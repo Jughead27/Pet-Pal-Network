@@ -1,18 +1,19 @@
 /**
- * HatchlingIcon — a small chick hatching from a cracked eggshell.
+ * HatchlingIcon — chick with a distinct round head on a long neck,
+ * emerging from a cracked half-eggshell.
  *
- * Composition (top to bottom):
- *   - Three small feather tufts on the crown
- *   - Round chick head with eye dot
- *   - Small open beak pointing right
- *   - Jagged crack line dividing shell from chick
- *   - Rounded eggshell bowl below the crack
+ * Key readable features preserved at small size:
+ *   - Round head (circle)
+ *   - Long neck (two angled paths)
+ *   - Open beak (right-facing chevron)
+ *   - Eye dot
+ *   - Cracked shell rim (zigzag) + rounded shell bowl
  *
- * Uses stroke="currentColor" so it inherits active/inactive nav tint.
+ * Uses stroke/fill="currentColor" so active/inactive tint works automatically.
  */
 
 import React from 'react';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 
 interface HatchlingIconProps {
   size?: number;
@@ -31,26 +32,26 @@ export default function HatchlingIcon({ size = 24, color = 'currentColor' }: Hat
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {/* ── Bottom eggshell bowl ── */}
-      <Path d="M5 15 Q5 22 12 22 Q19 22 19 15" />
+      {/* Round head */}
+      <Circle cx={13.2} cy={6.8} r={2.6} />
 
-      {/* ── Jagged crack across the shell opening ── */}
-      <Path d="M5 15 L7.5 13 L10 15 L12 12 L14 15 L16.5 13 L19 15" />
+      {/* Eye */}
+      <Circle cx={14.1} cy={6.3} r={0.4} fill={color} stroke="none" />
 
-      {/* ── Chick head: upper arc rising above the crack ── */}
-      {/* Endpoints sit just inside the shell rim so the chick reads as emerging */}
-      <Path d="M8.5 15 Q8 6 12 6 Q16 6 15.5 15" />
+      {/* Beak — right-facing open chevron */}
+      <Path d="M15.8 6.6l2 .8-2 .8" />
 
-      {/* ── Eye ── */}
-      <Circle cx={13} cy={10} r={0.5} fill={color} stroke="none" />
+      {/* Left neck line (head to shell) */}
+      <Path d="M11.4 9.2C10.4 10.7 9.9 12.2 9.8 14" />
 
-      {/* ── Beak: right-facing open chevron ── */}
-      <Path d="M15.5 10 L17.5 11 L15.5 12" />
+      {/* Right neck line (head to shell) */}
+      <Path d="M15 9.3c-.7 1.5-.9 3-.9 4.7" />
 
-      {/* ── Feather tufts on the crown ── */}
-      <Path d="M10.5 6.5 L10 4.5" />
-      <Path d="M12 6 L12 4" />
-      <Path d="M13.5 6.5 L14 4.5" />
+      {/* Cracked shell rim — zigzag */}
+      <Path d="M6.5 14l1.85 1.6L10.2 14l1.85 1.6L13.9 14l1.85 1.6L17.5 14" />
+
+      {/* Shell bowl — rounded bottom half */}
+      <Path d="M6.5 14c0 3.4 2.4 5.5 5.5 5.5s5.5-2.1 5.5-5.5" />
     </Svg>
   );
 }

@@ -1,0 +1,25 @@
+Two changes to the bottom navigation bar on the home page only. Do not modify any other screens, components, routes, or the right-side action rail.
+
+CHANGE 1 — Replace the Nursery hatchling icon with a clearer version.
+The current hatchling reads as a blob at small size. Replace it with this SVG: a chick with a distinct round head raised on a longer neck, emerging from a cracked half-eggshell. The long neck and beak are what make it read as a bird — preserve those two features above all else if any path needs adjusting to render cleanly:
+
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="13.2" cy="6.8" r="2.6"/>
+  <circle cx="14.1" cy="6.3" r="0.4" fill="currentColor" stroke="none"/>
+  <path d="M15.8 6.6l2 .8-2 .8"/>
+  <path d="M11.4 9.2C10.4 10.7 9.9 12.2 9.8 14"/>
+  <path d="M15 9.3c-.7 1.5-.9 3-.9 4.7"/>
+  <path d="M6.5 14l1.85 1.6L10.2 14l1.85 1.6L13.9 14l1.85 1.6L17.5 14"/>
+  <path d="M6.5 14c0 3.4 2.4 5.5 5.5 5.5s5.5-2.1 5.5-5.5"/>
+</svg>
+
+Update the existing HatchlingIcon component in place (same props, same usage) rather than creating a new component.
+
+CHANGE 2 — Give the Add tab more visual weight as the primary action.
+- Replace the current outlined circled-plus with a solid filled circle, 48px diameter, containing a plus glyph.
+- The circle fill should be the nav bar's light foreground color (the same near-white the inactive icons use), with the plus in the nav bar's dark background color — inverted/monochrome, NOT the teal accent. Teal must remain used only for the active tab state.
+- Raise the circle about 6px above the baseline of the other four icons so it slightly overlaps upward, keeping the "Add" label aligned with the other labels.
+- Keep the tap target at least 48x48 and keep the existing route/behavior unchanged.
+- The other four tabs keep their current 24px outline icons exactly as they are.
+
+When done, show me the home page nav so I can check: (1) the hatchling clearly reads as a bird at actual size, (2) the Add button reads as the primary action, (3) teal still only appears on the active tab.

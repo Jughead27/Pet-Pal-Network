@@ -114,12 +114,22 @@ function ClassicTabLayout() {
         name="add"
         options={{
           title: 'Add',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="plus.circle" tintColor={color} size={22} />
-            ) : (
-              <Feather name="plus-circle" size={22} color={color} />
-            ),
+          tabBarIcon: () => (
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: 24,
+                backgroundColor: colors.foreground,
+                alignItems: 'center',
+                justifyContent: 'center',
+                // Raises the circle ~6px above the other icon baselines
+                marginBottom: 10,
+              }}
+            >
+              <Feather name="plus" size={24} color={colors.background} />
+            </View>
+          ),
         }}
       />
       <Tabs.Screen
