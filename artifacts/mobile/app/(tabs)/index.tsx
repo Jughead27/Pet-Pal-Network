@@ -35,7 +35,15 @@ import CommentSheet from '@/components/CommentSheet';
 import ShareSheet from '@/components/ShareSheet';
 import PopText from '@/components/PopText';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+
+// ─── Exclusion-zone geometry ───────────────────────────────────────────────────
+// Right-rail strip: rail touchable (40 px) + container right inset (14 px) + left margin (24 px).
+// Taps where locationX >= this threshold are in the exclusion zone when chrome is visible.
+const RAIL_TOUCH_WIDTH   = 40;
+const RAIL_RIGHT_INSET   = 14;
+const RAIL_MARGIN        = 24;
+const RAIL_EXCLUSION_X   = SCREEN_WIDTH - RAIL_TOUCH_WIDTH - RAIL_RIGHT_INSET - RAIL_MARGIN; // ≈ SCREEN_WIDTH − 78
 
 const PET_IMAGES = {
   hero: require('@/assets/images/ripley-hero.jpg'),
@@ -82,8 +90,16 @@ export default function HomeScreen() {
   const chromeOpacity = useSharedValue(1);
   const chromeStyle = useAnimatedStyle(() => ({ opacity: chromeOpacity.value }));
 
-  // Double-tap detection timer
+  // Double-tap detection: toggle timer (open-area first tap)
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Exclusion-zone first-tap: no toggle timer, but still participates in double-tap
+  const pendingTapRef       = useRef(false);
+  const pendingClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Measured height of the petInfo block — used for bottom exclusion zone.
+  // Stored in a ref (not state) so the gesture handler closure never goes stale
+  // and we avoid re-renders on layout.
+  const petInfoHeightRef = useRef(120);
 
   // Reaction pops — each press spawns one independent element
   const [pops, setPops] = useState<Pop[]>([]);
@@ -121,15 +137,57 @@ export default function HomeScreen() {
   const spawnTreatPop = useCallback(() => spawnPop('Yum!',  TREAT_BOTTOM), [spawnPop, TREAT_BOTTOM]);
 
   // ── Gesture handler ──────────────────────────────────────────────────────────
-  const handleMediaPress = () => {
-    if (tapTimerRef.current) {
-      // Second tap within window → double tap → boop + pop
+  //
+  // Exclusion zones (active only while chrome is VISIBLE):
+  //   1. Right-rail strip  — full height, locationX >= RAIL_EXCLUSION_X
+  //   2. Bottom overlay    — locationY >= screen bottom minus petInfo height minus 16 px margin
+  //
+  // In an exclusion zone a single tap does nothing (no toggle).
+  // Double-tap fires boop from anywhere, including exclusion zones.
+  // When chrome is hidden, all zones are disabled — full image restores chrome.
+  //
+  const handleMediaPress = useCallback((e: { nativeEvent: { locationX: number; locationY: number } }) => {
+    const { locationX, locationY } = e.nativeEvent;
+
+    // Exclusion zones only apply while chrome is visible
+    const bottomZoneTop = SCREEN_HEIGHT - bottomOffset - petInfoHeightRef.current - 16;
+    const inZone = chromeVisibleRef.current && (
+      locationX >= RAIL_EXCLUSION_X ||
+      locationY >= bottomZoneTop
+    );
+
+    // ── Double-tap detection ────────────────────────────────────────────────
+    // Either a pending toggle timer or a pending exclusion-zone tap counts as
+    // the "first tap"; the second tap anywhere fires boop.
+    if (tapTimerRef.current !== null) {
       clearTimeout(tapTimerRef.current);
       tapTimerRef.current = null;
       boop();
       spawnBoopPop();
+      return;
+    }
+    if (pendingTapRef.current) {
+      if (pendingClearTimerRef.current) {
+        clearTimeout(pendingClearTimerRef.current);
+        pendingClearTimerRef.current = null;
+      }
+      pendingTapRef.current = false;
+      boop();
+      spawnBoopPop();
+      return;
+    }
+
+    // ── First tap ──────────────────────────────────────────────────────────
+    if (inZone) {
+      // Exclusion zone: record that a tap occurred so a second tap can boop,
+      // but do NOT start a toggle timer.
+      pendingTapRef.current = true;
+      pendingClearTimerRef.current = setTimeout(() => {
+        pendingTapRef.current = false;
+        pendingClearTimerRef.current = null;
+      }, 280);
     } else {
-      // Start window; if no second tap arrives, toggle chrome
+      // Open media area: start toggle timer as before.
       tapTimerRef.current = setTimeout(() => {
         tapTimerRef.current = null;
         const next = !chromeVisibleRef.current;
@@ -138,7 +196,7 @@ export default function HomeScreen() {
         chromeOpacity.value = withTiming(next ? 1 : 0, { duration: 200 });
       }, 280);
     }
-  };
+  }, [boop, spawnBoopPop, bottomOffset, chromeOpacity]);
 
   return (
     <View style={styles.container}>
@@ -187,6 +245,7 @@ export default function HomeScreen() {
       <Animated.View
         style={[styles.petInfo, { bottom: bottomOffset, right: 80 }, chromeStyle]}
         pointerEvents={chromeVisible ? 'box-none' : 'none'}
+        onLayout={(e) => { petInfoHeightRef.current = e.nativeEvent.layout.height; }}
       >
         {/* Identity row: name + pack toggle */}
         <View style={styles.identityRow}>
