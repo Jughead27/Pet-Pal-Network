@@ -152,11 +152,17 @@ function ActionItem({
 interface ActionRailProps {
   onCommentPress: () => void;
   onSharePress: () => void;
+  /** Called on every Boop press, after state update — use to spawn a pop */
+  onBoopFired?: () => void;
+  /** Called on every Treat press, after state update — use to spawn a pop */
+  onTreatFired?: () => void;
 }
 
 export default function ActionRail({
   onCommentPress,
   onSharePress,
+  onBoopFired,
+  onTreatFired,
 }: ActionRailProps) {
   const colors = useColors();
   const {
@@ -169,13 +175,31 @@ export default function ActionRail({
     hasTreatedOnce,
   } = useApp();
 
+  const handleBoopPress = () => {
+    // Web haptic: one short tick
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(10);
+    }
+    boop();
+    onBoopFired?.();
+  };
+
+  const handleTreatPress = () => {
+    // Web haptic: double tick — distinct from boop
+    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate([10, 40, 10]);
+    }
+    treat();
+    onTreatFired?.();
+  };
+
   return (
     <View style={styles.rail}>
       {/* 1. Boop */}
       <ActionItem
         renderIcon={(color, size) => <BoopIcon color={color} size={size} />}
         count={boopCount}
-        onPress={boop}
+        onPress={handleBoopPress}
         teachingLabel="Boop"
         activeColor={colors.accent}
         isActive={hasBoopedOnce}
@@ -186,7 +210,7 @@ export default function ActionRail({
       <ActionItem
         renderIcon={(color, size) => <TreatIcon color={color} size={size} />}
         count={treatCount}
-        onPress={treat}
+        onPress={handleTreatPress}
         teachingLabel="Treat"
         activeColor="#F4C542"
         isActive={hasTreatedOnce}

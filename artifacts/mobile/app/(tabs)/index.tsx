@@ -7,7 +7,7 @@
  *   Tap "more/less"      → expand / collapse caption
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Dimensions,
   Image,
@@ -20,6 +20,7 @@ import {
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -32,6 +33,7 @@ import ActionRail from '@/components/ActionRail';
 import AddToPackLink from '@/components/AddToPackLink';
 import CommentSheet from '@/components/CommentSheet';
 import ShareSheet from '@/components/ShareSheet';
+import PopText from '@/components/PopText';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -48,10 +50,26 @@ const TEXT_SHADOW = {
   textShadowRadius: 3,
 } as const;
 
+// ─── Pop state ───────────────────────────────────────────────────────────────
+
+interface Pop {
+  id: number;
+  word: string;
+  rotation: number; // degrees -8..+8
+  right: number;    // px from screen right
+  bottom: number;   // px from screen bottom
+}
+
+let popCounter = 0;
+const randRotation = () => Math.round((Math.random() * 16 - 8) * 10) / 10;
+
+// ─── HomeScreen ───────────────────────────────────────────────────────────────
+
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { pet, boop } = useApp();
+  const reducedMotion = useReducedMotion();
 
   const [commentSheetVisible, setCommentSheetVisible] = useState(false);
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
@@ -67,18 +85,49 @@ export default function HomeScreen() {
   // Double-tap detection timer
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Reaction pops — each press spawns one independent element
+  const [pops, setPops] = useState<Pop[]>([]);
+
   const featuredPost = pet.posts[0];
   const heroImage = PET_IMAGES[featuredPost.imageKey];
 
   const bottomOffset = insets.bottom + (Platform.OS === 'web' ? 110 : 116);
 
+  // Rail geometry (approximate, based on known layout constants):
+  //   4 items × ~45px + 3 gaps × 22px ≈ 246px total rail height
+  //   Boop (top item) center ≈ bottomOffset + 210
+  //   Treat (second item) center ≈ bottomOffset + 143
+  //   right: 60 places pop just left of the 54px-wide rail column
+  const BOOP_BOTTOM  = bottomOffset + 210;
+  const TREAT_BOTTOM = bottomOffset + 143;
+  const POP_RIGHT    = 60;
+
+  const spawnPop = useCallback((word: string, bottom: number) => {
+    const pop: Pop = {
+      id: ++popCounter,
+      word,
+      rotation: randRotation(),
+      right: POP_RIGHT,
+      bottom,
+    };
+    setPops((prev) => [...prev, pop]);
+  }, [POP_RIGHT]);
+
+  const removePop = useCallback((id: number) => {
+    setPops((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
+  const spawnBoopPop  = useCallback(() => spawnPop('Boop!', BOOP_BOTTOM),  [spawnPop, BOOP_BOTTOM]);
+  const spawnTreatPop = useCallback(() => spawnPop('Yum!',  TREAT_BOTTOM), [spawnPop, TREAT_BOTTOM]);
+
   // ── Gesture handler ──────────────────────────────────────────────────────────
   const handleMediaPress = () => {
     if (tapTimerRef.current) {
-      // Second tap within window → double tap → boop
+      // Second tap within window → double tap → boop + pop
       clearTimeout(tapTimerRef.current);
       tapTimerRef.current = null;
       boop();
+      spawnBoopPop();
     } else {
       // Start window; if no second tap arrives, toggle chrome
       tapTimerRef.current = setTimeout(() => {
@@ -129,6 +178,8 @@ export default function HomeScreen() {
         <ActionRail
           onCommentPress={() => setCommentSheetVisible(true)}
           onSharePress={() => setShareSheetVisible(true)}
+          onBoopFired={spawnBoopPop}
+          onTreatFired={spawnTreatPop}
         />
       </Animated.View>
 
@@ -193,6 +244,19 @@ export default function HomeScreen() {
         visible={shareSheetVisible}
         onClose={() => setShareSheetVisible(false)}
       />
+
+      {/* ── Reaction pops — absolutely positioned, pointer-events none ── */}
+      {pops.map((pop) => (
+        <PopText
+          key={pop.id}
+          word={pop.word}
+          rotation={pop.rotation}
+          right={pop.right}
+          bottom={pop.bottom}
+          reducedMotion={reducedMotion ?? false}
+          onDone={() => removePop(pop.id)}
+        />
+      ))}
     </View>
   );
 }
