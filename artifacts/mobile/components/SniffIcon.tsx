@@ -1,9 +1,5 @@
 /**
- * SniffIcon — wide pig-snout pill with two solid filled nostrils and two
- * small scent lines rising off the upper right.
- *
- * No ears, antennae, or any element above the snout except the scent lines.
- * Filled nostrils are essential — do not convert to outlines.
+ * SniffIcon — pig snout: rounded-square body, bold solid nostrils, long scent lines.
  */
 
 import React from 'react';
@@ -26,18 +22,16 @@ export default function SniffIcon({ size = 24, color = 'currentColor' }: SniffIc
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {/* Snout: wide pill */}
-      <Rect x={3.5} y={8.5} width={14} height={10} rx={5} />
+      {/* Snout: rounded-square (less wide, taller) */}
+      <Rect x={4.5} y={7.5} width={13} height={11} rx={5} />
 
-      {/* Left nostril — solid filled */}
-      <Ellipse cx={8} cy={13.5} rx={1.15} ry={1.8} fill={color} stroke="none" />
+      {/* Nostrils: bold, solid filled */}
+      <Ellipse cx={8.6}  cy={13} rx={1.5} ry={2.3} fill={color} stroke="none" />
+      <Ellipse cx={13.4} cy={13} rx={1.5} ry={2.3} fill={color} stroke="none" />
 
-      {/* Right nostril — solid filled */}
-      <Ellipse cx={13} cy={13.5} rx={1.15} ry={1.8} fill={color} stroke="none" />
-
-      {/* Scent lines — upper right only */}
-      <Path d="M18.8 8c.8-.6 1.2-1.4 1.3-2.5" />
-      <Path d="M20.3 11.5c.9-.4 1.5-1.1 1.8-2.1" />
+      {/* Scent lines: long, clearly visible, upper right */}
+      <Path d="M19.3 8.2c.9-.7 1.4-1.6 1.5-2.9" />
+      <Path d="M20.8 11.8c1-.5 1.7-1.3 2-2.4" />
     </Svg>
   );
 }
