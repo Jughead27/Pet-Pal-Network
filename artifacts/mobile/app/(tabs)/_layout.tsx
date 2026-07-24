@@ -31,7 +31,10 @@ export default function TabLayout() {
         tabBarInactiveTintColor: colors.mutedForeground,
         tabBarStyle: {
           position: 'absolute',
-          backgroundColor: isIOS ? 'transparent' : colors.background,
+          // iOS: transparent so BlurView shows through.
+          // Web: transparent so the tabBarBackground blur layer shows through.
+          // Android: solid app background (no blur support without extra lib).
+          backgroundColor: (isIOS || isWeb) ? 'transparent' : colors.background,
           borderTopWidth: isWeb ? 1 : StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
           elevation: 0,
@@ -44,17 +47,20 @@ export default function TabLayout() {
         },
         tabBarBackground: () =>
           isIOS ? (
+            // iOS: native frosted-glass blur via expo-blur
             <BlurView
               intensity={90}
               tint={isDark ? 'dark' : 'light'}
               style={StyleSheet.absoluteFill}
             />
           ) : isWeb ? (
+            // Web: semi-transparent background + CSS backdrop-filter blur so
+            // content scrolling behind the bar shows through — matching iOS visually.
+            // backdropFilter is a React Native Web style extension (not in RN ViewStyle
+            // types) so we cast to any.
             <View
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: colors.background },
-              ]}
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(6,11,16,0.75)', backdropFilter: 'blur(20px)' } as any]}
             />
           ) : null,
         tabBarLabelStyle: {

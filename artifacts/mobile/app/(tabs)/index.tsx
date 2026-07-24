@@ -10,6 +10,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
+  Animated,
   Dimensions,
   Image,
   Platform,
@@ -19,11 +20,6 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -51,12 +47,13 @@ const PET_IMAGES = {
   post2: require('@/assets/images/ripley-post2.jpg'),
 } as const;
 
-// Shared text-shadow style applied to all overlay text for legibility
-const TEXT_SHADOW = {
-  textShadowColor: 'rgba(0,0,0,0.4)',
-  textShadowOffset: { width: 0, height: 1 },
-  textShadowRadius: 3,
-} as const;
+// Shared text-shadow style applied to all overlay text for legibility.
+// textShadow shorthand (RN 0.76 / React Native Web) replaces the deprecated
+// textShadowColor / textShadowOffset / textShadowRadius triple.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const TEXT_SHADOW: any = {
+  textShadow: '0px 1px 3px rgba(0,0,0,0.4)',
+};
 
 // ─── Pop state ───────────────────────────────────────────────────────────────
 
@@ -92,11 +89,11 @@ export default function HomeScreen() {
   const [captionExpanded, setCaptionExpanded] = useState(false);
   const [captionNeedsMore, setCaptionNeedsMore] = useState(false);
 
-  // Chrome visibility — single-tap toggles, resets to visible per post
+  // Chrome visibility — single-tap toggles, resets to visible per post.
+  // Built-in Animated.Value drives the opacity fade (200 ms); no Reanimated needed.
   const chromeVisibleRef = useRef(true);
   const [chromeVisible, setChromeVisible] = useState(true);
-  const chromeOpacity = useSharedValue(1);
-  const chromeStyle = useAnimatedStyle(() => ({ opacity: chromeOpacity.value }));
+  const chromeOpacity = useRef(new Animated.Value(1)).current;
 
   // Double-tap detection: toggle timer (open-area first tap)
   const tapTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -115,7 +112,8 @@ export default function HomeScreen() {
   const featuredPost = pet.posts[0];
   const heroImage = PET_IMAGES[featuredPost.imageKey];
 
-  const bottomOffset = insets.bottom + (Platform.OS === 'web' ? 110 : 116);
+  // Single shared constant — same on web and native.
+  const bottomOffset = insets.bottom + 110;
 
   // Rail geometry (approximate, based on known layout constants):
   //   4 items × ~45px + 3 gaps × 22px ≈ 246px total rail height
@@ -201,7 +199,11 @@ export default function HomeScreen() {
         const next = !chromeVisibleRef.current;
         chromeVisibleRef.current = next;
         setChromeVisible(next);
-        chromeOpacity.value = withTiming(next ? 1 : 0, { duration: 200 });
+        Animated.timing(chromeOpacity, {
+          toValue: next ? 1 : 0,
+          duration: 200,
+          useNativeDriver: true,
+        }).start();
       }, 280);
     }
   }, [boop, spawnBoopPop, bottomOffset, chromeOpacity]);
@@ -215,7 +217,8 @@ export default function HomeScreen() {
       <Pressable style={StyleSheet.absoluteFill} onPress={handleMediaPress} />
 
       {/* ── Bottom legibility scrim — fades with chrome ── */}
-      <Animated.View style={[styles.scrim, chromeStyle]} pointerEvents="none">
+      {/* pointerEvents in style (not prop) per RN 0.76 */}
+      <Animated.View style={[styles.scrim, { opacity: chromeOpacity }]}>
         <LinearGradient
           colors={['rgba(0,0,0,0.65)', 'rgba(0,0,0,0.25)', 'transparent']}
           locations={[0, 0.55, 1]}
@@ -226,7 +229,7 @@ export default function HomeScreen() {
       </Animated.View>
 
       {/* ── Right-edge rail scrim — fades with chrome ── */}
-      <Animated.View style={[styles.railScrim, chromeStyle]} pointerEvents="none">
+      <Animated.View style={[styles.railScrim, { opacity: chromeOpacity }]}>
         <LinearGradient
           colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.15)', 'transparent']}
           locations={[0, 0.6, 1]}
@@ -238,8 +241,12 @@ export default function HomeScreen() {
 
       {/* ── ActionRail — right edge ── */}
       <Animated.View
-        style={[styles.railContainer, { bottom: bottomOffset }, chromeStyle]}
-        pointerEvents={chromeVisible ? 'box-none' : 'none'}
+        style={[
+          styles.railContainer,
+          { bottom: bottomOffset, opacity: chromeOpacity },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { pointerEvents: (chromeVisible ? 'box-none' : 'none') as any },
+        ]}
       >
         <ActionRail
           onCommentPress={() => setCommentSheetVisible(true)}
@@ -251,8 +258,12 @@ export default function HomeScreen() {
 
       {/* ── Pet info — bottom-left ── */}
       <Animated.View
-        style={[styles.petInfo, { bottom: bottomOffset, right: 80 }, chromeStyle]}
-        pointerEvents={chromeVisible ? 'box-none' : 'none'}
+        style={[
+          styles.petInfo,
+          { bottom: bottomOffset, right: 80, opacity: chromeOpacity },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          { pointerEvents: (chromeVisible ? 'box-none' : 'none') as any },
+        ]}
         onLayout={(e) => { petInfoHeightRef.current = e.nativeEvent.layout.height; }}
       >
         {/* Identity row: name + pack toggle */}
@@ -349,6 +360,8 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: SCREEN_HEIGHT * 0.45,
+    // pointerEvents in style (RN 0.76+) — was deprecated as a prop
+    pointerEvents: 'none',
   },
   // Right-edge rail scrim — 96px wide, full screen height
   railScrim: {
@@ -357,6 +370,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: 96,
+    pointerEvents: 'none',
   },
   railContainer: {
     position: 'absolute',

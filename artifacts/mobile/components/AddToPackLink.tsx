@@ -5,18 +5,15 @@
  *   Inactive  outlined ring, paw in light foreground (dim)
  *   Active    solid light-filled ring, paw in dark background (inverted)
  *
- * Transition: 150ms cross-fade driven by a Reanimated shared value.
+ * Transition: 150ms cross-fade driven by React Native's built-in Animated API.
+ * Two absolutely-stacked ring layers cross-fade between the inactive and active
+ * appearances — avoids the need for Reanimated's interpolateColor.
+ *
  * Touch target: 40×40.  Visible circle: 26×26.
  */
 
 import React, { useRef } from 'react';
-import { StyleSheet, TouchableOpacity, View } from 'react-native';
-import Animated, {
-  interpolateColor,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
+import { Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Svg, { Ellipse, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { useApp } from '@/context/AppContext';
@@ -49,37 +46,25 @@ function PawIcon({ size = 24, color = '#F0F4F8' }: PawIconProps) {
 export default function AddToPackLink() {
   const { isInPack, togglePack } = useApp();
 
-  // Track current state in a ref so the animation fires before context re-renders
+  // Track current state in a ref so the animation fires before context re-renders.
+  // progress: 0 = inactive, 1 = active.
   const activeRef = useRef(isInPack);
-  const progress = useSharedValue(isInPack ? 1 : 0);
+  const progress = useRef(new Animated.Value(isInPack ? 1 : 0)).current;
+
+  // inactiveOpacity fades out as progress → 1 (interpolate 0→1 maps to opacity 1→0)
+  const inactiveOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
   const handlePress = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     const next = !activeRef.current;
     activeRef.current = next;
-    progress.value = withTiming(next ? 1 : 0, { duration: 150 });
+    Animated.timing(progress, {
+      toValue: next ? 1 : 0,
+      duration: 150,
+      useNativeDriver: true,
+    }).start();
     togglePack();
   };
-
-  // Ring: transparent outline → solid light fill
-  const ringStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      progress.value,
-      [0, 1],
-      ['transparent', '#F0F4F8'],
-    ),
-    borderColor: interpolateColor(
-      progress.value,
-      [0, 1],
-      ['rgba(240,244,248,0.35)', '#F0F4F8'],
-    ),
-  }));
-
-  // Light paw (inactive): fades out as progress → 1
-  const lightPawStyle = useAnimatedStyle(() => ({ opacity: 1 - progress.value }));
-
-  // Dark paw (active): fades in as progress → 1
-  const darkPawStyle = useAnimatedStyle(() => ({ opacity: progress.value }));
 
   return (
     <TouchableOpacity
@@ -90,17 +75,21 @@ export default function AddToPackLink() {
       accessibilityRole="button"
       accessibilityLabel={isInPack ? 'In your Pack' : 'Add to Pack'}
     >
-      <Animated.View style={[styles.ring, ringStyle]}>
-        {/* Light paw — shown when inactive */}
-        <Animated.View style={[styles.pawLayer, lightPawStyle]} pointerEvents="none">
+      {/*
+        Two ring layers share the same 26×26 space via absoluteFillObject.
+        Cross-fading their opacity avoids interpolateColor (Reanimated-only).
+
+        Inactive ring: transparent fill, dim border → fades out when active.
+        Active ring:   solid light fill, light border → fades in when active.
+      */}
+      <View style={styles.ringContainer}>
+        <Animated.View style={[styles.ring, styles.ringInactive, { opacity: inactiveOpacity }]}>
           <PawIcon size={14} color="rgba(240,244,248,0.80)" />
         </Animated.View>
-
-        {/* Dark paw — shown when active (circle is light, paw inverts) */}
-        <Animated.View style={[styles.pawLayer, darkPawStyle]} pointerEvents="none">
+        <Animated.View style={[styles.ring, styles.ringActive, { opacity: progress }]}>
           <PawIcon size={14} color="#060B10" />
         </Animated.View>
-      </Animated.View>
+      </View>
     </TouchableOpacity>
   );
 }
@@ -115,19 +104,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  ring: {
+  ringContainer: {
     width: 26,
     height: 26,
+  },
+  ring: {
+    ...StyleSheet.absoluteFillObject,
     borderRadius: 13,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
   },
-  // Both paw layers sit in the same spot; only opacity differs
-  pawLayer: {
-    position: 'absolute',
-    alignItems: 'center',
-    justifyContent: 'center',
+  ringInactive: {
+    backgroundColor: 'transparent',
+    borderColor: 'rgba(240,244,248,0.35)',
+  },
+  ringActive: {
+    backgroundColor: '#F0F4F8',
+    borderColor: '#F0F4F8',
   },
 });

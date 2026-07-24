@@ -75,7 +75,6 @@ export default function PopText({ word, rotation, onDone, reducedMotion, right, 
 
   return (
     <Animated.View
-      pointerEvents="none"
       style={[
         styles.container,
         { right, bottom },
@@ -97,13 +96,15 @@ export default function PopText({ word, rotation, onDone, reducedMotion, right, 
 const styles = StyleSheet.create({
   container: {
     position: 'absolute',
+    // pointerEvents in style (RN 0.76+) — was deprecated as a prop
+    pointerEvents: 'none',
   },
   text: {
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    // textShadow shorthand (RN 0.76 / React Native Web)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...({ textShadow: '0px 1px 3px rgba(0,0,0,0.5)' } as any),
   },
 });

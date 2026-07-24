@@ -12,23 +12,19 @@
  *
  * Teaching labels: on the very first tap of Boop or Treat, a small text
  * label briefly appears to the left of the icon then disappears permanently.
+ *
+ * Animations use React Native's built-in Animated API — no Reanimated needed.
  */
 
 import React, { useRef } from 'react';
 import {
+  Animated,
   Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withTiming,
-  withSpring,
-} from 'react-native-reanimated';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
@@ -75,35 +71,29 @@ function ActionItem({
 }: ActionItemProps) {
   const colors = useColors();
   const hasShownLabel = useRef(false);
-  const scale = useSharedValue(1);
-  const labelOpacity = useSharedValue(0);
 
-  const iconStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
-
-  const labelStyle = useAnimatedStyle(() => ({
-    opacity: labelOpacity.value,
-  }));
+  // Built-in Animated.Value — works in Expo Go regardless of Reanimated version.
+  const scale = useRef(new Animated.Value(1)).current;
+  const labelOpacity = useRef(new Animated.Value(0)).current;
 
   const handlePress = () => {
-    // Spring-bounce on press
-    scale.value = withSequence(
-      withSpring(0.7, { damping: 10, stiffness: 300 }),
-      withSpring(1.2, { damping: 10, stiffness: 300 }),
-      withSpring(1, { damping: 12, stiffness: 200 }),
-    );
+    // Spring-bounce sequence on press: compress → overshoot → settle
+    Animated.sequence([
+      Animated.spring(scale, { toValue: 0.7, damping: 10, stiffness: 300, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1.2, damping: 10, stiffness: 300, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1.0, damping: 12, stiffness: 200, useNativeDriver: true }),
+    ]).start();
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Teaching label — shows only once, floats left then fades
+    // Teaching label — shows only once, fades in then out
     if (teachingLabel && !hasShownLabel.current) {
       hasShownLabel.current = true;
-      labelOpacity.value = withSequence(
-        withTiming(1, { duration: 200 }),
-        withTiming(1, { duration: 900 }),
-        withTiming(0, { duration: 350 }),
-      );
+      Animated.sequence([
+        Animated.timing(labelOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(labelOpacity, { toValue: 1, duration: 900, useNativeDriver: true }),
+        Animated.timing(labelOpacity, { toValue: 0, duration: 350, useNativeDriver: true }),
+      ]).start();
     }
 
     onPress();
@@ -120,8 +110,7 @@ function ActionItem({
       {/* Teaching label — absolutely positioned to the left, never affects layout */}
       {teachingLabel ? (
         <Animated.Text
-          style={[styles.teachingLabel, { color: colors.foreground }, labelStyle]}
-          pointerEvents="none"
+          style={[styles.teachingLabel, { color: colors.foreground, opacity: labelOpacity }]}
         >
           {teachingLabel}
         </Animated.Text>
@@ -135,11 +124,11 @@ function ActionItem({
         accessibilityLabel={teachingLabel ?? undefined}
         accessibilityRole="button"
       >
-        <Animated.View style={iconStyle}>
+        <Animated.View style={{ transform: [{ scale }] }}>
           {renderIcon(iconColor, 24)}
         </Animated.View>
         {countText !== undefined && (
-          <Text style={[styles.count, { color: 'rgba(240,244,248,0.85)' }]}>
+          <Text style={styles.count}>
             {countText}
           </Text>
         )}
@@ -277,18 +266,20 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const,
     letterSpacing: 0.2,
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.4)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+    color: 'rgba(240,244,248,0.85)',
+    // textShadow shorthand (RN 0.76 / React Native Web) — replaces deprecated
+    // textShadowColor / textShadowOffset / textShadowRadius triple.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ...({ textShadow: '0px 1px 3px rgba(0,0,0,0.4)' } as any),
   },
-  // Absolutely positioned; never shifts the icon column
+  // Absolutely positioned; never shifts the icon column.
+  // pointerEvents in style (RN 0.76+) — was deprecated as a prop.
   teachingLabel: {
     position: 'absolute',
     right: 44,
     top: 4,
     fontSize: 11,
     fontWeight: '600' as const,
-    // Reanimated controls opacity — start invisible
-    opacity: 0,
+    pointerEvents: 'none',
   },
 });
