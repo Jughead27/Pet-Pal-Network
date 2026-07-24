@@ -1,16 +1,13 @@
 /**
- * SniffIcon — pig snout with two nostrils and faint scent swirls above.
+ * SniffIcon — wide pig-snout pill with two solid filled nostrils and two
+ * small scent lines rising off the upper right.
  *
- * Geometrically simple so it renders cleanly at 22px nav size:
- *   - Rounded-rectangle snout (Rect with large rx)
- *   - Two filled oval nostrils
- *   - Two small scent squiggles rising above
- *
- * Uses stroke/fill="currentColor" so active/inactive tint works automatically.
+ * No ears, antennae, or any element above the snout except the scent lines.
+ * Filled nostrils are essential — do not convert to outlines.
  */
 
 import React from 'react';
-import Svg, { Path, Ellipse, Rect } from 'react-native-svg';
+import Svg, { Rect, Ellipse, Path } from 'react-native-svg';
 
 interface SniffIconProps {
   size?: number;
@@ -29,18 +26,18 @@ export default function SniffIcon({ size = 24, color = 'currentColor' }: SniffIc
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      {/* Snout: pill-shaped rounded rectangle */}
-      <Rect x={4} y={9} width={16} height={11} rx={5.5} />
+      {/* Snout: wide pill */}
+      <Rect x={3.5} y={8.5} width={14} height={10} rx={5} />
 
-      {/* Left nostril — filled so it reads clearly at small size */}
-      <Ellipse cx={9} cy={14.5} rx={1.6} ry={2} fill={color} stroke="none" />
+      {/* Left nostril — solid filled */}
+      <Ellipse cx={8} cy={13.5} rx={1.15} ry={1.8} fill={color} stroke="none" />
 
-      {/* Right nostril */}
-      <Ellipse cx={15} cy={14.5} rx={1.6} ry={2} fill={color} stroke="none" />
+      {/* Right nostril — solid filled */}
+      <Ellipse cx={13} cy={13.5} rx={1.15} ry={1.8} fill={color} stroke="none" />
 
-      {/* Scent swirls rising from the snout */}
-      <Path d="M9 8.5 Q8 7 9 5.5 Q10 4 9 3" />
-      <Path d="M15 8.5 Q16 7 15 5.5 Q14 4 15 3" />
+      {/* Scent lines — upper right only */}
+      <Path d="M18.8 8c.8-.6 1.2-1.4 1.3-2.5" />
+      <Path d="M20.3 11.5c.9-.4 1.5-1.1 1.8-2.1" />
     </Svg>
   );
 }
