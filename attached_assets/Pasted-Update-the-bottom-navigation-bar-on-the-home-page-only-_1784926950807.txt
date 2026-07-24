@@ -1,0 +1,31 @@
+Update the bottom navigation bar on the home page only. Two changes. Do not modify any other screens, components, routes, or the action rail on the right side of the feed.
+
+CHANGE 1 — Rename "Discovery" to "Sniff" and give it a new icon.
+- The tab label text changes from "Discovery" to "Sniff".
+- Replace its current icon with this custom SVG (a nose with scent lines).
+- Update any route names, aria-labels, or tooltips that say "Discovery" to "Sniff", but do not change the underlying page/route file itself today — just the nav label, icon, and accessibility text.
+
+CHANGE 2 — Keep the "Nursery" label but replace its icon.
+- Replace the current Nursery icon with this custom SVG (a hatchling chick in a cracked eggshell).
+
+Create both icons as reusable React components in the same folder where other icons or shared components live, named SniffIcon and HatchlingIcon. Each should accept a size prop (default 24) and a className prop, and must use stroke="currentColor" so they inherit the nav's existing active/inactive colors automatically. Match the exact rendered size, stroke weight, and spacing of the other nav icons so all five tabs look like one family.
+
+SniffIcon SVG:
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M11 18.5C7.5 16 5.5 13.4 5.5 11c0-2.6 2.5-4 5.5-4s5.5 1.4 5.5 4c0 2.4-2 5-5.5 7.5Z"/>
+  <path d="M9.2 10.6c-.4.7-.4 1.3 0 1.9"/>
+  <path d="M12.8 10.6c.4.7.4 1.3 0 1.9"/>
+  <path d="M18 8.5c.9-.5 1.4-1.3 1.5-2.4"/>
+  <path d="M19.5 12c1-.3 1.7-1 2-2"/>
+</svg>
+
+HatchlingIcon SVG:
+<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M8 11a4 4 0 0 1 8 0"/>
+  <circle cx="10.6" cy="9.6" r="0.4" fill="currentColor" stroke="none"/>
+  <path d="M16 9.8l2 .9-2 .9"/>
+  <path d="M6.5 12l1.85 1.8L10.2 12l1.85 1.8L13.9 12l1.85 1.8L17.5 12"/>
+  <path d="M6.5 12c0 4 2.4 6.5 5.5 6.5s5.5-2.5 5.5-6.5"/>
+</svg>
+
+When done, show me the home page so I can confirm both icons render at the correct size and the active/inactive tab colors still work on all five tabs.

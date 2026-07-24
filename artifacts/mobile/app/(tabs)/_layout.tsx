@@ -8,6 +8,8 @@ import { Tabs } from 'expo-router';
 import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
 import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import SniffIcon from '@/components/SniffIcon';
+import HatchlingIcon from '@/components/HatchlingIcon';
 
 // iOS 26+: NativeTabs with liquid glass (system-native; brand colors don't apply here)
 function NativeTabLayout() {
@@ -19,14 +21,14 @@ function NativeTabLayout() {
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="discovery">
         <Icon sf={{ default: 'safari', selected: 'safari.fill' }} />
-        <Label>Discovery</Label>
+        <Label>Sniff</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="add">
         <Icon sf={{ default: 'plus.circle', selected: 'plus.circle.fill' }} />
         <Label>Add</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="nursery">
-        <Icon sf={{ default: 'square.grid.2x2', selected: 'square.grid.2x2.fill' }} />
+        <Icon sf={{ default: 'bird', selected: 'bird.fill' }} />
         <Label>Nursery</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="profile">
@@ -98,12 +100,13 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="discovery"
         options={{
-          title: 'Discovery',
+          title: 'Sniff',
+          tabBarAccessibilityLabel: 'Sniff',
           tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name="safari" tintColor={color} size={22} />
+              <SniffIcon size={22} color={color} />
             ) : (
-              <Feather name="compass" size={22} color={color} />
+              <SniffIcon size={22} color={color} />
             ),
         }}
       />
@@ -123,12 +126,7 @@ function ClassicTabLayout() {
         name="nursery"
         options={{
           title: 'Nursery',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="square.grid.2x2" tintColor={color} size={22} />
-            ) : (
-              <Feather name="grid" size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => <HatchlingIcon size={22} color={color} />,
         }}
       />
       <Tabs.Screen
