@@ -1,6 +1,14 @@
 /**
- * HatchlingIcon — custom hatchling-chick-in-cracked-egg SVG for the Nursery tab.
- * Uses stroke="currentColor" so it inherits active/inactive nav tint automatically.
+ * HatchlingIcon — a small chick hatching from a cracked eggshell.
+ *
+ * Composition (top to bottom):
+ *   - Three small feather tufts on the crown
+ *   - Round chick head with eye dot
+ *   - Small open beak pointing right
+ *   - Jagged crack line dividing shell from chick
+ *   - Rounded eggshell bowl below the crack
+ *
+ * Uses stroke="currentColor" so it inherits active/inactive nav tint.
  */
 
 import React from 'react';
@@ -23,11 +31,26 @@ export default function HatchlingIcon({ size = 24, color = 'currentColor' }: Hat
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <Path d="M8 11a4 4 0 0 1 8 0" />
-      <Circle cx={10.6} cy={9.6} r={0.4} fill={color} stroke="none" />
-      <Path d="M16 9.8l2 .9-2 .9" />
-      <Path d="M6.5 12l1.85 1.8L10.2 12l1.85 1.8L13.9 12l1.85 1.8L17.5 12" />
-      <Path d="M6.5 12c0 4 2.4 6.5 5.5 6.5s5.5-2.5 5.5-6.5" />
+      {/* ── Bottom eggshell bowl ── */}
+      <Path d="M5 15 Q5 22 12 22 Q19 22 19 15" />
+
+      {/* ── Jagged crack across the shell opening ── */}
+      <Path d="M5 15 L7.5 13 L10 15 L12 12 L14 15 L16.5 13 L19 15" />
+
+      {/* ── Chick head: upper arc rising above the crack ── */}
+      {/* Endpoints sit just inside the shell rim so the chick reads as emerging */}
+      <Path d="M8.5 15 Q8 6 12 6 Q16 6 15.5 15" />
+
+      {/* ── Eye ── */}
+      <Circle cx={13} cy={10} r={0.5} fill={color} stroke="none" />
+
+      {/* ── Beak: right-facing open chevron ── */}
+      <Path d="M15.5 10 L17.5 11 L15.5 12" />
+
+      {/* ── Feather tufts on the crown ── */}
+      <Path d="M10.5 6.5 L10 4.5" />
+      <Path d="M12 6 L12 4" />
+      <Path d="M13.5 6.5 L14 4.5" />
     </Svg>
   );
 }
