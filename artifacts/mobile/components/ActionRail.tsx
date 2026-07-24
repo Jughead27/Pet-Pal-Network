@@ -195,8 +195,8 @@ export default function ActionRail({
 
       {/* 3. Comment */}
       <ActionItem
-        renderIcon={(color, size) => (
-          <Ionicons name="chatbubble-outline" size={size} color={color} />
+        renderIcon={(color) => (
+          <Ionicons name="chatbubble-outline" size={20} color={color} />
         )}
         count={comments.length}
         onPress={onCommentPress}
@@ -205,8 +205,8 @@ export default function ActionRail({
 
       {/* 4. Share */}
       <ActionItem
-        renderIcon={(color, size) => (
-          <Ionicons name="paper-plane-outline" size={size} color={color} />
+        renderIcon={(color) => (
+          <Ionicons name="paper-plane-outline" size={20} color={color} />
         )}
         onPress={onSharePress}
         testID="share-button"

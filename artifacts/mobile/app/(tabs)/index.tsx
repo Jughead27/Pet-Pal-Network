@@ -68,11 +68,6 @@ export default function HomeScreen() {
         style={styles.gradient}
       />
 
-      {/* Fish Book wordmark — top-left */}
-      <View style={[styles.wordmark, { top: topInset + 12 }]}>
-        <Text style={styles.wordmarkText}>Fish Book</Text>
-      </View>
-
       {/* ActionRail — right edge, vertically centered */}
       <View style={[styles.railContainer, { bottom: insets.bottom + (Platform.OS === 'web' ? 84 : 90) }]}>
         <ActionRail

@@ -2,8 +2,12 @@
  * AddToPackLink — compact 3-paw-print icon toggle for Pack membership.
  *
  * Sits inline next to the pet name in the identity row.
- * Outline style when inactive, filled teal when active.
- * Tap once = add to Pack, tap again = remove (toggle).
+ * Enclosed in a thin circular outline so it reads as an actionable control.
+ *
+ * Inactive: very subtle outline ring, dim paw prints.
+ * Active:   slightly brighter stroke + faint teal fill, teal paw prints.
+ *
+ * Tap target is generous (40×40) even though the visible circle is small.
  */
 
 import React from 'react';
@@ -14,30 +18,29 @@ import { useColors } from '@/hooks/useColors';
 import { useApp } from '@/context/AppContext';
 
 // Three paw prints arranged in a compact triangle cluster.
-function PawPackIcon({ active, color }: { active: boolean; color: string }) {
+function PawPackIcon({ active, pawColor }: { active: boolean; pawColor: string }) {
   const iconName = active ? 'paw' : 'paw-outline';
   return (
-    // Fixed bounds so the cluster never shifts layout
     <View style={styles.pawCluster}>
       {/* Top-center paw */}
       <MaterialCommunityIcons
         name={iconName}
-        size={9}
-        color={color}
+        size={8}
+        color={pawColor}
         style={styles.pawTop}
       />
       {/* Bottom-left paw */}
       <MaterialCommunityIcons
         name={iconName}
-        size={9}
-        color={color}
+        size={8}
+        color={pawColor}
         style={styles.pawBottomLeft}
       />
       {/* Bottom-right paw */}
       <MaterialCommunityIcons
         name={iconName}
-        size={9}
-        color={color}
+        size={8}
+        color={pawColor}
         style={styles.pawBottomRight}
       />
     </View>
@@ -53,7 +56,11 @@ export default function AddToPackLink() {
     togglePack();
   };
 
-  const iconColor = isInPack ? colors.primary : 'rgba(240,244,248,0.55)';
+  // Inactive: dim ring, dim paws
+  // Active: teal ring + very faint teal fill, teal paws
+  const ringColor      = isInPack ? colors.primary : 'rgba(240,244,248,0.30)';
+  const ringBackground = isInPack ? 'rgba(32,178,170,0.10)' : 'transparent';
+  const pawColor       = isInPack ? colors.primary : 'rgba(240,244,248,0.45)';
 
   return (
     <TouchableOpacity
@@ -64,40 +71,59 @@ export default function AddToPackLink() {
       accessibilityRole="button"
       accessibilityLabel={isInPack ? 'Remove from Pack' : 'Add to Pack'}
     >
-      <PawPackIcon active={isInPack} color={iconColor} />
+      {/* Thin circular outline ring */}
+      <View
+        style={[
+          styles.ring,
+          {
+            borderColor: ringColor,
+            backgroundColor: ringBackground,
+          },
+        ]}
+      >
+        <PawPackIcon active={isInPack} pawColor={pawColor} />
+      </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   touchable: {
-    padding: 4,
-    marginLeft: 4,
+    marginLeft: 6,
     // Generous hit area
-    minWidth: 28,
-    minHeight: 28,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Fixed-size canvas for the 3-paw cluster (keeps layout stable)
+  // Thin circle that frames the paw cluster
+  ring: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Fixed-size canvas for the 3-paw cluster
   pawCluster: {
-    width: 26,
-    height: 22,
+    width: 22,
+    height: 19,
     position: 'relative',
   },
   pawTop: {
     position: 'absolute',
     top: 0,
-    left: 8,
+    left: 7,
   },
   pawBottomLeft: {
     position: 'absolute',
-    top: 11,
+    top: 10,
     left: 0,
   },
   pawBottomRight: {
     position: 'absolute',
-    top: 11,
-    left: 17,
+    top: 10,
+    left: 14,
   },
 });
