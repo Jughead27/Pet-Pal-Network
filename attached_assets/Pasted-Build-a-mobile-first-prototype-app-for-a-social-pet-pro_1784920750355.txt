@@ -1,0 +1,263 @@
+Build a mobile-first prototype app for a social pet product called Fish Book.
+
+The goal is to create an app prototype with the correct interaction model, even if some visual polish is still rough. The interactions are non-negotiable and should be treated as the core UX.
+
+Product concept
+This is a pet-centered social/mobile experience where users can:
+
+view pet posts in a media-first feed,
+
+Boop a pet,
+
+send a Treat,
+
+comment,
+
+share,
+
+and Add to Pack to follow/save a pet.
+
+The app should feel:
+
+media-first,
+
+pet-first,
+
+minimal,
+
+modern,
+
+and lightweight.
+
+The pet should remain the visual star of the screen.
+
+Build target
+Build this as a mobile-first web app prototype that runs well in Replit.
+
+Preferred stack:
+
+React
+
+TypeScript
+
+Vite
+
+simple CSS or Tailwind
+
+The app should be easy to extend into a fuller product later.
+
+Screens to build
+Build these initial screens:
+
+Home feed
+
+Pet Profile
+
+basic navigation between them
+
+Use realistic placeholder pet data for one sample pet named Ripley.
+
+Home feed requirements
+The Home screen should show a single dominant pet post that fills most of the mobile viewport.
+
+Layout:
+
+full-bleed hero media/post area
+
+pet name, breed/type, and short caption near the bottom-left
+
+a thin vertical action rail near the right edge
+
+quiet bottom navigation
+
+The right rail must contain exactly these four actions in this order:
+
+Boop
+
+Treat
+
+Comment
+
+Share
+
+Do not place Add to Pack in the right rail.
+
+Action behavior
+Boop
+tap to increment boop count by 1
+
+visually acknowledge the action with a subtle animation
+
+on the user’s first Boop tap, briefly show a tiny plain-text label “Boop” near the icon, then hide it permanently
+
+Treat
+tap to increment treat count by 1
+
+visually acknowledge the action with a subtle animation
+
+on the user’s first Treat tap, briefly show a tiny plain-text label “Treat” near the icon, then hide it permanently
+
+Comment
+tap opens a comment sheet/modal for the post
+
+Share
+tap opens a simple share sheet/modal or mock share menu
+
+Action rail visual rules
+keep the rail thin and visually secondary
+
+use outline-style icons
+
+keep counts small and quiet
+
+keep spacing elegant and compact
+
+the rail should not visually dominate the media
+
+Use placeholder icons if needed, but structure the code so the Boop and Treat icons can be easily replaced later with custom icons.
+
+Add to Pack behavior
+The relationship action is Add to Pack.
+
+Requirements:
+
+place it near the pet name/info area on Home
+
+do not make it a big CTA button
+
+it should feel like a lightweight text action
+
+tap toggles the state between:
+“Add to Pack”
+
+“Added”
+
+
+Make this easy to refine later.
+
+Pet Profile requirements
+Build a Pet Profile screen for Ripley.
+
+Layout:
+
+hero media at top
+
+pet name, type, short bio
+
+Add to Pack near the name/info area
+
+aggregate boop and treat totals shown near the bio
+
+a grid of the pet’s posts below
+
+Behavior:
+
+Add to Pack behaves the same as on Home
+
+tapping a grid post can open a simple detail modal or placeholder post view
+
+Navigation
+Create a simple bottom nav with items like:
+
+Home
+
+Discovery
+
+Add
+
+Nursery
+
+Profile
+
+Only Home and Pet Profile need to be fully functional right now.
+Other tabs can be placeholders, but the nav should be visually present.
+
+Data and state
+Use local in-app state only.
+
+Include:
+
+sample pet data for Ripley
+
+boop count
+
+treat count
+
+comments
+
+Add to Pack state
+
+one-time teaching-label state for Boop and Treat
+
+Important implementation goals
+prioritize clean component structure
+
+separate UI components for:
+ActionRail
+
+AddToPackLink
+
+HomePost
+
+PetProfile
+
+BottomNav
+
+CommentSheet
+
+ShareSheet
+
+
+make the Boop and Treat icon components easy to swap later
+
+keep the code organized and readable
+
+Styling guidance
+The visual tone should be:
+
+dark, minimal, elegant
+
+high contrast
+
+restrained
+
+premium but simple
+
+The pet media area should dominate.
+The UI should feel lightweight over the content.
+
+Do not overdesign.
+Do not make the interface busy.
+
+Output
+Please:
+
+scaffold the full app in Replit,
+
+build the Home and Pet Profile screens,
+
+implement the interaction behaviors,
+
+use placeholder icons where necessary,
+
+keep the code ready for future iteration.
+
+Add clear comments where custom Boop/Treat icons can later be swapped in.
+
+Start by creating the working prototype rather than asking lots of follow-up questions.
+
+Why this is the right move
+This prompt shifts the center of gravity from pixel-perfect Figma work to working product behavior, which is what you’ve been trying to protect all along. It also tells Replit to keep Boop/Treat icons swappable later, so you do not need to solve the final visual icon problem before the app exists.
+image.jpg
++2
+
+One suggestion
+If Replit asks what “mobile-first” means, tell it to target:
+
+390px width first,
+
+dark theme,
+
+single-post vertical feed,
+
+and a componentized structure.
