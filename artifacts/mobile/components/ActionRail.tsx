@@ -11,7 +11,7 @@
  * (BoopIcon / TreatIcon) — replace their contents to use custom assets.
  *
  * Teaching labels: on the very first tap of Boop or Treat, a small text
- * label briefly appears next to the icon then disappears permanently.
+ * label briefly appears to the left of the icon then disappears permanently.
  */
 
 import React, { useRef } from 'react';
@@ -20,7 +20,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Platform,
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -29,7 +28,7 @@ import Animated, {
   withTiming,
   withSpring,
 } from 'react-native-reanimated';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useApp } from '@/context/AppContext';
@@ -38,25 +37,27 @@ import { useApp } from '@/context/AppContext';
 // Replace the contents of these components to use custom Boop / Treat icons.
 
 function BoopIcon({ color, size }: { color: string; size: number }) {
-  // SWAP: replace <Feather> with your custom Boop icon component
-  return <Feather name="heart" size={size} color={color} />;
+  // SWAP: replace with your custom Boop icon — currently a pointing/tap finger
+  return (
+    <MaterialCommunityIcons name="gesture-tap" size={size} color={color} />
+  );
 }
 
 function TreatIcon({ color, size }: { color: string; size: number }) {
-  // SWAP: replace <Feather> with your custom Treat icon component
-  return <Feather name="star" size={size} color={color} />;
+  // SWAP: replace with your custom Treat icon — currently a dog bone outline
+  return (
+    <MaterialCommunityIcons name="bone" size={size} color={color} />
+  );
 }
 
 // ─── ActionItem ───────────────────────────────────────────────────────────────
 
 interface ActionItemProps {
-  /** Renders the icon at the given color/size */
   renderIcon: (color: string, size: number) => React.ReactNode;
   count?: number;
   onPress: () => void;
   /** If provided, shows this text label once on the first press */
   teachingLabel?: string;
-  /** Accent color when active */
   activeColor?: string;
   isActive?: boolean;
   testID?: string;
@@ -75,7 +76,6 @@ function ActionItem({
   const hasShownLabel = useRef(false);
   const scale = useSharedValue(1);
   const labelOpacity = useSharedValue(0);
-  const labelTranslateX = useSharedValue(0);
 
   const iconStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -83,28 +83,25 @@ function ActionItem({
 
   const labelStyle = useAnimatedStyle(() => ({
     opacity: labelOpacity.value,
-    transform: [{ translateX: labelTranslateX.value }],
   }));
 
   const handlePress = () => {
-    // Scale bounce
+    // Spring-bounce on press
     scale.value = withSequence(
       withSpring(0.7, { damping: 10, stiffness: 300 }),
       withSpring(1.2, { damping: 10, stiffness: 300 }),
       withSpring(1, { damping: 12, stiffness: 200 }),
     );
 
-    // Haptic feedback
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Teaching label — show only on very first tap
+    // Teaching label — shows only once, floats left then fades
     if (teachingLabel && !hasShownLabel.current) {
       hasShownLabel.current = true;
-      labelTranslateX.value = 0;
       labelOpacity.value = withSequence(
         withTiming(1, { duration: 200 }),
-        withTiming(1, { duration: 1000 }),
-        withTiming(0, { duration: 300 }),
+        withTiming(1, { duration: 900 }),
+        withTiming(0, { duration: 350 }),
       );
     }
 
@@ -119,14 +116,11 @@ function ActionItem({
 
   return (
     <View style={styles.itemWrapper}>
-      {/* Teaching label — positioned to the left of the icon */}
+      {/* Teaching label — absolutely positioned to the left, never affects layout */}
       {teachingLabel ? (
         <Animated.Text
-          style={[
-            styles.teachingLabel,
-            { color: colors.foreground },
-            labelStyle,
-          ]}
+          style={[styles.teachingLabel, { color: colors.foreground }, labelStyle]}
+          pointerEvents="none"
         >
           {teachingLabel}
         </Animated.Text>
@@ -165,7 +159,15 @@ export default function ActionRail({
   onSharePress,
 }: ActionRailProps) {
   const colors = useColors();
-  const { boop, treat, boopCount, treatCount, comments, hasBoopedOnce, hasTreatedOnce } = useApp();
+  const {
+    boop,
+    treat,
+    boopCount,
+    treatCount,
+    comments,
+    hasBoopedOnce,
+    hasTreatedOnce,
+  } = useApp();
 
   return (
     <View style={styles.rail}>
@@ -225,29 +227,35 @@ function formatCount(n: number): string {
 const styles = StyleSheet.create({
   rail: {
     alignItems: 'center',
-    gap: 24,
-    paddingVertical: 8,
+    gap: 22,
+    paddingVertical: 4,
   },
+  // Each item: icon + count centered, teaching label floats left absolutely
   itemWrapper: {
-    alignItems: 'flex-end',
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    alignItems: 'center',
+    position: 'relative',
   },
   itemTouchable: {
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 4,
+    // Consistent 40px wide touch target keeps the rail visually tight
+    width: 40,
+    paddingVertical: 2,
   },
   count: {
     fontSize: 11,
     fontWeight: '500' as const,
     letterSpacing: 0.2,
+    textAlign: 'center',
   },
+  // Absolutely positioned; never shifts the icon column
   teachingLabel: {
+    position: 'absolute',
+    right: 44,
+    top: 4,
     fontSize: 11,
     fontWeight: '600' as const,
-    marginRight: 6,
+    // Reanimated controls opacity — start invisible
     opacity: 0,
-    // Positioned inline; Animated controls actual opacity
   },
 });

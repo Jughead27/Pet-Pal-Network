@@ -91,15 +91,18 @@ export default function HomeScreen() {
           },
         ]}
       >
-        {/* Pet name — tappable, navigates to profile */}
-        <TouchableOpacity
-          onPress={() => router.push(`/pet/${pet.id}`)}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel={`View ${pet.name}'s profile`}
-        >
-          <Text style={styles.petName}>{pet.name}</Text>
-        </TouchableOpacity>
+        {/* Identity row: pet name + paw-pack icon inline */}
+        <View style={styles.identityRow}>
+          <TouchableOpacity
+            onPress={() => router.push(`/pet/${pet.id}`)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${pet.name}'s profile`}
+          >
+            <Text style={styles.petName}>{pet.name}</Text>
+          </TouchableOpacity>
+          <AddToPackLink />
+        </View>
 
         <Text style={[styles.petBreed, { color: 'rgba(240,244,248,0.75)' }]}>
           {pet.breed}
@@ -108,11 +111,6 @@ export default function HomeScreen() {
         <Text style={[styles.petCaption, { color: 'rgba(240,244,248,0.9)' }]} numberOfLines={2}>
           {featuredPost.caption}
         </Text>
-
-        {/* Add to Pack — below the caption */}
-        <View style={styles.packRow}>
-          <AddToPackLink />
-        </View>
       </View>
 
       {/* Sheets */}
@@ -192,7 +190,8 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontStyle: 'italic',
   },
-  packRow: {
-    marginTop: 6,
+  identityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
 });
