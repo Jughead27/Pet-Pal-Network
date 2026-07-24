@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback } from "react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -12,7 +12,7 @@ export interface Comment {
 
 export interface PetPost {
   id: string;
-  imageKey: 'hero' | 'post1' | 'post2';
+  imageKey: "hero" | "post1" | "post2";
   caption: string;
 }
 
@@ -44,32 +44,36 @@ interface AppContextType {
 // ─── Sample Data ─────────────────────────────────────────────────────────────
 
 const RIPLEY: Pet = {
-  id: 'ripley',
-  name: 'Ripley',
-  breed: 'Crowntail Betta',
-  caption: 'Flaring at my own reflection again.',
-  bio: 'Professional bubble-nest architect.\nMood: iridescent.',
+  id: "RIPLEY",
+  name: "Finn",
+  breed: "Crowntail Betta",
+  caption: "Flaring at my own reflection again.",
+  bio: "Professional bubble-nest architect.\nMood: iridescent.",
   posts: [
-    { id: 'post-1', imageKey: 'hero', caption: 'Morning flare session.' },
-    { id: 'post-2', imageKey: 'post1', caption: 'The fins. They flow.' },
-    { id: 'post-3', imageKey: 'post2', caption: 'Close enough to count scales.' },
+    { id: "post-1", imageKey: "hero", caption: "Morning flare session." },
+    { id: "post-2", imageKey: "post1", caption: "The fins. They flow." },
+    {
+      id: "post-3",
+      imageKey: "post2",
+      caption: "Close enough to count scales.",
+    },
   ],
 };
 
 const INITIAL_COMMENTS: Comment[] = [
   {
-    id: 'c1',
-    author: 'aqua.keeper',
-    initials: 'AK',
-    text: 'Those fins are absolutely spectacular.',
-    timestamp: '2h',
+    id: "c1",
+    author: "aqua.keeper",
+    initials: "AK",
+    text: "Those fins are absolutely spectacular.",
+    timestamp: "2h",
   },
   {
-    id: 'c2',
-    author: 'fin.fancier',
-    initials: 'FF',
-    text: 'Ripley is living their best life.',
-    timestamp: '45m',
+    id: "c2",
+    author: "fin.fancier",
+    initials: "FF",
+    text: "Finn is living their best life.",
+    timestamp: "45m",
   },
 ];
 
@@ -98,10 +102,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const addComment = useCallback((text: string) => {
     const newComment: Comment = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      author: 'you',
-      initials: 'YO',
+      author: "you",
+      initials: "YO",
       text,
-      timestamp: 'now',
+      timestamp: "now",
     };
     setComments((prev) => [...prev, newComment]);
   }, []);
@@ -133,6 +137,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
 export function useApp(): AppContextType {
   const ctx = useContext(AppContext);
-  if (!ctx) throw new Error('useApp must be used within AppProvider');
+  if (!ctx) throw new Error("useApp must be used within AppProvider");
   return ctx;
 }

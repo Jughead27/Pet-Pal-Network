@@ -81,7 +81,7 @@ export default function HomeScreen() {
         style={[
           styles.petInfo,
           {
-            bottom: insets.bottom + (Platform.OS === 'web' ? 84 : 90),
+            bottom: insets.bottom + (Platform.OS === 'web' ? 110 : 116),
             right: 80, // leave space for the action rail
           },
         ]}

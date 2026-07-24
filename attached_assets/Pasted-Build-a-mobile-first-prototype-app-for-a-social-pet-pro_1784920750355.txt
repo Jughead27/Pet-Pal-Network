@@ -55,7 +55,7 @@ Pet Profile
 
 basic navigation between them
 
-Use realistic placeholder pet data for one sample pet named Ripley.
+Use realistic placeholder pet data for one sample pet named Finn.
 
 Home feed requirements
 The Home screen should show a single dominant pet post that fills most of the mobile viewport.
@@ -136,7 +136,7 @@ tap toggles the state between:
 Make this easy to refine later.
 
 Pet Profile requirements
-Build a Pet Profile screen for Ripley.
+Build a Pet Profile screen for Finn.
 
 Layout:
 
@@ -177,7 +177,7 @@ Use local in-app state only.
 
 Include:
 
-sample pet data for Ripley
+sample pet data for Finn
 
 boop count
 
