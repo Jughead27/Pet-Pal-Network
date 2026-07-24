@@ -69,7 +69,7 @@ export default function HomeScreen() {
       />
 
       {/* ActionRail — right edge, vertically centered */}
-      <View style={[styles.railContainer, { bottom: insets.bottom + (Platform.OS === 'web' ? 84 : 90) }]}>
+      <View style={[styles.railContainer, { bottom: insets.bottom + (Platform.OS === 'web' ? 110 : 116) }]}>
         <ActionRail
           onCommentPress={() => setCommentSheetVisible(true)}
           onSharePress={() => setShareSheetVisible(true)}
