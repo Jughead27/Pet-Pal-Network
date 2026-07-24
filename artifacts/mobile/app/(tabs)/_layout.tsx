@@ -36,6 +36,10 @@ export default function TabLayout() {
           borderTopColor: colors.border,
           elevation: 0,
           paddingBottom: isWeb ? 0 : safeAreaInsets.bottom,
+          // overflow: visible lets the Add circle bleed above the bar on both
+          // web (CSS overflow) and native (RN overflow). Without this the circle
+          // is hard-clipped at the bar's top edge.
+          overflow: 'visible',
           ...(isWeb ? { height: 84 } : {}),
         },
         tabBarBackground: () =>
@@ -83,19 +87,44 @@ export default function TabLayout() {
         options={{
           title: 'Add',
           tabBarIcon: () => (
-            // 44×44 touch target; 32px visible circle — no elevation, fully in-bar
-            <View style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+            // Touch target: 48×48 (≥44 required), centered on the circle.
+            // marginTop: -22 lifts the whole block so ~9px of the 40px circle
+            // bleeds above the nav bar's top edge.  The label stays at its
+            // natural baseline because tabBarLabel is rendered separately by
+            // React Navigation — only the icon wrapper moves.
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: -22,
+                // Allow the circle to paint outside this wrapper on web
+                overflow: 'visible',
+              }}
+            >
               <View
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
                   backgroundColor: colors.foreground,
                   alignItems: 'center',
                   justifyContent: 'center',
+                  // iOS / macOS shadow
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 8,
+                  // Android elevation (also provides shadow on API 21+)
+                  elevation: 8,
+                  // React Native Web box-shadow
+                  ...(isWeb ? { boxShadow: '0 2px 8px rgba(0,0,0,0.25)' } : {}),
+                  // Sit above media canvas and any scrims
+                  zIndex: 20,
                 }}
               >
-                <Feather name="plus" size={18} color={colors.background} />
+                <Feather name="plus" size={20} color={colors.background} />
               </View>
             </View>
           ),
