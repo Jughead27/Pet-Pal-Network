@@ -1,21 +1,19 @@
 /**
  * PopText — one independent reaction pop animation.
  *
- * Spawned per press. Animates: scale 0.5 → 1.1 (spring), drifts up 24px,
- * fades out. Total ~600ms then calls onDone so parent can remove it.
+ * Spawned per press. Animates: scale 0.5 → 1.1 (elastic bounce), drifts up
+ * 24 px, fades out. Total ~600 ms then calls onDone so parent can remove it.
  * With reducedMotion: simple fade only, no movement or scale change.
+ *
+ * Implemented with React Native's built-in Animated API (NOT Reanimated) so it
+ * works in Expo Go regardless of the bundled Reanimated version. Reanimated
+ * shared values start at their initial value and never animate when there is a
+ * version mismatch between the bundled and installed Reanimated — which causes
+ * pops to stay invisible (opacity starts at 0).
  */
 
-import React, { useEffect } from 'react';
-import { StyleSheet } from 'react-native';
-import Animated, {
-  runOnJS,
-  useAnimatedStyle,
-  useSharedValue,
-  withSequence,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, Text } from 'react-native';
 
 interface PopTextProps {
   word: string;
@@ -30,61 +28,77 @@ interface PopTextProps {
 }
 
 export default function PopText({ word, rotation, onDone, reducedMotion, right, bottom }: PopTextProps) {
-  const scale      = useSharedValue(reducedMotion ? 1 : 0.5);
-  const translateY = useSharedValue(0);
-  const opacity    = useSharedValue(0);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [
-      { scale: scale.value },
-      { translateY: translateY.value },
-      { rotate: `${reducedMotion ? 0 : rotation}deg` },
-    ],
-    opacity: opacity.value,
-  }));
+  const opacity    = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+  const scale      = useRef(new Animated.Value(reducedMotion ? 1 : 0.5)).current;
 
   useEffect(() => {
     if (reducedMotion) {
-      // Appear and fade — no movement
-      opacity.value = withSequence(
-        withTiming(1, { duration: 120 }),
-        withTiming(1, { duration: 280 }),
-        withTiming(0, { duration: 200 }, (finished) => {
-          if (finished) runOnJS(onDone)();
-        }),
-      );
+      // Appear and fade — no movement or scale change
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 1, duration: 120, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 280, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      ]).start(({ finished }) => {
+        if (finished) onDone();
+      });
     } else {
-      // Spring in, drift up, fade out — all on independent timelines
-      // Opacity: quick appear, hold, then fade
-      opacity.value = withSequence(
-        withTiming(1, { duration: 80 }),
-        withTiming(1, { duration: 180 }),
-        withTiming(0, { duration: 340 }),
-      );
-      // Scale: spring to 1.1 then hold
-      scale.value = withSpring(1.1, { damping: 9, stiffness: 380 });
-      // Translate: drift up 24px over 600ms, then call onDone
-      translateY.value = withTiming(-24, { duration: 600 }, (finished) => {
-        if (finished) runOnJS(onDone)();
+      // All three timelines run in parallel:
+      //   Opacity  — quick appear (80ms), hold (180ms), fade out (340ms) → 600ms total
+      //   Scale    — elastic bounce from 0.5 to 1.1 over 200ms
+      //   TranslateY — drift up 24px over 600ms
+      // onDone fires when the parallel composite finishes (~600ms).
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(opacity, { toValue: 1, duration: 80,  useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 1, duration: 180, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0, duration: 340, useNativeDriver: true }),
+        ]),
+        Animated.timing(scale, {
+          toValue: 1.1,
+          duration: 200,
+          easing: Easing.elastic(2),
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateY, {
+          toValue: -24,
+          duration: 600,
+          easing: Easing.out(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]).start(({ finished }) => {
+        if (finished) onDone();
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
-    <Animated.Text
-      style={[styles.pop, { right, bottom }, animStyle]}
-      // @ts-ignore — React Native Web supports pointerEvents on Text
+    <Animated.View
       pointerEvents="none"
+      style={[
+        styles.container,
+        { right, bottom },
+        {
+          opacity,
+          transform: [
+            { translateY },
+            { scale },
+            { rotate: reducedMotion ? '0deg' : `${rotation}deg` },
+          ],
+        },
+      ]}
     >
-      {word}
-    </Animated.Text>
+      <Text style={styles.text}>{word}</Text>
+    </Animated.View>
   );
 }
 
 const styles = StyleSheet.create({
-  pop: {
+  container: {
     position: 'absolute',
+  },
+  text: {
     fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',

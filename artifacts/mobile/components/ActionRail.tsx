@@ -16,6 +16,7 @@
 
 import React, { useRef } from 'react';
 import {
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -188,6 +189,11 @@ export default function ActionRail({
     // Web haptic: double tick — distinct from boop
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       navigator.vibrate([10, 40, 10]);
+    }
+    // Native haptic: two light impacts ~60ms apart so treats feel distinct from boops
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 60);
     }
     treat();
     onTreatFired?.();

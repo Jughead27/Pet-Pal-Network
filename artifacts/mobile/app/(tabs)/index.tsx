@@ -7,8 +7,9 @@
  *   Tap "more/less"      → expand / collapse caption
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AccessibilityInfo,
   Dimensions,
   Image,
   Platform,
@@ -20,7 +21,6 @@ import {
 } from 'react-native';
 import Animated, {
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -77,7 +77,15 @@ export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { pet, boop } = useApp();
-  const reducedMotion = useReducedMotion();
+
+  // Reduced motion — queried via AccessibilityInfo (built-in, no Reanimated dependency)
+  // so PopText's built-in Animated path receives the correct flag in Expo Go.
+  const [reducedMotion, setReducedMotion] = useState(false);
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', setReducedMotion);
+    return () => sub.remove();
+  }, []);
 
   const [commentSheetVisible, setCommentSheetVisible] = useState(false);
   const [shareSheetVisible, setShareSheetVisible] = useState(false);

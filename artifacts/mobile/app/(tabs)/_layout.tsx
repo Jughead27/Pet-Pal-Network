@@ -3,44 +3,19 @@ import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { isLiquidGlassAvailable } from 'expo-glass-effect';
 import { Tabs } from 'expo-router';
-import { Icon, Label, NativeTabs } from 'expo-router/unstable-native-tabs';
-import { SymbolView } from 'expo-symbols';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SniffIcon from '@/components/SniffIcon';
 import HatchlingIcon from '@/components/HatchlingIcon';
 
-// iOS 26+: NativeTabs with liquid glass (system-native; brand colors don't apply here)
-function NativeTabLayout() {
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: 'house', selected: 'house.fill' }} />
-        <Label>Home</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="discovery">
-        <Icon sf={{ default: 'safari', selected: 'safari.fill' }} />
-        <Label>Sniff</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="add">
-        <Icon sf={{ default: 'plus.circle', selected: 'plus.circle.fill' }} />
-        <Label>Add</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="nursery">
-        <Icon sf={{ default: 'bird', selected: 'bird.fill' }} />
-        <Label>Nursery</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: 'person', selected: 'person.fill' }} />
-        <Label>Profile</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
+// ─── TabLayout ────────────────────────────────────────────────────────────────
+//
+// Always uses the Classic (Tabs) layout so every tab renders its custom icon.
+// The NativeTabs / liquid-glass path was removed: NativeTabs only supports SF
+// symbols via <Icon>, so it cannot render SniffIcon or HatchlingIcon, causing
+// Expo Go to show a compass (safari SF symbol) and a dove (bird SF symbol).
 
-// Pre-iOS 26 / Android / Web
-function ClassicTabLayout() {
+export default function TabLayout() {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
@@ -89,27 +64,20 @@ function ClassicTabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="house" tintColor={color} size={22} />
-            ) : (
-              <Feather name="home" size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
         }}
       />
+
+      {/* Sniff — always the custom sniffing-dog SVG, never an SF symbol */}
       <Tabs.Screen
         name="discovery"
         options={{
           title: 'Sniff',
           tabBarAccessibilityLabel: 'Sniff',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SniffIcon size={22} color={color} />
-            ) : (
-              <SniffIcon size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => <SniffIcon size={22} color={color} />,
         }}
       />
+
       <Tabs.Screen
         name="add"
         options={{
@@ -133,6 +101,8 @@ function ClassicTabLayout() {
           ),
         }}
       />
+
+      {/* Nursery — always the custom hatchling SVG, never an SF symbol */}
       <Tabs.Screen
         name="nursery"
         options={{
@@ -140,25 +110,14 @@ function ClassicTabLayout() {
           tabBarIcon: ({ color }) => <HatchlingIcon size={22} color={color} />,
         }}
       />
+
       <Tabs.Screen
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="person" tintColor={color} size={22} />
-            ) : (
-              <Feather name="user" size={22} color={color} />
-            ),
+          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
         }}
       />
     </Tabs>
   );
-}
-
-export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout />;
 }

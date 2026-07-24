@@ -1,0 +1,13 @@
+The Expo/React Native build has diverged from the approved web design. Fix the native implementation to match the current web build, and prevent future divergence. Three fixes, then an audit:
+
+1 — NAV ICONS. In Expo Go, Sniff renders as a compass and Nursery as a generic dove from an icon library. These substitutions are not acceptable. Install react-native-svg (version compatible with the current Expo SDK) and port the exact custom icon components currently used on web — the Sniff sniffing-dog silhouette, the Nursery hatchling (in its current baseline-corrected position), the PawIcon on the follow button, and any other custom SVGs — to react-native-svg primitives (Svg, Path, Circle, Ellipse, Rect) with identical paths, viewBox, sizes, stroke weights, and fills. Then restructure so web and native render each icon from ONE shared source of truth — a single component per icon with platform-appropriate output — so an icon updated once updates everywhere.
+
+2 — BOOP!/YUM! POPS. The pop animations do not appear in Expo Go because they were implemented with web-only animation. Reimplement for React Native using the built-in Animated API (do NOT add Reanimated unless its version exactly matches what Expo Go's current SDK bundles — mismatches fail silently). Behavior identical to web: EVERY press spawns its own "Boop!"/"Yum!" text instance next to the icon — opacity 0→1→0, translateY 0 to -24, scale 0.5→1.1, small random rotation, ~600ms, removed after; no throttling or debouncing, rapid presses stack. Check AccessibilityInfo.isReduceMotionEnabled: if true, fade only, no movement or scaling.
+
+3 — HAPTICS. Confirm native haptics use expo-haptics: Haptics.impactAsync(ImpactFeedbackStyle.Light) on every Boop press; for Treat, two light impacts ~60ms apart so treats feel distinct.
+
+Also verify the recent behavior changes exist on native identically to web: the tap-to-hide chrome toggle WITH its exclusion zones around the right rail and bottom overlay, the scrims (bottom gradient and right-rail gradient), and the caption's 2-line clamp with tap-to-detail-view.
+
+4 — AUDIT. List every remaining place where the native build's UI differs from the web preview: icon substitutions, colors (including any coloring of the boop/treat rail icons), the nav bar's shape and styling, spacing, typography. Do NOT fix these — output the list only, so each difference can be ruled on deliberately.
+
+When done, I will retest everything in Expo Go on a physical iPhone.
