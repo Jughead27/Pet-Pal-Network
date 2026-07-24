@@ -1,0 +1,19 @@
+Three changes to the home page. Do not modify other screens or routes.
+
+CHANGE 1 — Shrink the Add button. It is currently far too large and overlaps the caption area.
+- The Add tab becomes a filled circle 32px in diameter (not larger), containing a plus glyph, sitting fully inside the nav bar and vertically center-aligned with the other four 24px icons. No elevation, no overlap above the nav bar, no shadow.
+- Circle fill: the same near-white the inactive icons use. Plus glyph: the nav bar's dark background color. No teal.
+- Tap target stays at least 44x44 via padding, but the visible circle is strictly 32px.
+- The "Add" label stays aligned with the other tab labels.
+
+CHANGE 2 — Add a legibility scrim to the media overlay.
+- Behind the pet name / breed / caption block, add a gradient overlay on the media, anchored to the bottom of the media area: linear-gradient(to top, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.25) 55%, transparent 100%). It should span the full width and roughly the bottom third of the screen, sitting above the media but below the text and nav.
+- Add text-shadow: 0 1px 3px rgba(0,0,0,0.4) to the pet name, breed, caption, and to the right-rail icons and counts.
+- This must not change the layout or position of any text or rail elements.
+
+CHANGE 3 — Chrome toggle and caption clamp.
+- A single tap anywhere on the media (that is not a button, the caption, or the rail) toggles "clean view": the name/breed/caption block, the right action rail, and the scrim fade out together over 200ms so only the photo/video remains, with the bottom nav still visible. Tapping again fades them back. Default state is always visible, and it resets to visible on every new post scrolled into view.
+- Make sure this tap does not conflict with the existing double-tap-to-boop gesture: use a short delay to distinguish single tap (toggle chrome) from double tap (boop).
+- Clamp the caption to a maximum of 2 lines with an ellipsis and a "more" affordance; tapping "more" expands it in place, tapping again collapses it.
+
+When done, show me the home page so I can check: (1) Add is small, in-line, and covers nothing, (2) text stays readable, (3) tap-to-hide works without breaking double-tap boop.

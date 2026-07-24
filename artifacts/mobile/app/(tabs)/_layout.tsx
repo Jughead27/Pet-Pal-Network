@@ -115,19 +115,20 @@ function ClassicTabLayout() {
         options={{
           title: 'Add',
           tabBarIcon: () => (
-            <View
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                backgroundColor: colors.foreground,
-                alignItems: 'center',
-                justifyContent: 'center',
-                // Raises the circle ~6px above the other icon baselines
-                marginBottom: 10,
-              }}
-            >
-              <Feather name="plus" size={24} color={colors.background} />
+            // 44×44 touch target; 32px visible circle — no elevation, fully in-bar
+            <View style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}>
+              <View
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: colors.foreground,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Feather name="plus" size={18} color={colors.background} />
+              </View>
             </View>
           ),
         }}

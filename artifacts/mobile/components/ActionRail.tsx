@@ -247,6 +247,9 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const,
     letterSpacing: 0.2,
     textAlign: 'center',
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   // Absolutely positioned; never shifts the icon column
   teachingLabel: {
