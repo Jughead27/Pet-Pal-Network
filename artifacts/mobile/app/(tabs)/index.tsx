@@ -99,12 +99,23 @@ export default function HomeScreen() {
       {/* ── Media tap target — sits behind all overlays ── */}
       <Pressable style={StyleSheet.absoluteFill} onPress={handleMediaPress} />
 
-      {/* ── Legibility scrim — fades with chrome ── */}
+      {/* ── Bottom legibility scrim — fades with chrome ── */}
       <Animated.View style={[styles.scrim, chromeStyle]} pointerEvents="none">
         <LinearGradient
           colors={['rgba(0,0,0,0.65)', 'rgba(0,0,0,0.25)', 'transparent']}
           locations={[0, 0.55, 1]}
           start={{ x: 0, y: 1 }}
+          end={{ x: 0, y: 0 }}
+          style={StyleSheet.absoluteFill}
+        />
+      </Animated.View>
+
+      {/* ── Right-edge rail scrim — fades with chrome ── */}
+      <Animated.View style={[styles.railScrim, chromeStyle]} pointerEvents="none">
+        <LinearGradient
+          colors={['rgba(0,0,0,0.45)', 'rgba(0,0,0,0.15)', 'transparent']}
+          locations={[0, 0.6, 1]}
+          start={{ x: 1, y: 0 }}
           end={{ x: 0, y: 0 }}
           style={StyleSheet.absoluteFill}
         />
@@ -200,13 +211,21 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  // Legibility scrim — covers bottom ~40% of screen
+  // Bottom legibility scrim — covers bottom ~45% of screen
   scrim: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
     height: SCREEN_HEIGHT * 0.45,
+  },
+  // Right-edge rail scrim — 96px wide, full screen height
+  railScrim: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 96,
   },
   railContainer: {
     position: 'absolute',

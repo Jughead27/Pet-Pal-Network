@@ -138,7 +138,7 @@ function ActionItem({
           {renderIcon(iconColor, 24)}
         </Animated.View>
         {countText !== undefined && (
-          <Text style={[styles.count, { color: colors.mutedForeground }]}>
+          <Text style={[styles.count, { color: 'rgba(240,244,248,0.85)' }]}>
             {countText}
           </Text>
         )}
