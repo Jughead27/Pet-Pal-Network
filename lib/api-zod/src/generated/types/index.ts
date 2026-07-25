@@ -17,6 +17,7 @@ export * from './feedPost';
 export * from './feedResponse';
 export * from './healthStatus';
 export * from './myPetsResponse';
+export * from './packResult';
 export * from './pet';
 export * from './petProfile';
 export * from './petSummary';

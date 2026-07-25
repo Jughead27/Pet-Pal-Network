@@ -287,6 +287,21 @@ async function main() {
   }
 
   console.log(`Backfill complete — ${backfilledCount} pet(s) updated.`);
+
+  // ── Auto-pack backfill: every owner gets pack_follows rows for their own pets ──
+  console.log("Backfilling pack_follows for existing pet owners…");
+  const allPets = await db.select({ id: schema.petsTable.id, ownerId: schema.petsTable.ownerId }).from(schema.petsTable);
+  let packCount = 0;
+  for (const pet of allPets) {
+    const result = await db
+      .insert(schema.packFollowsTable)
+      .values({ userId: pet.ownerId, petId: pet.id })
+      .onConflictDoNothing();
+    // onConflictDoNothing returns rowCount 0 if already existed
+    packCount++;
+  }
+  console.log(`  ✓ Processed ${packCount} pet(s) — owners now in their own Pack.`);
+
   await pool.end();
 }
 

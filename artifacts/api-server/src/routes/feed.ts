@@ -7,6 +7,7 @@ import {
   treatsTable,
   commentsTable,
   configTable,
+  packFollowsTable,
 } from "@workspace/db";
 import { and, eq, gte, desc, sql } from "drizzle-orm";
 import { presignGet } from "../lib/r2.js";
@@ -18,7 +19,7 @@ const router: IRouter = Router();
  *
  * Returns all posts in reverse-chronological order, each with embedded pet
  * info, aggregate reaction counts, and per-post viewer state (has_booped /
- * has_treated).  Also returns viewer.treats_remaining_today.
+ * has_treated / viewer_in_pack).  Also returns viewer.treats_remaining_today.
  *
  * Requires a valid Clerk session token (enforced by requireClerkAuth).
  */
@@ -27,28 +28,34 @@ router.get("/feed", async (req, res) => {
 
   const rows = await db
     .select({
-      id: postsTable.id,
-      caption: postsTable.caption,
-      mediaKey: postsTable.mediaKey,
-      cropFocusX: postsTable.cropFocusX,
-      cropFocusY: postsTable.cropFocusY,
-      isNursery: postsTable.isNursery,
-      createdAt: postsTable.createdAt,
-      petId: petsTable.id,
-      petName: petsTable.name,
-      petSpecies: petsTable.species,
-      petBreed: petsTable.breed,
-      boopCount: sql<number>`count(distinct ${boopsTable.id})::int`,
-      treatCount: sql<number>`count(distinct ${treatsTable.id})::int`,
+      id:          postsTable.id,
+      caption:     postsTable.caption,
+      mediaKey:    postsTable.mediaKey,
+      cropFocusX:  postsTable.cropFocusX,
+      cropFocusY:  postsTable.cropFocusY,
+      isNursery:   postsTable.isNursery,
+      createdAt:   postsTable.createdAt,
+      petId:       petsTable.id,
+      petName:     petsTable.name,
+      petSpecies:  petsTable.species,
+      petBreed:    petsTable.breed,
+      boopCount:    sql<number>`count(distinct ${boopsTable.id})::int`,
+      treatCount:   sql<number>`count(distinct ${treatsTable.id})::int`,
       commentCount: sql<number>`count(distinct ${commentsTable.id})::int`,
       // bool_or across the LEFT-JOINed rows: true if any row belongs to the viewer
-      viewerHasBooped: sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
+      viewerHasBooped:  sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
       viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
+      // Correlated EXISTS — whether the viewer follows this pet
+      viewerInPack: sql<boolean>`exists(
+        select 1 from pack_follows pf
+        where pf.user_id = ${userId}
+          and pf.pet_id = ${petsTable.id}
+      )`,
     })
     .from(postsTable)
-    .innerJoin(petsTable, eq(petsTable.id, postsTable.petId))
-    .leftJoin(boopsTable, eq(boopsTable.postId, postsTable.id))
-    .leftJoin(treatsTable, eq(treatsTable.postId, postsTable.id))
+    .innerJoin(petsTable,    eq(petsTable.id,    postsTable.petId))
+    .leftJoin(boopsTable,    eq(boopsTable.postId,    postsTable.id))
+    .leftJoin(treatsTable,   eq(treatsTable.postId,   postsTable.id))
     .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
     .groupBy(postsTable.id, petsTable.id)
     .orderBy(desc(postsTable.createdAt));
@@ -74,15 +81,16 @@ router.get("/feed", async (req, res) => {
       caption:     r.caption ?? null,
       mediaKey:    r.mediaKey,
       mediaUrl:    await presignGet(r.mediaKey),
-      cropFocusX:  r.cropFocusX ?? null,
-      cropFocusY:  r.cropFocusY ?? null,
+      cropFocusX:  r.cropFocusX  ?? null,
+      cropFocusY:  r.cropFocusY  ?? null,
       isNursery:   r.isNursery,
       createdAt:   r.createdAt,
       pet: {
-        id:      r.petId,
-        name:    r.petName,
-        species: r.petSpecies,
-        breed:   r.petBreed ?? null,
+        id:          r.petId,
+        name:        r.petName,
+        species:     r.petSpecies,
+        breed:       r.petBreed ?? null,
+        viewerInPack: r.viewerInPack,
       },
       boopCount:        r.boopCount,
       treatCount:       r.treatCount,

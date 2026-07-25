@@ -14,4 +14,6 @@ export interface PetSummary {
   name: string;
   species: string;
   breed?: string | null;
+  /** Whether the authenticated viewer is in this pet's Pack */
+  viewerInPack: boolean;
 }

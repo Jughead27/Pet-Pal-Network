@@ -38,7 +38,7 @@ import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import { useBoopPost } from '@workspace/api-client-react';
-import type { FeedPost } from '@workspace/api-client-react';
+import type { FeedPost, PackResult } from '@workspace/api-client-react';
 import ActionRail from '@/components/ActionRail';
 import AddToPackLink from '@/components/AddToPackLink';
 import PopText from '@/components/PopText';
@@ -376,7 +376,10 @@ export default function FeedPage({
           >
             <Text style={styles.petName}>{petName}</Text>
           </TouchableOpacity>
-          <AddToPackLink />
+          <AddToPackLink
+            petId={petId}
+            initialInPack={post.pet.viewerInPack}
+          />
         </View>
 
         <Text style={[styles.petBreed, { color: 'rgba(240,244,248,0.75)' }]}>

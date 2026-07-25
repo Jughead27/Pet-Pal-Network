@@ -5,6 +5,7 @@ import petsRouter from "./pets";
 import postsRouter from "./posts";
 import uploadsRouter from "./uploads";
 import speciesRouter from "./species";
+import packRouter from "./pack";
 import { requireClerkAuth } from "../middlewares/requireClerkAuth";
 
 const router: IRouter = Router();
@@ -24,5 +25,6 @@ router.use(petsRouter);    // GET /pets/:id  POST /pets  GET /me/pets
 router.use(postsRouter);   // GET /posts/:id/comments  POST /posts/:id/{boops,treats,comments}
 router.use(uploadsRouter); // POST /uploads/presign
 router.use(speciesRouter); // GET /species  GET /species/:id/breeds
+router.use(packRouter);    // POST /pets/:id/pack  DELETE /pets/:id/pack
 
 export default router;

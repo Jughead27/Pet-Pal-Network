@@ -2,8 +2,8 @@
  * Pet Profile — pet's profile screen.
  *
  * Data comes from GET /pets/:id via useGetPet(id).
+ * Displays packCount + viewerInPack (server-backed via AddToPackLink).
  * Boop/treat aggregate totals are summed across all posts from the server.
- * Images are resolved via resolveMediaKey() (seed: keys → bundled assets).
  */
 
 import React, { useState } from "react";
@@ -24,10 +24,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons, Feather } from "@expo/vector-icons";
+import Svg, { Path } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 import { useGetPet } from "@workspace/api-client-react";
+import type { FeedPost, PackResult } from "@workspace/api-client-react";
 import { resolveMediaKey } from "@/utils/mediaKey";
-import type { FeedPost } from "@workspace/api-client-react";
 import AddToPackLink from "@/components/AddToPackLink";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -39,6 +40,15 @@ function formatCount(n: number): string {
   return String(n);
 }
 
+/** Filled paw icon for the Pack stat cell. */
+function PawStatIcon({ size = 16, color }: { size?: number; color: string }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color} stroke="none">
+      <Path d="M7.2 7.24a1.9 1.9 0 0 0-1.9 2.4c.19.98 1.04 1.7 2.09 1.52A2.19 2.19 0 0 0 9.1 9.4a1.9 1.9 0 0 0-1.9-2.16zm9.6 0a1.9 1.9 0 0 0-1.9 2.16 2.19 2.19 0 0 0 1.71 1.76c1.05.18 1.9-.54 2.09-1.52a1.9 1.9 0 0 0-1.9-2.4zM10 4.1a1.8 1.8 0 0 0-1.8 2.3 2.11 2.11 0 0 0 1.64 1.7c1.02.17 1.83-.52 1.96-1.5A1.8 1.8 0 0 0 10 4.1zm4 0a1.8 1.8 0 0 0-1.8 2.5c.13.98.94 1.67 1.96 1.5A2.11 2.11 0 0 0 15.8 6.4 1.8 1.8 0 0 0 14 4.1zM12 11c-2.6 0-4.9 2-4.9 4.3 0 1.6 1.2 2.7 2.8 2.7 1 0 1.5-.4 2.1-.4s1.1.4 2.1.4c1.6 0 2.8-1.1 2.8-2.7C16.9 13 14.6 11 12 11Z" />
+    </Svg>
+  );
+}
+
 export default function PetProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -48,6 +58,8 @@ export default function PetProfileScreen() {
   const { data: pet, isLoading, isError } = useGetPet(petId ?? "");
 
   const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  // Local pack count — initialised from server, updated optimistically on toggle
+  const [localPackCount, setLocalPackCount] = useState<number | null>(null);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
@@ -74,16 +86,20 @@ export default function PetProfileScreen() {
   }
 
   // Aggregate reaction totals across all posts
-  const totalBoops   = pet.posts.reduce((s, p) => s + p.boopCount, 0);
-  const totalTreats  = pet.posts.reduce((s, p) => s + p.treatCount, 0);
+  const totalBoops  = pet.posts.reduce((s, p) => s + p.boopCount,  0);
+  const totalTreats = pet.posts.reduce((s, p) => s + p.treatCount, 0);
+  const packCount   = localPackCount ?? pet.packCount;
 
   // Hero image: first post's media key (most recent)
   const heroSource = pet.posts.length > 0
     ? resolveMediaKey(pet.posts[0].mediaKey, pet.posts[0].mediaUrl)
     : resolveMediaKey("seed:hero");
 
-  const selectedPost: FeedPost | undefined =
-    pet.posts.find((p) => p.id === selectedPostId);
+  const selectedPost: FeedPost | undefined = pet.posts.find((p) => p.id === selectedPostId);
+
+  const handlePackSuccess = (result: PackResult) => {
+    setLocalPackCount(result.packCount);
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -125,7 +141,11 @@ export default function PetProfileScreen() {
             <Text style={[styles.petName, { color: colors.foreground }]}>
               {pet.name}
             </Text>
-            <AddToPackLink />
+            <AddToPackLink
+              petId={pet.id}
+              initialInPack={pet.viewerInPack}
+              onSuccess={handlePackSuccess}
+            />
           </View>
 
           <Text style={[styles.breed, { color: colors.mutedForeground }]}>
@@ -140,6 +160,14 @@ export default function PetProfileScreen() {
 
           {/* ── Stats ── */}
           <View style={[styles.statsRow, { borderColor: colors.border }]}>
+            <View style={styles.stat}>
+              <PawStatIcon size={16} color={colors.primary} />
+              <Text style={[styles.statValue, { color: colors.foreground, marginTop: 4 }]}>
+                {formatCount(packCount)}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Pack</Text>
+            </View>
+            <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.stat}>
               <Feather name="heart" size={16} color={colors.accent} style={{ marginBottom: 4 }} />
               <Text style={[styles.statValue, { color: colors.foreground }]}>
@@ -233,47 +261,45 @@ export default function PetProfileScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  centered: { alignItems: "center", justifyContent: "center" },
-  scroll: { flex: 1 },
-  heroWrapper: { position: "relative" },
-  heroImage: { width: "100%" },
-  heroGradient: {
-    position: "absolute", left: 0, right: 0, bottom: 0, height: 120,
-  },
+  centered:  { alignItems: "center", justifyContent: "center" },
+  scroll:    { flex: 1 },
+  heroWrapper:  { position: "relative" },
+  heroImage:    { width: "100%" },
+  heroGradient: { position: "absolute", left: 0, right: 0, bottom: 0, height: 120 },
   backBtn: {
     position: "absolute", left: 14, width: 38, height: 38, borderRadius: 19,
     alignItems: "center", justifyContent: "center",
   },
   profileSection: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, gap: 6 },
   nameRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  petName: { fontSize: 26, fontWeight: "700" as const, letterSpacing: 0.2 },
-  breed: { fontSize: 14, fontWeight: "500" as const, letterSpacing: 0.3 },
-  bio: { fontSize: 14, lineHeight: 20, marginTop: 4 },
+  petName: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: 0.2 },
+  breed:   { fontSize: 14, fontFamily: "Inter_500Medium", letterSpacing: 0.3 },
+  bio:     { fontSize: 14, lineHeight: 20, marginTop: 4, fontFamily: "Inter_400Regular" },
   statsRow: {
     flexDirection: "row", alignItems: "center", marginTop: 16,
     paddingVertical: 16,
     borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  stat: { flex: 1, alignItems: "center" },
-  statValue: { fontSize: 18, fontWeight: "700" as const },
-  statLabel: {
-    fontSize: 11, fontWeight: "500" as const, letterSpacing: 0.5,
+  stat:       { flex: 1, alignItems: "center" },
+  statValue:  { fontSize: 18, fontFamily: "Inter_700Bold" },
+  statLabel:  {
+    fontSize: 11, fontFamily: "Inter_500Medium", letterSpacing: 0.5,
     textTransform: "uppercase", marginTop: 2,
   },
   statDivider: { width: StyleSheet.hairlineWidth, height: 36 },
   gridDivider: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 2 },
-  gridItem: { width: GRID_ITEM_SIZE, height: GRID_ITEM_SIZE },
-  gridImage: { width: "100%", height: "100%" },
+  grid:        { flexDirection: "row", flexWrap: "wrap", gap: 2 },
+  gridItem:    { width: GRID_ITEM_SIZE, height: GRID_ITEM_SIZE },
+  gridImage:   { width: "100%", height: "100%" },
   modalOverlay: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.85)",
     justifyContent: "center", alignItems: "center",
   },
-  modalContent: { width: SCREEN_WIDTH - 32, borderRadius: 16, overflow: "hidden" },
-  modalImage: { width: "100%", height: SCREEN_WIDTH - 32 },
-  modalCaption: { padding: 16, gap: 4 },
-  modalPetName: { fontSize: 13, fontWeight: "600" as const, letterSpacing: 0.4 },
-  modalCaptionText: { fontSize: 14, lineHeight: 20 },
+  modalContent:     { width: SCREEN_WIDTH - 32, borderRadius: 16, overflow: "hidden" },
+  modalImage:       { width: "100%", height: SCREEN_WIDTH - 32 },
+  modalCaption:     { padding: 16, gap: 4 },
+  modalPetName:     { fontSize: 13, fontFamily: "Inter_600SemiBold", letterSpacing: 0.4 },
+  modalCaptionText: { fontSize: 14, lineHeight: 20, fontFamily: "Inter_400Regular" },
   modalCloseBtn: {
     position: "absolute", top: 12, right: 12,
     width: 32, height: 32, borderRadius: 16,

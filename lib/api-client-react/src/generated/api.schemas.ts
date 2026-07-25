@@ -21,6 +21,8 @@ export interface PetSummary {
   name: string;
   species: string;
   breed?: string | null;
+  /** Whether the authenticated viewer is in this pet's Pack */
+  viewerInPack: boolean;
 }
 
 /**
@@ -70,7 +72,21 @@ export interface PetProfile {
   species: string;
   breed?: string | null;
   bio?: string | null;
+  /** Number of users who have this pet in their Pack */
+  packCount: number;
+  /** Whether the authenticated viewer is in this pet's Pack */
+  viewerInPack: boolean;
   posts: FeedPost[];
+}
+
+/**
+ * Result of a pack join or leave action
+ */
+export interface PackResult {
+  /** Current number of users in this pet's Pack */
+  packCount: number;
+  /** Whether the viewer is now in the Pack */
+  viewerInPack: boolean;
 }
 
 /**

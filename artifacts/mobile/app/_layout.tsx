@@ -16,7 +16,7 @@ import {
 } from '@expo-google-fonts/inter';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { AppProvider } from '@/context/AppContext';
+import { PackProvider } from '@/context/PackContext';
 import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
 
 // Set the API base URL before any component renders.
@@ -131,10 +131,10 @@ export default function RootLayout() {
           <QueryClientProvider client={queryClient}>
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
-                <AppProvider>
+                <PackProvider>
                   <ClerkTokenSync />
                   <RootLayoutNav />
-                </AppProvider>
+                </PackProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>
           </QueryClientProvider>

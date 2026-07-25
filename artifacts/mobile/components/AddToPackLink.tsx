@@ -1,25 +1,37 @@
 /**
- * AddToPackLink — filled solid paw print inside a circular toggle button.
+ * AddToPackLink — server-backed pack follow/unfollow toggle.
  *
- * States:
+ * Reads and writes to PackContext so that all instances for the same pet
+ * (e.g. multiple posts for Finn in the feed, or the same pet's feed post
+ * and profile page) stay in sync without a full refetch.
+ *
+ * Optimistic update flow:
+ *   1. Immediately flip state in PackContext (all instances for petId update).
+ *   2. Fire the join / leave mutation.
+ *   3. On success: call onSuccess(result) if provided (for pack count updates).
+ *   4. On error: revert PackContext to prior state (all instances revert).
+ *
+ * Animation sync: a useEffect watches isInPack and syncs the Animated.Value
+ * for instances that didn't trigger the mutation themselves (cross-post
+ * consistency in the feed — Finn followed from post A immediately shows
+ * active on posts B and C without a full refetch).
+ *
+ * Visual states:
  *   Inactive  outlined ring, paw in light foreground (dim)
  *   Active    solid light-filled ring, paw in dark background (inverted)
  *
- * Transition: 150ms cross-fade driven by React Native's built-in Animated API.
- * Two absolutely-stacked ring layers cross-fade between the inactive and active
- * appearances — avoids the need for Reanimated's interpolateColor.
- *
- * Touch target: 40×40.  Visible circle: 26×26.
+ * Transition: 150ms cross-fade.  No react-native-reanimated.
  */
 
-import React, { useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
 import Svg, { Ellipse, Path } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
-import { useApp } from '@/context/AppContext';
+import { useJoinPetPack, useLeavePetPack } from '@workspace/api-client-react';
+import type { PackResult } from '@workspace/api-client-react';
+import { usePackContext } from '@/context/PackContext';
 
 // ─── PawIcon ─────────────────────────────────────────────────────────────────
-// Filled solid paw print (4 toes + pad). No strokes. fill = color prop.
 
 interface PawIconProps {
   size?: number;
@@ -41,30 +53,84 @@ function PawIcon({ size = 24, color = '#F0F4F8' }: PawIconProps) {
   );
 }
 
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface AddToPackLinkProps {
+  petId: string;
+  /** Server-provided initial state; PackContext takes over after first mutation. */
+  initialInPack: boolean;
+  /** Called with the server's confirmed result after a successful toggle. */
+  onSuccess?: (result: PackResult) => void;
+}
+
 // ─── AddToPackLink ────────────────────────────────────────────────────────────
 
-export default function AddToPackLink() {
-  const { isInPack, togglePack } = useApp();
+export default function AddToPackLink({ petId, initialInPack, onSuccess }: AddToPackLinkProps) {
+  const { packMap, setPackState } = usePackContext();
 
-  // Track current state in a ref so the animation fires before context re-renders.
-  // progress: 0 = inactive, 1 = active.
-  const activeRef = useRef(isInPack);
+  // PackContext is authoritative once a key is set; fall back to server initial value.
+  const isInPack = packMap[petId] ?? initialInPack;
+
+  // Animated.Value drives the cross-fade between inactive (0) and active (1) rings.
   const progress = useRef(new Animated.Value(isInPack ? 1 : 0)).current;
+  // True while a mutation is in flight — suppresses the external-sync useEffect
+  // during the mutation so it doesn't fight the optimistic animation.
+  const mutatingRef = useRef(false);
 
-  // inactiveOpacity fades out as progress → 1 (interpolate 0→1 maps to opacity 1→0)
   const inactiveOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
 
-  const handlePress = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const next = !activeRef.current;
-    activeRef.current = next;
+  const { mutate: joinPack }  = useJoinPetPack();
+  const { mutate: leavePack } = useLeavePetPack();
+
+  const animateTo = useCallback((value: number) => {
     Animated.timing(progress, {
-      toValue: next ? 1 : 0,
+      toValue: value,
       duration: 150,
       useNativeDriver: true,
     }).start();
-    togglePack();
-  };
+  }, [progress]);
+
+  // Sync animation when PackContext changes due to another instance toggling
+  // the same pet (e.g., followed from the profile, should update feed posts).
+  useEffect(() => {
+    if (!mutatingRef.current) {
+      animateTo(isInPack ? 1 : 0);
+    }
+  }, [isInPack, animateTo]);
+
+  const handlePress = useCallback(() => {
+    if (mutatingRef.current) return;
+    mutatingRef.current = true;
+
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    const wasInPack = isInPack;
+    const nextInPack = !wasInPack;
+
+    // Optimistic update — all instances for this petId update immediately
+    setPackState(petId, nextInPack);
+    animateTo(nextInPack ? 1 : 0);
+
+    const mutate = nextInPack ? joinPack : leavePack;
+    mutate(
+      { id: petId },
+      {
+        onSuccess: (result) => {
+          // Sync with server-confirmed state (guards against out-of-order responses)
+          setPackState(petId, result.viewerInPack);
+          animateTo(result.viewerInPack ? 1 : 0);
+          onSuccess?.(result);
+          mutatingRef.current = false;
+        },
+        onError: () => {
+          // Revert — all instances for this petId revert
+          setPackState(petId, wasInPack);
+          animateTo(wasInPack ? 1 : 0);
+          mutatingRef.current = false;
+        },
+      },
+    );
+  }, [isInPack, petId, joinPack, leavePack, setPackState, animateTo, onSuccess]);
 
   return (
     <TouchableOpacity

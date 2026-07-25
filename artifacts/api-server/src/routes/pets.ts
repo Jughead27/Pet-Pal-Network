@@ -8,8 +8,9 @@ import {
   commentsTable,
   speciesTable,
   breedsTable,
+  packFollowsTable,
 } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql, and } from "drizzle-orm";
 import { CreatePetBody } from "@workspace/api-zod";
 import { presignGet } from "../lib/r2.js";
 
@@ -18,8 +19,9 @@ const router: IRouter = Router();
 /**
  * GET /pets/:id
  *
- * Returns a pet profile (name, species, breed, bio) and all of its posts
- * with the same FeedPost shape (reaction counts + viewer flags).
+ * Returns a pet profile (name, species, breed, bio, packCount, viewerInPack)
+ * and all of its posts with the same FeedPost shape (reaction counts + viewer
+ * flags, including viewerInPack on the embedded PetSummary).
  *
  * Requires a valid Clerk session token (enforced by requireClerkAuth).
  */
@@ -38,32 +40,45 @@ router.get("/pets/:id", async (req, res) => {
     return;
   }
 
+  // Pack count and viewer membership — single aggregation query
+  const [packRow] = await db
+    .select({
+      packCount:    sql<number>`count(*)::int`,
+      viewerInPack: sql<boolean>`coalesce(bool_or(${packFollowsTable.userId} = ${userId}), false)`,
+    })
+    .from(packFollowsTable)
+    .where(eq(packFollowsTable.petId, id));
+
+  const packCount    = packRow?.packCount    ?? 0;
+  const viewerInPack = packRow?.viewerInPack ?? false;
+
   const petSummary = {
-    id: pet.id,
-    name: pet.name,
-    species: pet.species,
-    breed: pet.breed ?? null,
+    id:           pet.id,
+    name:         pet.name,
+    species:      pet.species,
+    breed:        pet.breed ?? null,
+    viewerInPack,
   };
 
   // Fetch that pet's posts with reaction counts and viewer flags
   const rows = await db
     .select({
-      id: postsTable.id,
-      caption: postsTable.caption,
-      mediaKey: postsTable.mediaKey,
-      cropFocusX: postsTable.cropFocusX,
-      cropFocusY: postsTable.cropFocusY,
-      isNursery: postsTable.isNursery,
-      createdAt: postsTable.createdAt,
-      boopCount: sql<number>`count(distinct ${boopsTable.id})::int`,
-      treatCount: sql<number>`count(distinct ${treatsTable.id})::int`,
-      commentCount: sql<number>`count(distinct ${commentsTable.id})::int`,
-      viewerHasBooped: sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
+      id:              postsTable.id,
+      caption:         postsTable.caption,
+      mediaKey:        postsTable.mediaKey,
+      cropFocusX:      postsTable.cropFocusX,
+      cropFocusY:      postsTable.cropFocusY,
+      isNursery:       postsTable.isNursery,
+      createdAt:       postsTable.createdAt,
+      boopCount:       sql<number>`count(distinct ${boopsTable.id})::int`,
+      treatCount:      sql<number>`count(distinct ${treatsTable.id})::int`,
+      commentCount:    sql<number>`count(distinct ${commentsTable.id})::int`,
+      viewerHasBooped:  sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
       viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
     })
     .from(postsTable)
-    .leftJoin(boopsTable, eq(boopsTable.postId, postsTable.id))
-    .leftJoin(treatsTable, eq(treatsTable.postId, postsTable.id))
+    .leftJoin(boopsTable,    eq(boopsTable.postId,    postsTable.id))
+    .leftJoin(treatsTable,   eq(treatsTable.postId,   postsTable.id))
     .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
     .where(eq(postsTable.petId, id))
     .groupBy(postsTable.id)
@@ -71,15 +86,15 @@ router.get("/pets/:id", async (req, res) => {
 
   const posts = await Promise.all(
     rows.map(async (r) => ({
-      id:         r.id,
-      caption:    r.caption ?? null,
-      mediaKey:   r.mediaKey,
-      mediaUrl:   await presignGet(r.mediaKey),
-      cropFocusX: r.cropFocusX ?? null,
-      cropFocusY: r.cropFocusY ?? null,
-      isNursery:  r.isNursery,
-      createdAt:  r.createdAt,
-      pet:        petSummary,
+      id:               r.id,
+      caption:          r.caption ?? null,
+      mediaKey:         r.mediaKey,
+      mediaUrl:         await presignGet(r.mediaKey),
+      cropFocusX:       r.cropFocusX ?? null,
+      cropFocusY:       r.cropFocusY ?? null,
+      isNursery:        r.isNursery,
+      createdAt:        r.createdAt,
+      pet:              petSummary,
       boopCount:        r.boopCount,
       treatCount:       r.treatCount,
       commentCount:     r.commentCount,
@@ -89,11 +104,13 @@ router.get("/pets/:id", async (req, res) => {
   );
 
   res.json({
-    id: pet.id,
-    name: pet.name,
-    species: pet.species,
-    breed: pet.breed ?? null,
-    bio: pet.bio ?? null,
+    id:           pet.id,
+    name:         pet.name,
+    species:      pet.species,
+    breed:        pet.breed ?? null,
+    bio:          pet.bio  ?? null,
+    packCount,
+    viewerInPack,
     posts,
   });
 });
@@ -101,8 +118,10 @@ router.get("/pets/:id", async (req, res) => {
 /**
  * POST /pets
  *
- * Creates a new pet owned by the authenticated user.
- * Validates name (required) and species (required) server-side; returns 400 on failure.
+ * Creates a new pet owned by the authenticated user, then immediately adds the
+ * creator to that pet's Pack — both in a single transaction.  This ensures the
+ * owner always has their own pets in their Pack, which the future
+ * follows-filtered Home feed requires.
  */
 router.post("/pets", async (req, res) => {
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
@@ -153,18 +172,29 @@ router.post("/pets", async (req, res) => {
     resolvedBreed = breedRow.name;
   }
 
-  const [pet] = await db
-    .insert(petsTable)
-    .values({
-      ownerId:   userId,
-      name,
-      species:   resolvedSpecies,
-      breed:     resolvedBreed,
-      speciesId: speciesId ?? null,
-      breedId:   breedId   ?? null,
-      bio:       bio       ?? null,
-    })
-    .returning();
+  // Create the pet and auto-join the creator's Pack in one transaction
+  const pet = await db.transaction(async (tx) => {
+    const [newPet] = await tx
+      .insert(petsTable)
+      .values({
+        ownerId:   userId,
+        name,
+        species:   resolvedSpecies,
+        breed:     resolvedBreed,
+        speciesId: speciesId ?? null,
+        breedId:   breedId   ?? null,
+        bio:       bio        ?? null,
+      })
+      .returning();
+
+    // Auto-pack: owner always follows their own pet from creation
+    await tx
+      .insert(packFollowsTable)
+      .values({ userId, petId: newPet.id })
+      .onConflictDoNothing();
+
+    return newPet;
+  });
 
   res.status(201).json({
     id:        pet.id,
@@ -200,7 +230,7 @@ router.get("/me/pets", async (req, res) => {
       name:      p.name,
       species:   p.species,
       breed:     p.breed ?? null,
-      bio:       p.bio ?? null,
+      bio:       p.bio   ?? null,
       createdAt: p.createdAt,
     })),
   });

@@ -29,6 +29,7 @@ import type {
   FeedResponse,
   HealthStatus,
   MyPetsResponse,
+  PackResult,
   Pet,
   PetProfile,
   PostComment,
@@ -377,6 +378,150 @@ export function useGetSpeciesByIdBreeds<TData = Awaited<ReturnType<typeof getSpe
 
 
 
+
+export const getJoinPetPackUrl = (id: string,) => {
+
+
+
+
+  return `/api/pets/${id}/pack`
+}
+
+/**
+ * Adds the authenticated user to this pet's Pack. Idempotent — joining when already in the Pack is a no-op and returns current state.
+ * @summary Join a pet's Pack
+ */
+export const joinPetPack = async (id: string, options?: RequestInit): Promise<PackResult> => {
+
+  return customFetch<PackResult>(getJoinPetPackUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getJoinPetPackMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinPetPack>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof joinPetPack>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['joinPetPack'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof joinPetPack>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  joinPetPack(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type JoinPetPackMutationResult = NonNullable<Awaited<ReturnType<typeof joinPetPack>>>
+
+    export type JoinPetPackMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Join a pet's Pack
+ */
+export const useJoinPetPack = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof joinPetPack>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof joinPetPack>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getJoinPetPackMutationOptions(options));
+    }
+
+export const getLeavePetPackUrl = (id: string,) => {
+
+
+
+
+  return `/api/pets/${id}/pack`
+}
+
+/**
+ * Removes the authenticated user from this pet's Pack. Idempotent — leaving when not in the Pack is a no-op and returns current state.
+ * @summary Leave a pet's Pack
+ */
+export const leavePetPack = async (id: string, options?: RequestInit): Promise<PackResult> => {
+
+  return customFetch<PackResult>(getLeavePetPackUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getLeavePetPackMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof leavePetPack>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof leavePetPack>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['leavePetPack'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof leavePetPack>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  leavePetPack(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LeavePetPackMutationResult = NonNullable<Awaited<ReturnType<typeof leavePetPack>>>
+
+    export type LeavePetPackMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Leave a pet's Pack
+ */
+export const useLeavePetPack = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof leavePetPack>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof leavePetPack>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getLeavePetPackMutationOptions(options));
+    }
 
 export const getGetPetUrl = (id: string,) => {
 

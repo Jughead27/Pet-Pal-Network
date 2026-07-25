@@ -35,7 +35,8 @@ export const GetFeedResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "species": zod.string(),
-  "breed": zod.string().nullish()
+  "breed": zod.string().nullish(),
+  "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack')
 }).describe('Minimal pet info embedded in feed posts'),
   "boopCount": zod.number(),
   "treatCount": zod.number(),
@@ -81,6 +82,34 @@ export const GetSpeciesByIdBreedsResponse = zod.object({
 
 
 /**
+ * Adds the authenticated user to this pet's Pack. Idempotent — joining when already in the Pack is a no-op and returns current state.
+ * @summary Join a pet's Pack
+ */
+export const JoinPetPackParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const JoinPetPackResponse = zod.object({
+  "packCount": zod.number().describe('Current number of users in this pet\'s Pack'),
+  "viewerInPack": zod.boolean().describe('Whether the viewer is now in the Pack')
+}).describe('Result of a pack join or leave action')
+
+
+/**
+ * Removes the authenticated user from this pet's Pack. Idempotent — leaving when not in the Pack is a no-op and returns current state.
+ * @summary Leave a pet's Pack
+ */
+export const LeavePetPackParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const LeavePetPackResponse = zod.object({
+  "packCount": zod.number().describe('Current number of users in this pet\'s Pack'),
+  "viewerInPack": zod.boolean().describe('Whether the viewer is now in the Pack')
+}).describe('Result of a pack join or leave action')
+
+
+/**
  * Returns a pet profile with its posts and reaction counts
  * @summary Get pet profile
  */
@@ -94,6 +123,8 @@ export const GetPetResponse = zod.object({
   "species": zod.string(),
   "breed": zod.string().nullish(),
   "bio": zod.string().nullish(),
+  "packCount": zod.number().describe('Number of users who have this pet in their Pack'),
+  "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
   "posts": zod.array(zod.object({
   "id": zod.string(),
   "caption": zod.string().nullish(),
@@ -107,7 +138,8 @@ export const GetPetResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "species": zod.string(),
-  "breed": zod.string().nullish()
+  "breed": zod.string().nullish(),
+  "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack')
 }).describe('Minimal pet info embedded in feed posts'),
   "boopCount": zod.number(),
   "treatCount": zod.number(),
