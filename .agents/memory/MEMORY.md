@@ -2,3 +2,4 @@
 - [API Base URL — Expo domain split](api-base-url-expo-domain.md) — setBaseUrl required; relative fetch URLs hit the wrong host on both web and native.
 - [Write Reactions Architecture](write-reactions-architecture.md) — boop/treat/comment POST endpoints, viewer flags in feed, daily treat limit pattern.
 - [Orval index.ts append + Expo version pinning](orval-index-append.md) — orval appends duplicate exports after every codegen; fix both index files. Expo packages must be pinned to SDK 54 expected version, not latest.
+- [Crop Focus / Focal Point Architecture](crop-focus-architecture.md) — cropFocusX/Y on posts; FocalImage component; CropFramer WYSIWYG step; post detail route at app/post/[id].tsx.

@@ -204,7 +204,7 @@ export default function PetProfileScreen() {
                 <Image
                   source={resolveMediaKey(selectedPost.mediaKey, selectedPost.mediaUrl)}
                   style={styles.modalImage}
-                  resizeMode="cover"
+                  resizeMode="contain"
                 />
                 <View style={[styles.modalCaption, { backgroundColor: colors.card }]}>
                   <Text style={[styles.modalPetName, { color: colors.primary }]}>

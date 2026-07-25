@@ -27,6 +27,8 @@ export const GetFeedResponse = zod.object({
   "caption": zod.string().nullish(),
   "mediaKey": zod.string(),
   "mediaUrl": zod.string().nullable().describe('Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client).'),
+  "cropFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for cover-crop rendering. null = center.'),
+  "cropFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for cover-crop rendering. null = center.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -66,6 +68,8 @@ export const GetPetResponse = zod.object({
   "caption": zod.string().nullish(),
   "mediaKey": zod.string(),
   "mediaUrl": zod.string().nullable().describe('Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client).'),
+  "cropFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for cover-crop rendering. null = center.'),
+  "cropFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for cover-crop rendering. null = center.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -135,13 +139,21 @@ export const PresignUploadResponse = zod.object({
  */
 export const createPostBodyCaptionMax = 280;
 
+export const createPostBodyCropFocusXMin = 0;
+export const createPostBodyCropFocusXMax = 1;
+
+export const createPostBodyCropFocusYMin = 0;
+export const createPostBodyCropFocusYMax = 1;
+
 
 
 export const CreatePostBody = zod.object({
   "petId": zod.string(),
   "mediaKey": zod.string(),
   "caption": zod.string().max(createPostBodyCaptionMax).optional(),
-  "isNursery": zod.boolean().optional()
+  "isNursery": zod.boolean().optional(),
+  "cropFocusX": zod.number().min(createPostBodyCropFocusXMin).max(createPostBodyCropFocusXMax).nullish().describe('Horizontal focal point (0–1). null or omitted = center.'),
+  "cropFocusY": zod.number().min(createPostBodyCropFocusYMin).max(createPostBodyCropFocusYMax).nullish().describe('Vertical focal point (0–1). null or omitted = center.')
 }).describe('Request body for creating a post')
 
 export const CreatePostResponse = zod.object({

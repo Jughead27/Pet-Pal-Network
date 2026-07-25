@@ -15,4 +15,16 @@ export interface CreatePostBody {
   /** @maxLength 280 */
   caption?: string;
   isNursery?: boolean;
+  /**
+     * Horizontal focal point (0–1). null or omitted = center.
+     * @minimum 0
+     * @maximum 1
+     */
+  cropFocusX?: number | null;
+  /**
+     * Vertical focal point (0–1). null or omitted = center.
+     * @minimum 0
+     * @maximum 1
+     */
+  cropFocusY?: number | null;
 }

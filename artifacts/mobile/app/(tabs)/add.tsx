@@ -5,8 +5,10 @@
  *   1. If the user owns no pets → prompt linking to pet creation.
  *   2. Pick a photo from the camera roll (expo-image-picker).
  *   3. Compress to max 2048 px longest edge as JPEG (compressImage util).
- *   4. Show preview + caption + pet selector + nursery toggle.
- *   5. Submit: presign → PUT to R2 → POST /posts → invalidate feed → navigate Home.
+ *   4. WYSIWYG framing step — CropFramer lets the poster choose what will
+ *      be visible in the feed cover-crop. Stores focusX / focusY (0–1).
+ *   5. Form: caption + pet selector + nursery toggle.
+ *   6. Submit: presign → PUT to R2 → POST /posts → invalidate feed → Home.
  *
  * No react-native-reanimated. Works on web, iOS, and Android.
  */
@@ -39,8 +41,11 @@ import {
 } from '@workspace/api-client-react';
 import type { Pet } from '@workspace/api-client-react';
 import { compressImage } from '@/utils/compressImage';
+import CropFramer from '@/components/CropFramer';
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+type AddStep = 'idle' | 'compressing' | 'framing' | 'form';
 
 export default function AddScreen() {
   const colors       = useColors();
@@ -53,13 +58,18 @@ export default function AddScreen() {
   const pets = myPetsData?.pets ?? [];
 
   // ── Local state ───────────────────────────────────────────────────────────
-  const [compressedUri,  setCompressedUri]  = useState<string | null>(null);
-  const [isCompressing,  setIsCompressing]  = useState(false);
-  const [caption,        setCaption]        = useState('');
-  const [selectedPetId,  setSelectedPetId]  = useState<string | null>(null);
-  const [isNursery,      setIsNursery]      = useState(false);
-  const [isUploading,    setIsUploading]    = useState(false);
-  const [error,          setError]          = useState<string | null>(null);
+  const [step,          setStep]          = useState<AddStep>('idle');
+  const [compressedUri, setCompressedUri] = useState<string | null>(null);
+  // Natural pixel dimensions of the compressed image (needed by CropFramer).
+  const naturalSize = useRef({ width: 0, height: 0 });
+  const [caption,       setCaption]       = useState('');
+  const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
+  const [isNursery,     setIsNursery]     = useState(false);
+  const [isUploading,   setIsUploading]   = useState(false);
+  const [error,         setError]         = useState<string | null>(null);
+  // Focal point chosen in the framing step (0–1, default center).
+  const [cropFocusX,    setCropFocusX]    = useState(0.5);
+  const [cropFocusY,    setCropFocusY]    = useState(0.5);
 
   // Auto-select pet when there is exactly one.
   useEffect(() => {
@@ -101,15 +111,36 @@ export default function AddScreen() {
     }
 
     setCompressedUri(null);
-    setIsCompressing(true);
+    setStep('compressing');
     try {
       const compressed = await compressImage(asset.uri, asset.width, asset.height);
       setCompressedUri(compressed.uri);
+      // Store the compressed pixel dimensions (or original if not returned).
+      naturalSize.current = {
+        width:  (compressed as { width?: number }).width  ?? asset.width,
+        height: (compressed as { height?: number }).height ?? asset.height,
+      };
+      // Reset focal point to center for each new image.
+      setCropFocusX(0.5);
+      setCropFocusY(0.5);
+      setStep('framing');
     } catch {
       setError('Failed to process image. Please try another photo.');
-    } finally {
-      setIsCompressing(false);
+      setStep('idle');
     }
+  }, []);
+
+  // ── Framing callbacks ─────────────────────────────────────────────────────
+  const handleFrameConfirm = useCallback((fx: number, fy: number) => {
+    setCropFocusX(fx);
+    setCropFocusY(fy);
+    setStep('form');
+  }, []);
+
+  const handleFrameBack = useCallback(() => {
+    // Go back to idle so the user can pick a different image.
+    setCompressedUri(null);
+    setStep('idle');
   }, []);
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -142,13 +173,15 @@ export default function AddScreen() {
       });
       if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
 
-      // 4. Create the post record.
+      // 4. Create the post record, including the focal point.
       await createPost({
         data: {
-          petId:     selectedPetId,
+          petId:      selectedPetId,
           mediaKey,
-          caption:   caption.trim() || undefined,
+          caption:    caption.trim() || undefined,
           isNursery,
+          cropFocusX,
+          cropFocusY,
         },
       });
 
@@ -159,6 +192,9 @@ export default function AddScreen() {
       setCompressedUri(null);
       setCaption('');
       setIsNursery(false);
+      setCropFocusX(0.5);
+      setCropFocusY(0.5);
+      setStep('idle');
       if (pets.length !== 1) setSelectedPetId(null);
 
       router.navigate('/');
@@ -168,13 +204,26 @@ export default function AddScreen() {
     } finally {
       setIsUploading(false);
     }
-  }, [compressedUri, selectedPetId, isUploading, presignUpload, createPost, caption, isNursery, queryClient, pets.length]);
+  }, [compressedUri, selectedPetId, isUploading, presignUpload, createPost, caption, isNursery, cropFocusX, cropFocusY, queryClient, pets.length]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const canSubmit = !!compressedUri && !!selectedPetId && !isUploading;
   const s = makeStyles(colors);
 
   // ── Render ────────────────────────────────────────────────────────────────
+
+  // ── Framing step — full-screen, outside scroll ─────────────────────────
+  if (step === 'framing' && compressedUri) {
+    return (
+      <CropFramer
+        uri={compressedUri}
+        naturalWidth={naturalSize.current.width  || 1}
+        naturalHeight={naturalSize.current.height || 1}
+        onConfirm={handleFrameConfirm}
+        onBack={handleFrameBack}
+      />
+    );
+  }
 
   if (petsLoading) {
     return (
@@ -220,27 +269,40 @@ export default function AddScreen() {
         <Text style={[s.heading, { color: colors.foreground }]}>New Post</Text>
 
         {/* ── Image area ── */}
-        {isCompressing ? (
+        {step === 'compressing' ? (
           <View style={[s.imagePlaceholder, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <ActivityIndicator color={colors.primary} />
             <Text style={[s.processingText, { color: colors.mutedForeground }]}>Processing…</Text>
           </View>
         ) : compressedUri ? (
+          // Form step: show the framed preview (cover, focal point applied).
           <View style={s.previewWrapper}>
             <Image
               source={{ uri: compressedUri }}
               style={s.preview}
               resizeMode="cover"
             />
-            <TouchableOpacity
-              style={[s.changePhotoBtn, { backgroundColor: 'rgba(6,11,16,0.6)' }]}
-              onPress={pickImage}
-              accessibilityRole="button"
-              accessibilityLabel="Change photo"
-            >
-              <Feather name="refresh-cw" size={14} color="#F0F4F8" />
-              <Text style={s.changePhotoBtnText}>Change</Text>
-            </TouchableOpacity>
+            {/* Re-frame button */}
+            <View style={s.previewBtnRow}>
+              <TouchableOpacity
+                style={[s.previewBtn, { backgroundColor: 'rgba(6,11,16,0.6)' }]}
+                onPress={() => setStep('framing')}
+                accessibilityRole="button"
+                accessibilityLabel="Adjust framing"
+              >
+                <Feather name="crop" size={14} color="#F0F4F8" />
+                <Text style={s.previewBtnText}>Reframe</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.previewBtn, { backgroundColor: 'rgba(6,11,16,0.6)' }]}
+                onPress={pickImage}
+                accessibilityRole="button"
+                accessibilityLabel="Change photo"
+              >
+                <Feather name="refresh-cw" size={14} color="#F0F4F8" />
+                <Text style={s.previewBtnText}>Change</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <Pressable
@@ -414,9 +476,9 @@ const chipStyles = StyleSheet.create({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
   return StyleSheet.create({
-    fill:    { flex: 1 },
+    fill:     { flex: 1 },
     centered: { alignItems: 'center', justifyContent: 'center' },
-    scroll:  { flexGrow: 1, paddingHorizontal: 20 },
+    scroll:   { flexGrow: 1, paddingHorizontal: 20 },
 
     heading: {
       fontFamily: 'Inter_700Bold',
@@ -473,10 +535,14 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       width: '100%',
       height: 260,
     },
-    changePhotoBtn: {
+    previewBtnRow: {
       position: 'absolute',
       bottom: 10,
       right: 10,
+      flexDirection: 'row',
+      gap: 8,
+    },
+    previewBtn: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
@@ -484,7 +550,7 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       paddingVertical: 6,
       borderRadius: 20,
     },
-    changePhotoBtnText: {
+    previewBtnText: {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
       color: '#F0F4F8',

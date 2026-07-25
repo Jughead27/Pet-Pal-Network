@@ -30,7 +30,7 @@ router.post("/posts", async (req, res) => {
     return;
   }
 
-  const { petId, mediaKey, caption, isNursery } = parsed.data;
+  const { petId, mediaKey, caption, isNursery, cropFocusX, cropFocusY } = parsed.data;
 
   // Verify pet exists and is owned by caller
   const [pet] = await db
@@ -53,18 +53,22 @@ router.post("/posts", async (req, res) => {
     .values({
       petId,
       mediaKey,
-      caption: caption ?? null,
-      isNursery: isNursery ?? false,
+      caption:    caption ?? null,
+      isNursery:  isNursery ?? false,
+      cropFocusX: cropFocusX ?? null,
+      cropFocusY: cropFocusY ?? null,
     })
     .returning();
 
   res.status(201).json({
-    id:        post.id,
-    petId:     post.petId,
-    mediaKey:  post.mediaKey,
-    caption:   post.caption ?? null,
-    isNursery: post.isNursery,
-    createdAt: post.createdAt,
+    id:         post.id,
+    petId:      post.petId,
+    mediaKey:   post.mediaKey,
+    caption:    post.caption ?? null,
+    isNursery:  post.isNursery,
+    cropFocusX: post.cropFocusX ?? null,
+    cropFocusY: post.cropFocusY ?? null,
+    createdAt:  post.createdAt,
   });
 });
 

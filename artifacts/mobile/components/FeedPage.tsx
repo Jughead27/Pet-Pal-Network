@@ -31,6 +31,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import FocalImage from '@/components/FocalImage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -248,8 +249,13 @@ export default function FeedPage({
 
   return (
     <View style={[styles.page, { height }]}>
-      {/* Full-bleed hero image */}
-      <Image source={heroImage} style={styles.heroImage} resizeMode="cover" />
+      {/* Full-bleed hero image — respects poster's focal point */}
+      <FocalImage
+        source={heroImage}
+        style={styles.heroImage}
+        focusX={post.cropFocusX}
+        focusY={post.cropFocusY}
+      />
 
       {/* Media tap target (sits below all interactive overlays) */}
       <Pressable style={StyleSheet.absoluteFill} onPress={handleMediaPress} />
@@ -334,7 +340,7 @@ export default function FeedPage({
           {petBreed}
         </Text>
 
-        {/* Caption with expand/collapse */}
+        {/* Caption with expand/collapse + tap-to-detail */}
         <View>
           {/* Off-screen measure to detect truncation */}
           <Text
@@ -345,12 +351,20 @@ export default function FeedPage({
           >
             {caption}
           </Text>
-          <Text
-            style={[styles.petCaption, { color: 'rgba(240,244,248,0.9)' }]}
-            numberOfLines={captionExpanded ? undefined : 2}
+          <TouchableOpacity
+            onPress={() => router.push(`/post/${post.id}`)}
+            activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel="View full post"
+            hitSlop={{ top: 4, bottom: 4, left: 0, right: 0 }}
           >
-            {caption}
-          </Text>
+            <Text
+              style={[styles.petCaption, { color: 'rgba(240,244,248,0.9)' }]}
+              numberOfLines={captionExpanded ? undefined : 2}
+            >
+              {caption || 'View full photo'}
+            </Text>
+          </TouchableOpacity>
           {captionNeedsMore && (
             <TouchableOpacity
               onPress={() => setCaptionExpanded((v) => !v)}
@@ -392,8 +406,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    right: 0,
-    bottom: 0,
     width: '100%',
     height: '100%',
   },

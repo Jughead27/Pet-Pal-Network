@@ -447,6 +447,16 @@ components:
           type: string
           nullable: true
           description: Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client).
+        cropFocusX:
+          type: number
+          format: float
+          nullable: true
+          description: Horizontal focal point (0–1) for cover-crop rendering. null = center.
+        cropFocusY:
+          type: number
+          format: float
+          nullable: true
+          description: Vertical focal point (0–1) for cover-crop rendering. null = center.
         isNursery:
           type: boolean
         createdAt:
@@ -468,6 +478,8 @@ components:
         - id
         - mediaKey
         - mediaUrl
+        - cropFocusX
+        - cropFocusY
         - isNursery
         - createdAt
         - pet
@@ -648,6 +660,20 @@ components:
           maxLength: 280
         isNursery:
           type: boolean
+        cropFocusX:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Horizontal focal point (0–1). null or omitted = center.
+        cropFocusY:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Vertical focal point (0–1). null or omitted = center.
       required:
         - petId
         - mediaKey

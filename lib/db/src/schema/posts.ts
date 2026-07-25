@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, boolean, index, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { petsTable } from "./pets";
@@ -14,6 +14,9 @@ export const postsTable = pgTable(
     mediaKey: text("media_key").notNull(),
     caption: text("caption"),
     isNursery: boolean("is_nursery").notNull().default(false),
+    // Focal point for cover-crop rendering (0–1 each axis). null = center (default cover behavior).
+    cropFocusX: real("crop_focus_x"),
+    cropFocusY: real("crop_focus_y"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
   (table) => [

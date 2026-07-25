@@ -16,6 +16,10 @@ export interface FeedPost {
   mediaKey: string;
   /** Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client). */
   mediaUrl: string | null;
+  /** Horizontal focal point (0–1) for cover-crop rendering. null = center. */
+  cropFocusX: number | null;
+  /** Vertical focal point (0–1) for cover-crop rendering. null = center. */
+  cropFocusY: number | null;
   isNursery: boolean;
   createdAt: Date;
   pet: PetSummary;
