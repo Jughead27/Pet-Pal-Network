@@ -237,6 +237,22 @@ export const GetPetResponse = zod.object({
 
 
 /**
+ * Returns the list of users who follow this pet, ordered by join date (oldest first).
+ * @summary Get a pet's Pack members
+ */
+export const GetPetPackMembersParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetPetPackMembersResponse = zod.object({
+  "members": zod.array(zod.object({
+  "username": zod.string(),
+  "joinedAt": zod.coerce.date()
+}).describe('A single member of a pet\'s Pack'))
+}).describe('All members of a pet\'s Pack')
+
+
+/**
  * Inserts one boop event (unlimited, no dedupe). Returns the new boop count.
  * @summary Boop a post
  */

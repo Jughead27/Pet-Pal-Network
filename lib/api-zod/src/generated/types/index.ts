@@ -23,6 +23,8 @@ export * from './interestFollowResult';
 export * from './myFollowsResponse';
 export * from './myPetsResponse';
 export * from './packedPetItem';
+export * from './packMemberItem';
+export * from './packMembersResponse';
 export * from './packResult';
 export * from './pet';
 export * from './petProfile';

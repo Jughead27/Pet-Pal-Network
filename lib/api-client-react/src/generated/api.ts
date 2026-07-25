@@ -32,6 +32,7 @@ import type {
   InterestFollowResult,
   MyFollowsResponse,
   MyPetsResponse,
+  PackMembersResponse,
   PackResult,
   Pet,
   PetProfile,
@@ -965,6 +966,84 @@ export function useGetPet<TData = Awaited<ReturnType<typeof getPet>>, TError = E
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetPetQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetPetPackMembersUrl = (id: string,) => {
+
+
+
+
+  return `/api/pets/${id}/pack-members`
+}
+
+/**
+ * Returns the list of users who follow this pet, ordered by join date (oldest first).
+ * @summary Get a pet's Pack members
+ */
+export const getPetPackMembers = async (id: string, options?: RequestInit): Promise<PackMembersResponse> => {
+
+  return customFetch<PackMembersResponse>(getGetPetPackMembersUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPetPackMembersQueryKey = (id: string,) => {
+    return [
+    `/api/pets/${id}/pack-members`
+    ] as const;
+    }
+
+
+export const getGetPetPackMembersQueryOptions = <TData = Awaited<ReturnType<typeof getPetPackMembers>>, TError = ErrorType<ErrorResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPetPackMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPetPackMembersQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPetPackMembers>>> = ({ signal }) => getPetPackMembers(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPetPackMembers>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPetPackMembersQueryResult = NonNullable<Awaited<ReturnType<typeof getPetPackMembers>>>
+export type GetPetPackMembersQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get a pet's Pack members
+ */
+
+export function useGetPetPackMembers<TData = Awaited<ReturnType<typeof getPetPackMembers>>, TError = ErrorType<ErrorResponse>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPetPackMembers>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPetPackMembersQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

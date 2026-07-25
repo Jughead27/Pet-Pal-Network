@@ -62,6 +62,8 @@ A pet-only social network: pets are the profiles, humans are accounts that act o
 - The raised Add button requires `overflow: visible` on the nav bar and ALL ancestor containers — restyling the bar can silently reintroduce clipping.
 - Every behavior change applies identically to web, iOS, and Android.
 - Deliberately accepted platform divergences — do NOT "fix": iOS system nav height + safe-area insets, hairline borders, CoreText font rendering, status bar behavior; Android nav bar uses a solid background (no blur).
+- REGRESSION RULE: before rewriting or substantially modifying any screen or component, enumerate its existing capabilities and preserve every one unless the prompt explicitly says to remove it. Losing existing functionality (e.g., a sign-out button, a navigation path, an empty state) is a failed delivery even if the new feature works.
+- After any delivery, verify the golden path still works: sign in → feed loads → boop persists → post a photo → sign out.
 
 ## User preferences
 

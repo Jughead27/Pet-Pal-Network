@@ -377,6 +377,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /pets/{id}/pack-members:
+    get:
+      operationId: getPetPackMembers
+      tags: [pets]
+      summary: Get a pet's Pack members
+      description: Returns the list of users who follow this pet, ordered by join date (oldest first).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PackMembersResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Pet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /posts/{id}/boops:
     post:
       operationId: boopPost
@@ -1215,3 +1249,27 @@ components:
       required:
         - treatCount
         - treatsRemainingToday
+
+    PackMemberItem:
+      type: object
+      description: A single member of a pet's Pack
+      properties:
+        username:
+          type: string
+        joinedAt:
+          type: string
+          format: date-time
+      required:
+        - username
+        - joinedAt
+
+    PackMembersResponse:
+      type: object
+      description: All members of a pet's Pack
+      properties:
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/PackMemberItem"
+      required:
+        - members

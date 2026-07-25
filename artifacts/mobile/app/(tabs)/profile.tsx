@@ -1,16 +1,22 @@
 /**
- * Profile tab — shows the signed-in user's pets and their full follow graph.
+ * Profile tab — signed-in user's pets, full follow graph, and sign-out.
  *
- * My Pets section:
+ * MY PETS section:
  *   Empty state  → "Create a pet" prompt
  *   Has pets     → scrollable list + "Add another pet" button
  *
- * Following section:
- *   Packed pets     → tappable rows (navigate to pet profile) + Leave Pack button
- *   Followed species/breeds → rows with Unfollow button
+ * FOLLOWING section:
+ *   MY PACK       → tappable pet rows (navigate to pet profile) + Leave Pack
+ *   SPECIES       → followed species rows with Unfollow
+ *   BREEDS        → followed breed rows with Unfollow
  *
- * All unfollow actions are optimistic: context updates immediately, followed by
- * a server mutation and cache invalidation of the follows list.
+ * SIGN OUT:
+ *   Footer row with inline confirmation (cross-platform; no Alert.alert).
+ *   Clerk signOut() clears the session; the auth guard in _layout.tsx
+ *   then redirects to sign-in automatically.
+ *
+ * All unfollow actions are optimistic: context updates immediately, then
+ * a server mutation runs and cache is invalidated on settle.
  */
 
 import React, { useCallback, useState } from 'react';
@@ -27,6 +33,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
+import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import {
@@ -42,10 +49,12 @@ import { useFollowsContext } from '@/context/FollowsContext';
 import { usePackContext } from '@/context/PackContext';
 
 export default function ProfileScreen() {
-  const colors    = useColors();
-  const insets    = useSafeAreaInsets();
-  const topInset  = Platform.OS === 'web' ? 67 : insets.top;
-  const qc        = useQueryClient();
+  const colors   = useColors();
+  const insets   = useSafeAreaInsets();
+  const topInset = Platform.OS === 'web' ? 67 : insets.top;
+  const qc       = useQueryClient();
+
+  const { signOut } = useAuth();
 
   const { data: petsData, isLoading: petsLoading, isError: petsError } = useGetMyPets();
   const { data: followsData, isLoading: followsLoading }               = useGetMyFollows();
@@ -58,11 +67,13 @@ export default function ProfileScreen() {
   const { mutate: unfollowBreed }   = useUnfollowBreed();
   const { mutate: leavePetPack }    = useLeavePetPack();
 
-  // Track which items are pending an unfollow mutation (to show loading state / prevent double-tap)
+  // Pending unfollow mutations — prevents double-tap
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-
   const addPending    = (id: string) => setPendingIds((s) => new Set(s).add(id));
   const removePending = (id: string) => setPendingIds((s) => { const n = new Set(s); n.delete(id); return n; });
+
+  // Sign-out confirmation state (inline, no Alert — works identically on all platforms)
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   const invalidateFollows = useCallback(() => {
     qc.invalidateQueries({ queryKey: getGetMyFollowsQueryKey() });
@@ -107,7 +118,14 @@ export default function ProfileScreen() {
     );
   }, [pendingIds, setPackState, leavePetPack, invalidateFollows]);
 
-  // ── Loading ────────────────────────────────────────────────────────────────
+  const handleSignOut = useCallback(async () => {
+    await signOut();
+    // The auth guard in (tabs)/_layout.tsx redirects to sign-in automatically.
+    // Explicitly push just in case the guard doesn't fire fast enough.
+    router.replace('/(auth)/sign-in');
+  }, [signOut]);
+
+  // ── Loading ──────────────────────────────────────────────────────────────────
   if (petsLoading) {
     return (
       <View style={[styles.fill, styles.centered, { backgroundColor: colors.background, paddingTop: topInset }]}>
@@ -141,6 +159,7 @@ export default function ProfileScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
+
         {/* ══════════════ MY PETS ══════════════ */}
         <Text style={[styles.heading, { color: colors.foreground }]}>My Pets</Text>
 
@@ -208,10 +227,11 @@ export default function ProfileScreen() {
           </View>
         ) : (
           <View style={styles.listGap}>
-            {/* ── Pets in Pack ── */}
+
+            {/* ── MY PACK ── */}
             {packedPets.length > 0 && (
               <>
-                <Text style={[styles.subheading, { color: colors.mutedForeground }]}>Pets in Pack</Text>
+                <Text style={[styles.subheading, { color: colors.mutedForeground }]}>My Pack</Text>
                 {packedPets.map((item) => (
                   <FollowRow
                     key={`pack-${item.id}`}
@@ -227,7 +247,7 @@ export default function ProfileScreen() {
               </>
             )}
 
-            {/* ── Followed Species ── */}
+            {/* ── SPECIES ── */}
             {followedSpecies.length > 0 && (
               <>
                 <Text style={[styles.subheading, { color: colors.mutedForeground }]}>Species</Text>
@@ -243,7 +263,7 @@ export default function ProfileScreen() {
               </>
             )}
 
-            {/* ── Followed Breeds ── */}
+            {/* ── BREEDS ── */}
             {followedBreeds.length > 0 && (
               <>
                 <Text style={[styles.subheading, { color: colors.mutedForeground }]}>Breeds</Text>
@@ -261,6 +281,54 @@ export default function ProfileScreen() {
             )}
           </View>
         )}
+
+        {/* ══════════════ SIGN OUT ══════════════ */}
+        <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
+
+        {confirmSignOut ? (
+          // Confirmation row — inline, no modal/Alert, works on all platforms
+          <View style={styles.signOutConfirmRow}>
+            <Text style={[styles.signOutConfirmText, { color: colors.mutedForeground }]}>
+              Sign out?
+            </Text>
+            <View style={styles.signOutConfirmBtns}>
+              <TouchableOpacity
+                onPress={() => setConfirmSignOut(false)}
+                style={[styles.signOutBtn, { borderColor: colors.border }]}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel sign out"
+              >
+                <Text style={[styles.signOutBtnText, { color: colors.mutedForeground }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleSignOut}
+                style={[styles.signOutBtn, styles.signOutBtnDestructive, { borderColor: colors.border }]}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm sign out"
+              >
+                <Text style={[styles.signOutBtnText, { color: colors.destructive ?? '#EF4444' }]}>
+                  Sign out
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={() => setConfirmSignOut(true)}
+            activeOpacity={0.7}
+            style={styles.signOutRow}
+            accessibilityRole="button"
+            accessibilityLabel="Sign out"
+          >
+            <Feather name="log-out" size={16} color={colors.mutedForeground} />
+            <Text style={[styles.signOutText, { color: colors.mutedForeground }]}>Sign out</Text>
+          </TouchableOpacity>
+        )}
+
       </ScrollView>
     </View>
   );
@@ -296,7 +364,7 @@ function PetRow({ pet, colors, onPress }: PetRowProps) {
   );
 }
 
-// ── FollowRow — generic follow item with optional navigation + unfollow ────────
+// ── FollowRow ─────────────────────────────────────────────────────────────────
 
 interface FollowRowProps {
   primaryText:    string;
@@ -319,7 +387,6 @@ function FollowRow({
 }: FollowRowProps) {
   return (
     <View style={[styles.followRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      {/* Tappable area (left + center) */}
       <TouchableOpacity
         onPress={onRowPress}
         activeOpacity={onRowPress ? 0.7 : 1}
@@ -341,7 +408,6 @@ function FollowRow({
         )}
       </TouchableOpacity>
 
-      {/* Unfollow button */}
       <TouchableOpacity
         onPress={onUnfollow}
         disabled={isPending}
@@ -394,7 +460,7 @@ const styles = StyleSheet.create({
   },
 
   followsLoading: {
-    alignItems:  'center',
+    alignItems:      'center',
     paddingVertical: 20,
   },
 
@@ -412,20 +478,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   emptySubtitle: {
-    fontFamily:  'Inter_400Regular',
-    fontSize:    14,
-    lineHeight:  20,
-    textAlign:   'center',
+    fontFamily:   'Inter_400Regular',
+    fontSize:     14,
+    lineHeight:   20,
+    textAlign:    'center',
     marginBottom: 24,
   },
 
   // Buttons
   primaryBtn: {
-    borderRadius:    10,
-    paddingVertical: 13,
+    borderRadius:      10,
+    paddingVertical:   13,
     paddingHorizontal: 28,
-    alignItems:      'center',
-    alignSelf:       'stretch',
+    alignItems:        'center',
+    alignSelf:         'stretch',
   },
   primaryBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   addBtn: {
@@ -464,14 +530,14 @@ const styles = StyleSheet.create({
 
   // Follow row
   followRow: {
-    flexDirection:  'row',
-    alignItems:     'center',
-    borderRadius:   12,
-    borderWidth:    StyleSheet.hairlineWidth,
+    flexDirection:   'row',
+    alignItems:      'center',
+    borderRadius:    12,
+    borderWidth:     StyleSheet.hairlineWidth,
     paddingVertical: 10,
-    paddingLeft:    14,
-    paddingRight:   10,
-    gap:            8,
+    paddingLeft:     14,
+    paddingRight:    10,
+    gap:             8,
   },
   followRowContent: {
     flex:          1,
@@ -479,17 +545,55 @@ const styles = StyleSheet.create({
     alignItems:    'center',
   },
   unfollowBtn: {
-    borderWidth:      StyleSheet.hairlineWidth,
-    borderRadius:     8,
-    paddingVertical:  6,
+    borderWidth:       StyleSheet.hairlineWidth,
+    borderRadius:      8,
+    paddingVertical:   6,
     paddingHorizontal: 10,
-    minWidth:         72,
-    alignItems:       'center',
-    justifyContent:   'center',
+    minWidth:          72,
+    alignItems:        'center',
+    justifyContent:    'center',
   },
   unfollowBtnText: {
     fontFamily:    'Inter_500Medium',
     fontSize:      12,
     letterSpacing: 0.1,
+  },
+
+  // Sign out
+  signOutRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            10,
+    paddingVertical: 12,
+  },
+  signOutText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   15,
+  },
+  signOutConfirmRow: {
+    gap: 14,
+    paddingVertical: 4,
+  },
+  signOutConfirmText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize:   14,
+  },
+  signOutConfirmBtns: {
+    flexDirection: 'row',
+    gap:           10,
+  },
+  signOutBtn: {
+    borderWidth:       StyleSheet.hairlineWidth,
+    borderRadius:      8,
+    paddingVertical:   9,
+    paddingHorizontal: 16,
+    alignItems:        'center',
+  },
+  signOutBtnDestructive: {
+    // Same size; color is applied inline via the destructive palette
+  },
+  signOutBtnText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize:   14,
   },
 });

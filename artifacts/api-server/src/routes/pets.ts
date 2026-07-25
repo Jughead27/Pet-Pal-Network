@@ -10,6 +10,7 @@ import {
   breedsTable,
   packFollowsTable,
   interestFollowsTable,
+  usersTable,
 } from "@workspace/db";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { CreatePetBody } from "@workspace/api-zod";
@@ -249,6 +250,41 @@ router.post("/pets", async (req, res) => {
     bio:       pet.bio       ?? null,
     createdAt: pet.createdAt,
   });
+});
+
+/**
+ * GET /pets/:id/pack-members
+ *
+ * Returns the list of users who have this pet in their Pack, ordered by
+ * join date ascending (founding members first).  No auth required to view
+ * a pet's Pack — the pet must exist, otherwise 404.
+ */
+router.get("/pets/:id/pack-members", async (req, res) => {
+  const { id } = req.params;
+
+  // Verify the pet exists
+  const [pet] = await db
+    .select({ id: petsTable.id })
+    .from(petsTable)
+    .where(eq(petsTable.id, id))
+    .limit(1);
+
+  if (!pet) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  const rows = await db
+    .select({
+      username: usersTable.username,
+      joinedAt: packFollowsTable.createdAt,
+    })
+    .from(packFollowsTable)
+    .innerJoin(usersTable, eq(usersTable.id, packFollowsTable.userId))
+    .where(eq(packFollowsTable.petId, id))
+    .orderBy(packFollowsTable.createdAt); // oldest first — founding members at top
+
+  res.json({ members: rows.map((r) => ({ username: r.username, joinedAt: r.joinedAt })) });
 });
 
 /**

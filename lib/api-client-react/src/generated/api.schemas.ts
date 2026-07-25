@@ -321,6 +321,21 @@ export interface TreatResult {
   treatsRemainingToday: number;
 }
 
+/**
+ * A single member of a pet's Pack
+ */
+export interface PackMemberItem {
+  username: string;
+  joinedAt: string;
+}
+
+/**
+ * All members of a pet's Pack
+ */
+export interface PackMembersResponse {
+  members: PackMemberItem[];
+}
+
 export type GetFeedParams = {
 /**
  * When true, returns only nursery (is_nursery=true) posts. Omit or false for the full feed.

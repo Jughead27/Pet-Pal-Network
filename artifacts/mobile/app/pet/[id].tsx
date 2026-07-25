@@ -29,6 +29,7 @@ import Svg, { Path } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 import {
   useGetPet,
+  useGetPetPackMembers,
   useFollowSpecies,
   useUnfollowSpecies,
   useFollowBreed,
@@ -66,9 +67,13 @@ export default function PetProfileScreen() {
 
   const { data: pet, isLoading, isError } = useGetPet(petId ?? "");
 
-  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
+  const [selectedPostId,  setSelectedPostId]  = useState<string | null>(null);
+  const [packMembersOpen, setPackMembersOpen] = useState(false);
   // Local pack count — initialised from server, updated optimistically on toggle
   const [localPackCount, setLocalPackCount] = useState<number | null>(null);
+
+  // Pack members — fetched when component mounts; React Query caches the result
+  const { data: membersData, isLoading: membersLoading } = useGetPetPackMembers(petId ?? "");
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
@@ -274,13 +279,20 @@ export default function PetProfileScreen() {
 
           {/* ── Stats ── */}
           <View style={[styles.statsRow, { borderColor: colors.border }]}>
-            <View style={styles.stat}>
+            {/* Pack stat — tappable to view member list */}
+            <TouchableOpacity
+              onPress={() => setPackMembersOpen(true)}
+              activeOpacity={0.7}
+              style={styles.stat}
+              accessibilityRole="button"
+              accessibilityLabel={`Pack — ${packCount} members`}
+            >
               <PawStatIcon size={16} color={colors.primary} />
               <Text style={[styles.statValue, { color: colors.foreground, marginTop: 4 }]}>
                 {formatCount(packCount)}
               </Text>
               <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Pack</Text>
-            </View>
+            </TouchableOpacity>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.stat}>
               <Feather name="heart" size={16} color={colors.accent} style={{ marginBottom: 4 }} />
@@ -331,6 +343,75 @@ export default function PetProfileScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* ── Pack Members Modal ── */}
+      <Modal
+        visible={packMembersOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPackMembersOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setPackMembersOpen(false)}
+          />
+          <View style={[styles.membersSheet, { backgroundColor: colors.card }]}>
+            {/* Header */}
+            <View style={[styles.membersHeader, { borderBottomColor: colors.border }]}>
+              <PawStatIcon size={14} color={colors.primary} />
+              <Text style={[styles.membersTitle, { color: colors.foreground }]}>
+                Pack · {formatCount(packCount)}
+              </Text>
+              <TouchableOpacity
+                onPress={() => setPackMembersOpen(false)}
+                style={styles.membersCloseBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
+              >
+                <Ionicons name="close" size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Content */}
+            {membersLoading ? (
+              <View style={styles.membersCentered}>
+                <ActivityIndicator color={colors.primary} size="small" />
+              </View>
+            ) : !membersData || membersData.members.length === 0 ? (
+              <View style={styles.membersCentered}>
+                <Text style={[styles.membersEmpty, { color: colors.mutedForeground }]}>
+                  No pack members yet.
+                </Text>
+              </View>
+            ) : (
+              <ScrollView
+                style={styles.membersList}
+                contentContainerStyle={styles.membersListContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {membersData.members.map((m) => (
+                  <View
+                    key={m.username}
+                    style={[styles.memberRow, { borderBottomColor: colors.border }]}
+                  >
+                    <Text style={[styles.memberUsername, { color: colors.foreground }]}>
+                      {m.username}
+                    </Text>
+                    <Text style={[styles.memberDate, { color: colors.mutedForeground }]}>
+                      {new Date(m.joinedAt).toLocaleDateString(undefined, {
+                        month: "short",
+                        day:   "numeric",
+                        year:  "numeric",
+                      })}
+                    </Text>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
 
       {/* ── Post Detail Modal ── */}
       <Modal
@@ -407,9 +488,66 @@ const styles = StyleSheet.create({
   gridItem:    { width: GRID_ITEM_SIZE, height: GRID_ITEM_SIZE },
   gridImage:   { width: "100%", height: "100%" },
   modalOverlay: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.85)",
-    justifyContent: "center", alignItems: "center",
+    flex: 1, backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end", alignItems: "center",
   },
+
+  // Pack members sheet (slides up from bottom)
+  membersSheet: {
+    width: "100%",
+    maxHeight: "60%",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: "hidden",
+  },
+  membersHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  membersTitle: {
+    flex: 1,
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+    letterSpacing: -0.2,
+  },
+  membersCloseBtn: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  membersCentered: {
+    paddingVertical: 40,
+    alignItems: "center",
+  },
+  membersEmpty: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+  },
+  membersList: { flex: 1 },
+  membersListContent: { paddingBottom: 40 },
+  memberRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  memberUsername: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 15,
+  },
+  memberDate: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+  },
+
+  // Post detail modal
   modalContent:     { width: SCREEN_WIDTH - 32, borderRadius: 16, overflow: "hidden" },
   modalImage:       { width: "100%", height: SCREEN_WIDTH - 32 },
   modalCaption:     { padding: 16, gap: 4 },

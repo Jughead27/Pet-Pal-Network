@@ -1,19 +1,23 @@
 /**
- * InterestChip — animated pill chip for species/breed interest follows.
+ * InterestChip — typographic follow toggle for species/breed interests.
  *
- * Pure presentation: the parent derives `followed` from FollowsContext and
- * handles all mutation logic. This component just animates when the prop changes.
+ * Design system: plain text states, no capsule/pill, no background, no border,
+ * no checkmark. Follows the same convention as "Add to Pack" (plain text).
  *
- * Monochrome active treatment (teal reserved for nav):
- *   Inactive  card bg + hairline border + muted text
- *   Active    foreground bg + background text (inverted) + check icon
+ *   Inactive  muted-foreground color, Inter_400Regular
+ *   Active    foreground color, Inter_700Bold
  *
- * 150ms cross-fade via built-in Animated API. No react-native-reanimated.
+ * The transition is a 150ms cross-fade between two overlaid Animated.Text
+ * nodes — the active text fades in as the inactive text fades out.
+ *
+ * Touch target: ≥44px via invisible paddingVertical — no visible capsule.
+ * No truncation: numberOfLines is not set so text wraps freely.
+ *
+ * No react-native-reanimated.
  */
 
 import React, { useEffect, useRef } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Animated, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 
 interface InterestChipProps {
@@ -25,13 +29,13 @@ interface InterestChipProps {
 }
 
 export default function InterestChip({ label, followed, onPress, disabled = false }: InterestChipProps) {
-  const colors  = useColors();
+  const colors   = useColors();
   const progress = useRef(new Animated.Value(followed ? 1 : 0)).current;
 
   const inactiveOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
   const activeOpacity   = progress;
 
-  // Animate whenever the followed prop changes (driven by parent/context).
+  // Animate whenever the followed prop changes.
   useEffect(() => {
     Animated.timing(progress, {
       toValue:         followed ? 1 : 0,
@@ -43,74 +47,71 @@ export default function InterestChip({ label, followed, onPress, disabled = fals
   return (
     <TouchableOpacity
       onPress={onPress}
-      activeOpacity={0.75}
+      activeOpacity={0.6}
       disabled={disabled}
       accessibilityRole="button"
       accessibilityLabel={followed ? `Following ${label}` : `Follow ${label}`}
+      // paddingVertical pads the invisible tap target to ≥44px.
+      // paddingHorizontal gives slight breathing room without visual border.
       style={styles.wrapper}
     >
-      {/* Inactive layer: fades out when active */}
-      <Animated.View
-        style={[
-          styles.chip,
-          {
-            backgroundColor: colors.card,
-            borderColor:     colors.border,
-            opacity:         inactiveOpacity,
-          },
-        ]}
-      >
-        <Text style={[styles.label, { color: colors.mutedForeground }]} numberOfLines={1}>
+      {/*
+        Two Animated.Text nodes stacked in the same space.
+        The inactive layer sits in normal flow and sizes the wrapper.
+        The active layer is absolute, aligned to the same bounds.
+        Both have identical font size so they occupy the same height;
+        the bold weight may be fractionally wider but never clips (no overflow:hidden).
+      */}
+      <View style={styles.textArea}>
+        {/* Inactive: muted, regular weight — fades out when followed */}
+        <Animated.Text
+          style={[styles.labelInactive, { color: colors.mutedForeground, opacity: inactiveOpacity }]}
+        >
           {label}
-        </Text>
-      </Animated.View>
+        </Animated.Text>
 
-      {/* Active layer: fades in when active, positioned over inactive */}
-      <Animated.View
-        style={[
-          styles.chip,
-          styles.chipAbsolute,
-          {
-            backgroundColor: colors.foreground,
-            borderColor:     colors.foreground,
-            opacity:         activeOpacity,
-          },
-        ]}
-        pointerEvents="none"
-      >
-        <Feather name="check" size={11} color={colors.background} />
-        <Text style={[styles.label, { color: colors.background }]} numberOfLines={1}>
+        {/* Active: full foreground, bold — fades in when followed */}
+        <Animated.Text
+          style={[styles.labelActive, styles.labelAbsolute, { color: colors.foreground, opacity: activeOpacity }]}
+          // pointerEvents="none" so taps pass through to the TouchableOpacity
+          pointerEvents="none"
+        >
           {label}
-        </Text>
-      </Animated.View>
+        </Animated.Text>
+      </View>
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
-    alignSelf: 'flex-start',
+    // Invisible padding reaches the ≥44px WCAG tap target.
+    // alignSelf: 'flex-start' prevents the wrapper from stretching in a row.
+    alignSelf:       'flex-start',
+    paddingVertical: 12,   // 12 + 12 + ~20px line height ≈ 44px tap target
+    paddingHorizontal: 2,
   },
-  chip: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    paddingHorizontal: 11,
-    paddingVertical:   5,
-    borderRadius:    20,
-    borderWidth:     StyleSheet.hairlineWidth,
-    gap:             4,
-    minWidth:        44,   // accessibility touch target
+  textArea: {
+    // Positions the active label over the inactive one.
+    position: 'relative',
   },
-  chipAbsolute: {
-    position: 'absolute',
-    top:    0,
-    left:   0,
-    right:  0,
-    bottom: 0,
-  },
-  label: {
-    fontFamily:    'Inter_500Medium',
-    fontSize:      13,
+  labelInactive: {
+    fontFamily:    'Inter_400Regular',
+    fontSize:      14,
     letterSpacing: 0.1,
+    lineHeight:    20,
+  },
+  labelAbsolute: {
+    // Covers the inactive text exactly.
+    position: 'absolute',
+    top:      0,
+    left:     0,
+    right:    0,
+  },
+  labelActive: {
+    fontFamily:    'Inter_700Bold',
+    fontSize:      14,
+    letterSpacing: 0.1,
+    lineHeight:    20,
   },
 });
