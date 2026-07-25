@@ -1,0 +1,20 @@
+Scope: canonical species + breeds, and the pet-creation picker. OpenAPI-first. Do not modify the feed, reactions, follows (none exist yet), or upload code.
+
+Schema: species table (id, name, sort_order) and breeds table (id, species_id FK, name), unique on (species_id, name), indexed. pets gains nullable species_id and breed_id FKs — keep the existing free-text species/breed columns for backward compatibility; existing pets remain valid.
+Seed (idempotent) — pet-store-comprehensive. Species: Cat, Dog, Bird, Fish, Reptile, Small Mammal, Amphibian, Horse, Invertebrate, Other. Breeds/kinds per species (the list serves how owners describe their pets — colloquial names and popular crosses are first-class entries, not formal taxonomy only):
+Cat: CFA/TICA-recognized breeds (~45–70) plus colloquial coat-types: Calico, Tabby, Tuxedo, Tortoiseshell, Domestic Shorthair, Domestic Longhair.
+Dog: AKC-recognized breeds (~200) plus popular designer crosses — Cockapoo, Labradoodle, Goldendoodle, Bernedoodle, Cavapoo, Maltipoo, Cavachon, Puggle, Pomsky, Schnoodle, Yorkipoo, Shihpoo, Aussiedoodle, Sheepadoodle — and Mixed Breed / Mutt.
+Bird: Parakeet/Budgie, Cockatiel, Cockatoo, Conure, Lovebird, Canary, Finch, Parrotlet, African Grey, Macaw, Amazon Parrot, Quaker Parrot, Caique, Dove, Pigeon, Chicken, Duck.
+Fish: Betta (including Crowntail Betta as its own entry), Goldfish, Guppy, Molly, Platy, Tetra, Angelfish, Cichlid, Koi, Pleco, Corydoras, Discus, Gourami, Barb, Danio.
+Small Mammal (kinds): Hamster, Guinea Pig, Ferret, Rat, Mouse, Rabbit, Gerbil, Chinchilla, Hedgehog, Sugar Glider, Degu.
+Reptile (kinds): Bearded Dragon, Leopard Gecko, Crested Gecko, Corn Snake, Ball Python, Turtle, Tortoise, Iguana, Chameleon, Anole, Skink.
+Amphibian (kinds): Axolotl, Pacman Frog, Tree Frog, Dart Frog, Newt, Salamander, Toad.
+Invertebrate (kinds): Tarantula, Hermit Crab, Snail, Mantis, Scorpion, Isopod.
+Horse: ~15 common breeds (Quarter Horse, Arabian, Thoroughbred, Appaloosa, Paint, Morgan, Andalusian, Clydesdale, Shetland Pony, Welsh Pony, Friesian, Mustang, Tennessee Walker, Standardbred, Percheron).
+Other: empty.
+API: GET /species (with breed counts) and GET /species/{id}/breeds — auth-gated like everything else.
+Pet creation UI: species becomes a picker (chips or list); breed becomes a searchable picker filtered to the chosen species, with an explicit "Not listed — enter my own" option storing free text in the legacy breed column (these entries are the future submit-a-breed admin-queue candidates). Selecting from the list sets the FK columns AND mirrors the names into the legacy text columns so all existing display code keeps working unchanged.
+Backfill: map existing pets whose free-text matches seeded values (case-insensitive) to the FKs — Ripley (Cat/Calico) and Finn (Fish/Crowntail Betta) should both match.
+Apply identically to web, iOS, and Android. No react-native-reanimated imports.
+
+Acceptance test: Creating a pet offers species chips and a searchable breed list (typing "cal" under Cat surfaces Calico; typing "cocka" under Dog surfaces Cockapoo); "not listed" free-text works; Ripley and Finn are backfilled with FK links; existing screens display species/breed exactly as before. pnpm run typecheck clean.
