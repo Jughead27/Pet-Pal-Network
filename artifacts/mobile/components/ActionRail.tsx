@@ -528,6 +528,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 22,
     paddingVertical: 4,
+    // overflow: visible is required on iOS — RN defaults to 'hidden' for Views,
+    // which would clip the ripple ring as it expands beyond the rail column.
+    overflow: 'visible',
   },
   treatSection: {
     alignItems: 'center',
@@ -550,12 +553,17 @@ const styles = StyleSheet.create({
   itemWrapper: {
     alignItems: 'center',
     position: 'relative',
+    // Must be visible on iOS — default is hidden, which clips the ripple ring.
+    overflow: 'visible',
   },
   itemTouchable: {
     alignItems: 'center',
     gap: 4,
     width: 40,
     paddingVertical: 2,
+    // Must be visible: TouchableOpacity is a View on iOS; without this, the
+    // 40px-wide touchable clips the ~102px-diameter ripple ring at the boundary.
+    overflow: 'visible',
   },
   // Boop icon container — overflow: visible so ripple rings expand beyond
   // the 40×40 bounds without being clipped. Fixed size for consistent ripple

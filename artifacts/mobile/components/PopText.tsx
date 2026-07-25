@@ -155,8 +155,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FFFFFF',
     // Strong shadow so chunky text holds against bright media.
-    // textShadow shorthand (RN 0.76 / React Native Web)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...({ textShadow: '0px 2px 12px rgba(0,0,0,0.95)' } as any),
+    //
+    // Platform split is required: React Native Web understands the CSS
+    // shorthand string, but the iOS/Android native bridge silently drops any
+    // style key it doesn't recognise — so white text on a bright photo becomes
+    // invisible without the three-prop form on native.
+    ...(Platform.OS === 'web'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ? ({ textShadow: '0px 2px 12px rgba(0,0,0,0.95)' } as any)
+      : ({
+          textShadowColor: 'rgba(0,0,0,0.95)',
+          textShadowOffset: { width: 0, height: 2 },
+          textShadowRadius: 12,
+        } as any)),
   },
 });
