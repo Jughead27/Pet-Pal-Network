@@ -1,6 +1,6 @@
-# [Project name]
+# Pet Pal Network (product name: Snout Stack)
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+A pet-only social network: pets are the profiles, humans are accounts that act on their behalf. Photo/video-first immersive feed for web, iOS, and Android.
 
 ## Run & Operate
 
@@ -14,31 +14,60 @@ _Replace the heading above with the project's name, and this line with one sente
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
+- API: Express 5 — ALL data access goes through it
+- DB: Replit PostgreSQL + Drizzle ORM (schema source of truth: `lib/db/src/schema/`)
+- Auth: Clerk (planned) — NOT Replit Auth; this is a consumer app needing its own branded login
+- Media: Cloudflare R2 (planned) — all images/video; the database stores keys/URLs only
+- App: Expo / React Native in `artifacts/mobile`, one codebase for web + iOS + Android
+- API contracts: OpenAPI spec in `lib/api-spec` → Orval codegen → typed React Query client (`lib/api-client-react`) used by the app
 - Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
 
-## Where things live
+## Vocabulary (locked — use these words everywhere, in UI and code)
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- **Boop** = like. Unlimited, claps-style: every press adds one. Event rows, NO unique constraint.
+- **Treat** = super-reaction. Scarce: 5 per user per day, server-enforced from a config table. Bone icon.
+- **Pack** = follow a pet ("Add to Pack"). The paw icon is EXCLUSIVE to Pack/follow.
+- **Parrot** = repost (future feature).
+- **Sniff** = explore tab.
+- **Nursery** = per-POST baby-content flag, set at upload.
+- Rule: playful names for social actions and places; boring names for utilities (Add, Profile, Settings).
+
+## Design system (locked)
+
+- Inter only; monochrome ink; full-bleed immersive media; frosted-glass bottom nav.
+- Teal is the SOLE nav accent (active tab). Coral `#FF7A5C` and gold `#F4C542` are reserved EXCLUSIVELY for boop/treat reacted states.
+- Icons: one shared react-native-svg component per icon, used by all platforms. Solid filled silhouettes for figurative shapes; one shared optical baseline.
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The app NEVER queries the database directly. Every read/write goes through the Express API; authorization is enforced in API middleware. (This is the project's security model — treat it like RLS.)
+- Treat cap (5/user/day) is enforced server-side in a transaction, reading the limit from a `config` table. Self-treating (treating your own pet) is rejected server-side.
+- Boops are unlimited event rows. Treats are event rows plus the daily cap.
+- Media uploads: API issues presigned R2 URLs; client compresses images to max 2048px longest edge (JPEG/WebP) before upload; video max 60s / 150MB, MP4/MOV/WebM. Limits validated server-side as well.
+- New API endpoints are defined in `lib/api-spec/openapi.yaml` first, then codegen, then implemented — keep spec and server in sync.
 
-## Product
+## Cost guardrails
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Media files live in R2 ONLY. NEVER store binary media in Postgres (DB storage ≈ $1.50/GiB/mo; R2 ≈ $0.015/GB with free egress). The database stores text and R2 keys/URLs only.
+- Client-side image compression before upload is mandatory (cost and bandwidth control), with server-side size/type validation as backstop.
+- One deployment. Do not create additional deployments, scheduled deployments, or reserved VMs unless the user explicitly asks.
+- Keep work scoped to the single change requested. Do not refactor, reformat, or "improve" unrelated code — it burns credits and risks regressions.
+
+## Gotchas (hard-won — do not relearn)
+
+- Native behavior is verified in Expo Go on a physical device. The web preview lies about native.
+- NO `react-native-reanimated` imports anywhere — use React Native's built-in Animated API only. (The package remains in package.json solely as a required peer dependency; never import it, never add its babel plugin.)
+- NO NativeTabs / SF-symbol tab paths — classic Tabs only. NativeTabs silently swaps custom icons for Apple glyphs.
+- Icons are shared react-native-svg components (Svg, Path, Circle, Ellipse, Rect). Never raw `<svg>` markup, never per-platform icon forks.
+- The raised Add button requires `overflow: visible` on the nav bar and ALL ancestor containers — restyling the bar can silently reintroduce clipping.
+- Every behavior change applies identically to web, iOS, and Android.
+- Deliberately accepted platform divergences — do NOT "fix": iOS system nav height + safe-area insets, hairline borders, CoreText font rendering, status bar behavior; Android nav bar uses a solid background (no blur).
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
-
-## Gotchas
-
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- One scoped change per prompt, with an explicit do-not-modify list and an acceptance test.
+- State design INTENT; never substitute stand-in assets or nearest-equivalent icons.
+- Do not reintroduce removed libraries or migrate working code to new libraries unprompted.
 
 ## Pointers
 
