@@ -243,7 +243,7 @@ export default function ProfileScreen() {
                     onRowPress={() => router.push(`/pet/${item.id}`)}
                     onUnfollow={() => handleLeavePackFromFollows(item)}
                     isPending={pendingIds.has(item.id)}
-                    unfollowLabel="Leave Pack"
+                    unfollowLabel="Leave"
                     colors={colors}
                   />
                 ))}
@@ -436,6 +436,7 @@ function FollowRow({
 }: FollowRowProps) {
   return (
     <View style={[styles.followRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      {/* Tappable content area — takes all remaining space */}
       <TouchableOpacity
         onPress={onRowPress}
         activeOpacity={onRowPress ? 0.7 : 1}
@@ -445,37 +446,36 @@ function FollowRow({
         {thumbnailUrl !== undefined && (
           <PetThumbnail thumbnailUrl={thumbnailUrl} size={40} colors={colors} />
         )}
+        {/* Name + species/breed column takes flex priority — name never truncates */}
         <View style={styles.petInfo}>
-          <Text style={[styles.petName, { color: colors.foreground }]} numberOfLines={1}>
+          <Text style={[styles.petName, { color: colors.foreground }]}>
             {primaryText}
           </Text>
           {secondaryText ? (
-            <Text style={[styles.petSubtitle, { color: colors.mutedForeground }]} numberOfLines={1}>
+            <Text
+              style={[styles.petSubtitle, { color: colors.mutedForeground }]}
+              numberOfLines={1}
+            >
               {secondaryText}
             </Text>
           ) : null}
         </View>
-        {onRowPress && (
-          <Feather name="chevron-right" size={16} color={colors.mutedForeground} style={{ marginRight: 8 }} />
-        )}
+        {/* No chevron — this row carries a trailing action */}
       </TouchableOpacity>
 
+      {/* Quiet typographic action — no border, no background, ≥44 px touch target */}
       <TouchableOpacity
         onPress={onUnfollow}
         disabled={isPending}
-        activeOpacity={0.7}
+        activeOpacity={0.6}
         accessibilityRole="button"
         accessibilityLabel={unfollowLabel}
-        style={[
-          styles.unfollowBtn,
-          { borderColor: colors.border },
-          isPending && { opacity: 0.5 },
-        ]}
+        style={[styles.quietAction, isPending && { opacity: 0.4 }]}
       >
         {isPending ? (
           <ActivityIndicator size={12} color={colors.mutedForeground} />
         ) : (
-          <Text style={[styles.unfollowBtnText, { color: colors.mutedForeground }]}>
+          <Text style={[styles.quietActionText, { color: colors.mutedForeground }]}>
             {unfollowLabel}
           </Text>
         )}
@@ -588,27 +588,30 @@ const styles = StyleSheet.create({
     borderWidth:     StyleSheet.hairlineWidth,
     paddingVertical: 10,
     paddingLeft:     14,
-    paddingRight:    10,
-    gap:             8,
+    paddingRight:    4,   // action button supplies its own horizontal padding
+    gap:             4,
   },
   followRowContent: {
     flex:          1,
     flexDirection: 'row',
     alignItems:    'center',
     gap:           12,
+    // Shrink only this side — action text never wraps
+    flexShrink:    1,
   },
-  unfollowBtn: {
-    borderWidth:       StyleSheet.hairlineWidth,
-    borderRadius:      8,
-    paddingVertical:   6,
-    paddingHorizontal: 10,
-    minWidth:          72,
+  // Quiet typographic action — no border, no background, invisible padding for ≥44 px target
+  quietAction: {
+    minHeight:         44,
+    minWidth:          44,
+    paddingHorizontal: 12,
+    paddingVertical:   4,
     alignItems:        'center',
     justifyContent:    'center',
+    flexShrink:        0,
   },
-  unfollowBtnText: {
+  quietActionText: {
     fontFamily:    'Inter_500Medium',
-    fontSize:      12,
+    fontSize:      13,
     letterSpacing: 0.1,
   },
 
