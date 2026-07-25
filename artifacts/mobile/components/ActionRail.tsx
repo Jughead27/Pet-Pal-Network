@@ -2,21 +2,16 @@
  * ActionRail — vertical right-side interaction rail.
  *
  * Contains exactly four actions in this order:
- *   1. Boop
- *   2. Treat
+ *   1. Boop   — instant & optimistic; background POST fires after local update
+ *   2. Treat  — server-confirmed; gold state and count update only on success;
+ *               transient countdown on success, bone-shake on 429, nudge on 403
  *   3. Comment
  *   4. Share
  *
- * Boop and Treat icons are isolated in swappable wrapper components
- * (BoopIcon / TreatIcon) — replace their contents to use custom assets.
- *
- * Teaching labels: on the very first tap of Boop or Treat, a small text
- * label briefly appears to the left of the icon then disappears permanently.
- *
- * Animations use React Native's built-in Animated API — no Reanimated needed.
+ * All animations use React Native's built-in Animated API — no Reanimated.
  */
 
-import React, { useRef } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -29,22 +24,16 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useApp } from '@/context/AppContext';
+import { useBoopPost, useTreatPost } from '@workspace/api-client-react';
 
 // ─── Swappable Icon Components ───────────────────────────────────────────────
-// Replace the contents of these components to use custom Boop / Treat icons.
 
 function BoopIcon({ color, size }: { color: string; size: number }) {
-  // SWAP: replace with your custom Boop icon — currently a pointing/tap finger
-  return (
-    <MaterialCommunityIcons name="gesture-tap" size={size} color={color} />
-  );
+  return <MaterialCommunityIcons name="gesture-tap" size={size} color={color} />;
 }
 
 function TreatIcon({ color, size }: { color: string; size: number }) {
-  // SWAP: replace with your custom Treat icon — currently a dog bone outline
-  return (
-    <MaterialCommunityIcons name="bone" size={size} color={color} />
-  );
+  return <MaterialCommunityIcons name="bone" size={size} color={color} />;
 }
 
 // ─── ActionItem ───────────────────────────────────────────────────────────────
@@ -53,7 +42,6 @@ interface ActionItemProps {
   renderIcon: (color: string, size: number) => React.ReactNode;
   count?: number;
   onPress: () => void;
-  /** If provided, shows this text label once on the first press */
   teachingLabel?: string;
   activeColor?: string;
   isActive?: boolean;
@@ -71,13 +59,10 @@ function ActionItem({
 }: ActionItemProps) {
   const colors = useColors();
   const hasShownLabel = useRef(false);
-
-  // Built-in Animated.Value — works in Expo Go regardless of Reanimated version.
   const scale = useRef(new Animated.Value(1)).current;
   const labelOpacity = useRef(new Animated.Value(0)).current;
 
   const handlePress = () => {
-    // Spring-bounce sequence on press: compress → overshoot → settle
     Animated.sequence([
       Animated.spring(scale, { toValue: 0.7, damping: 10, stiffness: 300, useNativeDriver: true }),
       Animated.spring(scale, { toValue: 1.2, damping: 10, stiffness: 300, useNativeDriver: true }),
@@ -86,7 +71,6 @@ function ActionItem({
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Teaching label — shows only once, fades in then out
     if (teachingLabel && !hasShownLabel.current) {
       hasShownLabel.current = true;
       Animated.sequence([
@@ -99,15 +83,11 @@ function ActionItem({
     onPress();
   };
 
-  const iconColor = isActive
-    ? (activeColor ?? colors.primary)
-    : colors.foreground;
-
+  const iconColor = isActive ? (activeColor ?? colors.primary) : colors.foreground;
   const countText = count !== undefined ? formatCount(count) : undefined;
 
   return (
     <View style={styles.itemWrapper}>
-      {/* Teaching label — absolutely positioned to the left, never affects layout */}
       {teachingLabel ? (
         <Animated.Text
           style={[styles.teachingLabel, { color: colors.foreground, opacity: labelOpacity }]}
@@ -128,9 +108,7 @@ function ActionItem({
           {renderIcon(iconColor, 24)}
         </Animated.View>
         {countText !== undefined && (
-          <Text style={styles.count}>
-            {countText}
-          </Text>
+          <Text style={styles.count}>{countText}</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -140,15 +118,18 @@ function ActionItem({
 // ─── ActionRail ───────────────────────────────────────────────────────────────
 
 interface ActionRailProps {
+  /** Post ID for boop/treat mutations. */
+  postId: string;
   onCommentPress: () => void;
   onSharePress: () => void;
-  /** Called on every Boop press, after state update — use to spawn a pop */
+  /** Called after boop state updates (optimistic) — use to spawn a pop. */
   onBoopFired?: () => void;
-  /** Called on every Treat press, after state update — use to spawn a pop */
+  /** Called after a treat is server-confirmed — use to spawn a pop. */
   onTreatFired?: () => void;
 }
 
 export default function ActionRail({
+  postId,
   onCommentPress,
   onSharePress,
   onBoopFired,
@@ -157,43 +138,105 @@ export default function ActionRail({
   const colors = useColors();
   const {
     boop,
-    treat,
+    onTreatSuccess,
     boopCount,
     treatCount,
-    comments,
     serverCommentCount,
-    hasBoopedOnce,
-    hasTreatedOnce,
+    viewerHasBooped,
+    viewerHasTreated,
   } = useApp();
 
+  // ── Boop mutation (fire-and-forget after optimistic update) ────────────────
+  const { mutate: doBoopPost } = useBoopPost();
+
+  // ── Treat mutation with server-confirmed flow ──────────────────────────────
+  const { mutate: doTreatPost } = useTreatPost();
+  const isTreatPending = useRef(false);
+
+  // Bone-shake animation for 429
+  const treatShakeX = useRef(new Animated.Value(0)).current;
+
+  // Transient message (countdown, limit, self-treat)
+  const transientOpacity = useRef(new Animated.Value(0)).current;
+  const [transientMsg, setTransientMsg] = useState('');
+
+  const showTransient = useCallback(
+    (msg: string, holdMs = 1500) => {
+      setTransientMsg(msg);
+      transientOpacity.setValue(0);
+      Animated.sequence([
+        Animated.timing(transientOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
+        Animated.timing(transientOpacity, { toValue: 1, duration: holdMs, useNativeDriver: true }),
+        Animated.timing(transientOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
+      ]).start();
+    },
+    [transientOpacity],
+  );
+
+  const shakeAnimation = useCallback(() => {
+    treatShakeX.setValue(0);
+    Animated.sequence([
+      Animated.timing(treatShakeX, { toValue: -6, duration: 50, useNativeDriver: true }),
+      Animated.timing(treatShakeX, { toValue:  6, duration: 50, useNativeDriver: true }),
+      Animated.timing(treatShakeX, { toValue: -4, duration: 50, useNativeDriver: true }),
+      Animated.timing(treatShakeX, { toValue:  4, duration: 50, useNativeDriver: true }),
+      Animated.timing(treatShakeX, { toValue:  0, duration: 50, useNativeDriver: true }),
+    ]).start();
+  }, [treatShakeX]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
+
   const handleBoopPress = () => {
-    // Web haptic: one short tick
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       navigator.vibrate(10);
     }
+    // Optimistic update then background request
     boop();
     onBoopFired?.();
+    doBoopPost({ id: postId });
   };
 
   const handleTreatPress = () => {
-    // Web haptic: double tick — distinct from boop
+    if (isTreatPending.current) return;
+
+    // Haptics fire immediately for tactile feedback regardless of outcome
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       navigator.vibrate([10, 40, 10]);
     }
-    // Native haptic: two light impacts ~60ms apart so treats feel distinct from boops
     if (Platform.OS !== 'web') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 60);
     }
-    treat();
-    onTreatFired?.();
-  };
 
-  // Comment count = server baseline + locally added comments (optimistic)
-  const commentCount = serverCommentCount + comments.length;
+    isTreatPending.current = true;
+    doTreatPost(
+      { id: postId },
+      {
+        onSuccess: (data) => {
+          isTreatPending.current = false;
+          // Gold state + count update only on confirmed success
+          onTreatSuccess(data.treatCount, data.treatsRemainingToday);
+          onTreatFired?.();
+          const remaining = data.treatsRemainingToday;
+          showTransient(remaining === 0 ? 'Last one!' : `${remaining} left`, 1500);
+        },
+        onError: (error) => {
+          isTreatPending.current = false;
+          const status = (error as { status?: number }).status;
+          if (status === 429) {
+            shakeAnimation();
+            showTransient('Out of treats until tomorrow', 2500);
+          } else if (status === 403) {
+            showTransient('Your own pet? Sneaky.', 2000);
+          }
+        },
+      },
+    );
+  };
 
   return (
     <View style={styles.rail}>
+
       {/* 1. Boop */}
       <ActionItem
         renderIcon={(color, size) => <BoopIcon color={color} size={size} />}
@@ -201,27 +244,45 @@ export default function ActionRail({
         onPress={handleBoopPress}
         teachingLabel="Boop"
         activeColor={colors.accent}
-        isActive={hasBoopedOnce}
+        isActive={viewerHasBooped}
         testID="boop-button"
       />
 
-      {/* 2. Treat */}
-      <ActionItem
-        renderIcon={(color, size) => <TreatIcon color={color} size={size} />}
-        count={treatCount}
-        onPress={handleTreatPress}
-        teachingLabel="Treat"
-        activeColor="#F4C542"
-        isActive={hasTreatedOnce}
-        testID="treat-button"
-      />
+      {/* 2. Treat — wrapped for bone-shake and transient message */}
+      <View style={styles.treatSection}>
+        {/* Transient message: countdown, limit warning, or self-treat nudge */}
+        <Animated.Text
+          style={[
+            styles.transientLabel,
+            { color: colors.foreground, opacity: transientOpacity },
+          ]}
+          numberOfLines={2}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          pointerEvents={"none" as any}
+        >
+          {transientMsg}
+        </Animated.Text>
+
+        {/* Bone-shake wrapper */}
+        <Animated.View style={{ transform: [{ translateX: treatShakeX }] }}>
+          <ActionItem
+            renderIcon={(color, size) => <TreatIcon color={color} size={size} />}
+            count={treatCount}
+            onPress={handleTreatPress}
+            teachingLabel="Treat"
+            activeColor="#F4C542"
+            isActive={viewerHasTreated}
+            testID="treat-button"
+          />
+        </Animated.View>
+      </View>
 
       {/* 3. Comment */}
       <ActionItem
         renderIcon={(color) => (
           <Ionicons name="chatbubble-outline" size={20} color={color} />
         )}
-        count={commentCount}
+        count={serverCommentCount}
         onPress={onCommentPress}
         testID="comment-button"
       />
@@ -234,6 +295,7 @@ export default function ActionRail({
         onPress={onSharePress}
         testID="share-button"
       />
+
     </View>
   );
 }
@@ -253,7 +315,24 @@ const styles = StyleSheet.create({
     gap: 22,
     paddingVertical: 4,
   },
-  // Each item: icon + count centered, teaching label floats left absolutely
+  // Treat section: relative container so the transient label can be absolute
+  treatSection: {
+    alignItems: 'center',
+    position: 'relative',
+  },
+  // Transient message: floats to the left of the treat icon, never shifts layout
+  transientLabel: {
+    position: 'absolute',
+    right: 50,
+    width: 120,
+    textAlign: 'right',
+    top: 2,
+    fontSize: 10,
+    fontWeight: '600' as const,
+    lineHeight: 13,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    pointerEvents: 'none' as any,
+  },
   itemWrapper: {
     alignItems: 'center',
     position: 'relative',
@@ -261,7 +340,6 @@ const styles = StyleSheet.create({
   itemTouchable: {
     alignItems: 'center',
     gap: 4,
-    // Consistent 40px wide touch target keeps the rail visually tight
     width: 40,
     paddingVertical: 2,
   },
@@ -271,13 +349,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
     textAlign: 'center',
     color: 'rgba(240,244,248,0.85)',
-    // textShadow shorthand (RN 0.76 / React Native Web) — replaces deprecated
-    // textShadowColor / textShadowOffset / textShadowRadius triple.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...({ textShadow: '0px 1px 3px rgba(0,0,0,0.4)' } as any),
   },
-  // Absolutely positioned; never shifts the icon column.
-  // pointerEvents in style (RN 0.76+) — was deprecated as a prop.
   teachingLabel: {
     position: 'absolute',
     right: 44,

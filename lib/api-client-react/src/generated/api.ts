@@ -6,25 +6,32 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useMutation,
   useQuery
 } from '@tanstack/react-query';
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult
 } from '@tanstack/react-query';
 
 import type {
+  BoopResult,
+  CommentBody,
   ErrorResponse,
-  FeedPost,
+  FeedResponse,
   HealthStatus,
   PetProfile,
-  PostComment
+  PostComment,
+  TreatResult
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
-import type { ErrorType } from '../custom-fetch';
+import type { ErrorType , BodyType } from '../custom-fetch';
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -137,12 +144,12 @@ export const getGetFeedUrl = () => {
 }
 
 /**
- * Returns recency-ordered posts with pet info and reaction counts
+ * Returns recency-ordered posts with pet info, reaction counts, and viewer state
  * @summary Get feed
  */
-export const getFeed = async ( options?: RequestInit): Promise<FeedPost[]> => {
+export const getFeed = async ( options?: RequestInit): Promise<FeedResponse> => {
 
-  return customFetch<FeedPost[]>(getGetFeedUrl(),
+  return customFetch<FeedResponse>(getGetFeedUrl(),
   {
     ...options,
     method: 'GET'
@@ -284,6 +291,150 @@ export function useGetPet<TData = Awaited<ReturnType<typeof getPet>>, TError = E
 
 
 
+export const getBoopPostUrl = (id: string,) => {
+
+
+
+
+  return `/api/posts/${id}/boops`
+}
+
+/**
+ * Inserts one boop event (unlimited, no dedupe). Returns the new boop count.
+ * @summary Boop a post
+ */
+export const boopPost = async (id: string, options?: RequestInit): Promise<BoopResult> => {
+
+  return customFetch<BoopResult>(getBoopPostUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getBoopPostMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof boopPost>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof boopPost>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['boopPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof boopPost>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  boopPost(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BoopPostMutationResult = NonNullable<Awaited<ReturnType<typeof boopPost>>>
+
+    export type BoopPostMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Boop a post
+ */
+export const useBoopPost = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof boopPost>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof boopPost>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getBoopPostMutationOptions(options));
+    }
+
+export const getTreatPostUrl = (id: string,) => {
+
+
+
+
+  return `/api/posts/${id}/treats`
+}
+
+/**
+ * In a single transaction: checks daily treat limit (config.daily_treat_limit, default 5), rejects self-treats (caller owns the post's pet), then inserts and returns the new treat count plus remaining treats for today.
+ * @summary Treat a post
+ */
+export const treatPost = async (id: string, options?: RequestInit): Promise<TreatResult> => {
+
+  return customFetch<TreatResult>(getTreatPostUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getTreatPostMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof treatPost>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof treatPost>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['treatPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof treatPost>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  treatPost(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type TreatPostMutationResult = NonNullable<Awaited<ReturnType<typeof treatPost>>>
+
+    export type TreatPostMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Treat a post
+ */
+export const useTreatPost = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof treatPost>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof treatPost>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getTreatPostMutationOptions(options));
+    }
+
 export const getGetPostCommentsUrl = (id: string,) => {
 
 
@@ -361,4 +512,77 @@ export function useGetPostComments<TData = Awaited<ReturnType<typeof getPostComm
 
 
 
+
+export const getCreateCommentUrl = (id: string,) => {
+
+
+
+
+  return `/api/posts/${id}/comments`
+}
+
+/**
+ * Creates a comment on a post and returns it with the author's username.
+ * @summary Post a comment
+ */
+export const createComment = async (id: string,
+    commentBody: CommentBody, options?: RequestInit): Promise<PostComment> => {
+
+  return customFetch<PostComment>(getCreateCommentUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(commentBody)
+  }
+);}
+
+
+
+
+
+export const getCreateCommentMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createComment>>, TError,{id: string;data: BodyType<CommentBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createComment>>, TError,{id: string;data: BodyType<CommentBody>}, TContext> => {
+
+const mutationKey = ['createComment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createComment>>, {id: string;data: BodyType<CommentBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createComment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateCommentMutationResult = NonNullable<Awaited<ReturnType<typeof createComment>>>
+    export type CreateCommentMutationBody = BodyType<CommentBody>
+    export type CreateCommentMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Post a comment
+ */
+export const useCreateComment = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createComment>>, TError,{id: string;data: BodyType<CommentBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createComment>>,
+        TError,
+        {id: string;data: BodyType<CommentBody>},
+        TContext
+      > => {
+      return useMutation(getCreateCommentMutationOptions(options));
+    }
 

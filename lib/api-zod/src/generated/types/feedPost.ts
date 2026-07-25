@@ -8,7 +8,7 @@
 import type { PetSummary } from './petSummary';
 
 /**
- * A post in the feed with reaction counts
+ * A post in the feed with reaction counts and viewer state
  */
 export interface FeedPost {
   id: string;
@@ -20,4 +20,6 @@ export interface FeedPost {
   boopCount: number;
   treatCount: number;
   commentCount: number;
+  viewerHasBooped: boolean;
+  viewerHasTreated: boolean;
 }

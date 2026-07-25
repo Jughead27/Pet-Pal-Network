@@ -1,9 +1,10 @@
 /**
- * CommentSheet — modal sheet showing server comments and a local-add input.
+ * CommentSheet — modal sheet showing server comments with a send input.
  *
- * Server comments are fetched via useGetPostComments(postId).
- * New comments added locally via AppContext.addComment are shown below them
- * (optimistic — not yet persisted; write endpoints come in the next phase).
+ * Comments are fetched via useGetPostComments(postId).
+ * New comments POST through useCreateComment; on success the returned
+ * PostComment is appended to the query cache for instant display, and
+ * AppContext.onCommentPosted() bumps the ActionRail count.
  */
 
 import React, { useState, useRef } from 'react';
@@ -13,7 +14,6 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
-  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -22,9 +22,14 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
-import { useApp, Comment } from '@/context/AppContext';
-import { useGetPostComments } from '@workspace/api-client-react';
+import { useApp } from '@/context/AppContext';
+import {
+  useGetPostComments,
+  useCreateComment,
+  getGetPostCommentsQueryKey,
+} from '@workspace/api-client-react';
 import type { PostComment } from '@workspace/api-client-react';
 
 interface Props {
@@ -33,9 +38,9 @@ interface Props {
   postId: string | null;
 }
 
-// ─── Row components ──────────────────────────────────────────────────────────
+// ─── Row component ────────────────────────────────────────────────────────────
 
-function ServerCommentRow({
+function CommentRow({
   comment,
   colors,
 }: {
@@ -48,7 +53,6 @@ function ServerCommentRow({
     .slice(0, 2)
     .join('');
 
-  // Relative timestamp: show "now" for items without a meaningful date diff
   const relativeTime = (() => {
     const diff = Date.now() - new Date(comment.createdAt).getTime();
     const mins = Math.floor(diff / 60_000);
@@ -81,69 +85,46 @@ function ServerCommentRow({
   );
 }
 
-function LocalCommentRow({
-  comment,
-  colors,
-}: {
-  comment: Comment;
-  colors: ReturnType<typeof useColors>;
-}) {
-  return (
-    <View style={styles.commentRow}>
-      <View style={[styles.avatar, { backgroundColor: colors.card }]}>
-        <Text style={[styles.avatarText, { color: colors.primary }]}>
-          {comment.initials}
-        </Text>
-      </View>
-      <View style={styles.commentContent}>
-        <Text style={[styles.commentAuthor, { color: colors.foreground }]}>
-          {comment.author}
-          <Text style={[styles.commentTime, { color: colors.mutedForeground }]}>
-            {'  '}{comment.timestamp}
-          </Text>
-        </Text>
-        <Text style={[styles.commentText, { color: colors.foreground }]}>
-          {comment.text}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 // ─── CommentSheet ─────────────────────────────────────────────────────────────
 
 export default function CommentSheet({ visible, onClose, postId }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { comments: localComments, addComment } = useApp();
+  const { onCommentPosted } = useApp();
+  const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
   const inputRef = useRef<TextInput>(null);
 
-  // Fetch server comments — disabled when no postId.
-  // We cast the query options because orval's generated type requires `queryKey`
-  // but the hook's implementation always provides it from the path template.
+  // Fetch server comments — disabled when no postId or sheet not visible
   const { data: serverComments, isLoading } = useGetPostComments(
     postId ?? '',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     { query: { enabled: !!postId && visible } as any },
   );
 
+  // POST comment mutation
+  const { mutate: postComment, isPending: isSending } = useCreateComment();
+
   const handleSend = () => {
     const trimmed = draft.trim();
-    if (!trimmed) return;
-    addComment(trimmed);
-    setDraft('');
+    if (!trimmed || !postId || isSending) return;
+
+    postComment(
+      { id: postId, data: { text: trimmed } },
+      {
+        onSuccess: (newComment) => {
+          setDraft('');
+          // Append to query cache — instant display without a round-trip refetch
+          queryClient.setQueryData<PostComment[]>(
+            getGetPostCommentsQueryKey(postId),
+            (old) => [...(old ?? []), newComment],
+          );
+          // Bump the comment count shown in ActionRail
+          onCommentPosted();
+        },
+      },
+    );
   };
-
-  // Combine: server comments first (chronological), then local additions
-  type ListItem =
-    | { kind: 'server'; data: PostComment }
-    | { kind: 'local'; data: Comment };
-
-  const items: ListItem[] = [
-    ...(serverComments ?? []).map((c) => ({ kind: 'server' as const, data: c })),
-    ...localComments.map((c) => ({ kind: 'local' as const, data: c })),
-  ];
 
   return (
     <Modal
@@ -171,15 +152,11 @@ export default function CommentSheet({ visible, onClose, postId }: Props) {
           </View>
         ) : (
           <FlatList
-            data={items}
-            keyExtractor={(item) => `${item.kind}-${item.data.id}`}
-            renderItem={({ item }) =>
-              item.kind === 'server' ? (
-                <ServerCommentRow comment={item.data} colors={colors} />
-              ) : (
-                <LocalCommentRow comment={item.data} colors={colors} />
-              )
-            }
+            data={serverComments ?? []}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <CommentRow comment={item} colors={colors} />
+            )}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
@@ -230,11 +207,12 @@ export default function CommentSheet({ visible, onClose, postId }: Props) {
             <TouchableOpacity
               onPress={handleSend}
               activeOpacity={0.7}
-              disabled={!draft.trim()}
+              disabled={!draft.trim() || isSending}
               style={[
                 styles.sendBtn,
                 {
-                  backgroundColor: draft.trim() ? colors.primary : colors.border,
+                  backgroundColor:
+                    draft.trim() && !isSending ? colors.primary : colors.border,
                 },
               ]}
               accessibilityRole="button"
@@ -243,7 +221,11 @@ export default function CommentSheet({ visible, onClose, postId }: Props) {
               <Ionicons
                 name="arrow-up"
                 size={18}
-                color={draft.trim() ? colors.primaryForeground : colors.mutedForeground}
+                color={
+                  draft.trim() && !isSending
+                    ? colors.primaryForeground
+                    : colors.mutedForeground
+                }
               />
             </TouchableOpacity>
           </View>
@@ -254,9 +236,7 @@ export default function CommentSheet({ visible, onClose, postId }: Props) {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   header: {
     paddingTop: 12,
     paddingBottom: 14,

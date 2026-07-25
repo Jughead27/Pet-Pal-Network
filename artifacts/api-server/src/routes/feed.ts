@@ -1,6 +1,14 @@
 import { Router, type IRouter } from "express";
-import { db, postsTable, petsTable, boopsTable, treatsTable, commentsTable } from "@workspace/db";
-import { eq, desc, sql } from "drizzle-orm";
+import {
+  db,
+  postsTable,
+  petsTable,
+  boopsTable,
+  treatsTable,
+  commentsTable,
+  configTable,
+} from "@workspace/db";
+import { and, eq, gte, desc, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -8,10 +16,14 @@ const router: IRouter = Router();
  * GET /feed
  *
  * Returns all posts in reverse-chronological order, each with embedded pet
- * info and aggregate reaction counts.  Requires a valid Clerk session token
- * (enforced by requireClerkAuth in routes/index.ts).
+ * info, aggregate reaction counts, and per-post viewer state (has_booped /
+ * has_treated).  Also returns viewer.treats_remaining_today.
+ *
+ * Requires a valid Clerk session token (enforced by requireClerkAuth).
  */
-router.get("/feed", async (_req, res) => {
+router.get("/feed", async (req, res) => {
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
   const rows = await db
     .select({
       id: postsTable.id,
@@ -26,6 +38,9 @@ router.get("/feed", async (_req, res) => {
       boopCount: sql<number>`count(distinct ${boopsTable.id})::int`,
       treatCount: sql<number>`count(distinct ${treatsTable.id})::int`,
       commentCount: sql<number>`count(distinct ${commentsTable.id})::int`,
+      // bool_or across the LEFT-JOINed rows: true if any row belongs to the viewer
+      viewerHasBooped: sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
+      viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
     })
     .from(postsTable)
     .innerJoin(petsTable, eq(petsTable.id, postsTable.petId))
@@ -35,7 +50,22 @@ router.get("/feed", async (_req, res) => {
     .groupBy(postsTable.id, petsTable.id)
     .orderBy(desc(postsTable.createdAt));
 
-  const feed = rows.map((r) => ({
+  // Compute viewer's treats remaining today
+  const [limitRow] = await db
+    .select()
+    .from(configTable)
+    .where(eq(configTable.key, "daily_treat_limit"));
+  const dailyLimit = limitRow ? parseInt(limitRow.value, 10) : 5;
+
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  const [countRow] = await db
+    .select({ todayTreats: sql<number>`count(*)::int` })
+    .from(treatsTable)
+    .where(and(eq(treatsTable.userId, userId), gte(treatsTable.createdAt, today)));
+  const treatsRemainingToday = Math.max(0, dailyLimit - (countRow?.todayTreats ?? 0));
+
+  const posts = rows.map((r) => ({
     id: r.id,
     caption: r.caption ?? null,
     mediaKey: r.mediaKey,
@@ -50,9 +80,11 @@ router.get("/feed", async (_req, res) => {
     boopCount: r.boopCount,
     treatCount: r.treatCount,
     commentCount: r.commentCount,
+    viewerHasBooped: r.viewerHasBooped,
+    viewerHasTreated: r.viewerHasTreated,
   }));
 
-  res.json(feed);
+  res.json({ posts, viewer: { treatsRemainingToday } });
 });
 
 export default router;

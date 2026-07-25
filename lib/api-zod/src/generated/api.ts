@@ -18,10 +18,11 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
- * Returns recency-ordered posts with pet info and reaction counts
+ * Returns recency-ordered posts with pet info, reaction counts, and viewer state
  * @summary Get feed
  */
-export const GetFeedResponseItem = zod.object({
+export const GetFeedResponse = zod.object({
+  "posts": zod.array(zod.object({
   "id": zod.string(),
   "caption": zod.string().nullish(),
   "mediaKey": zod.string(),
@@ -35,9 +36,14 @@ export const GetFeedResponseItem = zod.object({
 }).describe('Minimal pet info embedded in feed posts'),
   "boopCount": zod.number(),
   "treatCount": zod.number(),
-  "commentCount": zod.number()
-}).describe('A post in the feed with reaction counts')
-export const GetFeedResponse = zod.array(GetFeedResponseItem)
+  "commentCount": zod.number(),
+  "viewerHasBooped": zod.boolean(),
+  "viewerHasTreated": zod.boolean()
+}).describe('A post in the feed with reaction counts and viewer state')),
+  "viewer": zod.object({
+  "treatsRemainingToday": zod.number()
+}).describe('Viewer-specific state returned with the feed')
+}).describe('Feed response wrapping posts and viewer state')
 
 
 /**
@@ -68,9 +74,38 @@ export const GetPetResponse = zod.object({
 }).describe('Minimal pet info embedded in feed posts'),
   "boopCount": zod.number(),
   "treatCount": zod.number(),
-  "commentCount": zod.number()
-}).describe('A post in the feed with reaction counts'))
+  "commentCount": zod.number(),
+  "viewerHasBooped": zod.boolean(),
+  "viewerHasTreated": zod.boolean()
+}).describe('A post in the feed with reaction counts and viewer state'))
 }).describe('Full pet profile including posts')
+
+
+/**
+ * Inserts one boop event (unlimited, no dedupe). Returns the new boop count.
+ * @summary Boop a post
+ */
+export const BoopPostParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const BoopPostResponse = zod.object({
+  "boopCount": zod.number()
+}).describe('Result of a boop action')
+
+
+/**
+ * In a single transaction: checks daily treat limit (config.daily_treat_limit, default 5), rejects self-treats (caller owns the post's pet), then inserts and returns the new treat count plus remaining treats for today.
+ * @summary Treat a post
+ */
+export const TreatPostParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const TreatPostResponse = zod.object({
+  "treatCount": zod.number(),
+  "treatsRemainingToday": zod.number()
+}).describe('Result of a treat action')
 
 
 /**
@@ -88,5 +123,29 @@ export const GetPostCommentsResponseItem = zod.object({
   "createdAt": zod.coerce.date()
 }).describe('A comment on a post')
 export const GetPostCommentsResponse = zod.array(GetPostCommentsResponseItem)
+
+
+/**
+ * Creates a comment on a post and returns it with the author's username.
+ * @summary Post a comment
+ */
+export const CreateCommentParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const createCommentBodyTextMax = 280;
+
+
+
+export const CreateCommentBody = zod.object({
+  "text": zod.string().min(1).max(createCommentBodyTextMax)
+}).describe('Request body for creating a comment')
+
+export const CreateCommentResponse = zod.object({
+  "id": zod.string(),
+  "text": zod.string(),
+  "authorUsername": zod.string(),
+  "createdAt": zod.coerce.date()
+}).describe('A comment on a post')
 
 

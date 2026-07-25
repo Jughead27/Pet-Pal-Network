@@ -6,9 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './boopResult';
+export * from './commentBody';
 export * from './errorResponse';
 export * from './feedPost';
+export * from './feedResponse';
 export * from './healthStatus';
 export * from './petProfile';
 export * from './petSummary';
 export * from './postComment';
+export * from './treatResult';
+export * from './viewerInfo';

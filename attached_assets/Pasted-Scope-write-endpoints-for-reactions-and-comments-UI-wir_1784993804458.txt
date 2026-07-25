@@ -1,0 +1,10 @@
+Scope: write endpoints for reactions and comments + UI wiring. OpenAPI-first (spec → codegen → implement). Do not modify auth, nav, icons, or upload anything — no media/R2 work.
+
+Extend read shapes: GET /feed and GET /pets/{id} post items gain viewer_has_booped and viewer_has_treated booleans; the feed response gains a top-level viewer object with treats_remaining_today.
+POST /posts/{id}/boops — inserts one boop event row per call (unlimited, no dedupe), returns the new boop_count.
+POST /posts/{id}/treats — in a single transaction: read daily_treat_limit from config; count the caller's treats since midnight UTC (fixed daily reset); reject with a structured 429 { "error": "treat_limit_reached" } if at limit; reject with 403 { "error": "self_treat" } if the caller owns the post's pet; otherwise insert and return new treat_count and treats_remaining_today.
+POST /posts/{id}/comments — creates the comment, returns it with author username; the comment sheet posts through it (no more local-only comments).
+UI wiring: Boop stays instant and optimistic (pop + haptic + local increment, request in background). Treat becomes server-confirmed: Yum! pop, gold state, and count increment only on success; after each success show the transient countdown text ("4 left" … "Last one!") fading after ~1.5s; on treat_limit_reached, bone-shake animation (built-in Animated) + transient "Out of treats until tomorrow"; on self_treat, a gentle transient "Your own pet? Sneaky." Coral/gold reacted states initialize from viewer_has_booped/viewer_has_treated so they survive refresh and reinstall.
+Apply identically to web, iOS, and Android. No react-native-reanimated imports.
+
+Acceptance test: Booping increments and survives a full refresh. The 6th treat of the day is rejected server-side (verify by direct API call too, not just UI). Treating your own pet's post is rejected. Reacted coral/gold persist across refresh and sign-out/sign-in. A posted comment appears for another account viewing the same post. pnpm run typecheck passes clean.

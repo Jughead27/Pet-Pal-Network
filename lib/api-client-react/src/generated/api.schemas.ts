@@ -24,7 +24,14 @@ export interface PetSummary {
 }
 
 /**
- * A post in the feed with reaction counts
+ * Viewer-specific state returned with the feed
+ */
+export interface ViewerInfo {
+  treatsRemainingToday: number;
+}
+
+/**
+ * A post in the feed with reaction counts and viewer state
  */
 export interface FeedPost {
   id: string;
@@ -36,6 +43,16 @@ export interface FeedPost {
   boopCount: number;
   treatCount: number;
   commentCount: number;
+  viewerHasBooped: boolean;
+  viewerHasTreated: boolean;
+}
+
+/**
+ * Feed response wrapping posts and viewer state
+ */
+export interface FeedResponse {
+  posts: FeedPost[];
+  viewer: ViewerInfo;
 }
 
 /**
@@ -58,5 +75,31 @@ export interface PostComment {
   text: string;
   authorUsername: string;
   createdAt: string;
+}
+
+/**
+ * Request body for creating a comment
+ */
+export interface CommentBody {
+  /**
+     * @minLength 1
+     * @maxLength 280
+     */
+  text: string;
+}
+
+/**
+ * Result of a boop action
+ */
+export interface BoopResult {
+  boopCount: number;
+}
+
+/**
+ * Result of a treat action
+ */
+export interface TreatResult {
+  treatCount: number;
+  treatsRemainingToday: number;
 }
 

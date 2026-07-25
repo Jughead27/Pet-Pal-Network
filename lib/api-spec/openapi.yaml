@@ -36,7 +36,7 @@ paths:
       operationId: getFeed
       tags: [feed]
       summary: Get feed
-      description: Returns recency-ordered posts with pet info and reaction counts
+      description: Returns recency-ordered posts with pet info, reaction counts, and viewer state
       security:
         - bearerAuth: []
       responses:
@@ -45,9 +45,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/FeedPost"
+                $ref: "#/components/schemas/FeedResponse"
         "401":
           description: Unauthorized
           content:
@@ -89,6 +87,89 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /posts/{id}/boops:
+    post:
+      operationId: boopPost
+      tags: [posts]
+      summary: Boop a post
+      description: Inserts one boop event (unlimited, no dedupe). Returns the new boop count.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoopResult"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /posts/{id}/treats:
+    post:
+      operationId: treatPost
+      tags: [posts]
+      summary: Treat a post
+      description: >
+        In a single transaction: checks daily treat limit (config.daily_treat_limit, default 5),
+        rejects self-treats (caller owns the post's pet), then inserts and returns the new
+        treat count plus remaining treats for today.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TreatResult"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Self-treat not allowed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "429":
+          description: Daily treat limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /posts/{id}/comments:
     get:
       operationId: getPostComments
@@ -114,6 +195,44 @@ paths:
                   $ref: "#/components/schemas/PostComment"
         "401":
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    post:
+      operationId: createComment
+      tags: [posts]
+      summary: Post a comment
+      description: Creates a comment on a post and returns it with the author's username.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostComment"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Post not found
           content:
             application/json:
               schema:
@@ -160,9 +279,18 @@ components:
         - name
         - species
 
+    ViewerInfo:
+      type: object
+      description: Viewer-specific state returned with the feed
+      properties:
+        treatsRemainingToday:
+          type: integer
+      required:
+        - treatsRemainingToday
+
     FeedPost:
       type: object
-      description: A post in the feed with reaction counts
+      description: A post in the feed with reaction counts and viewer state
       properties:
         id:
           type: string
@@ -184,6 +312,10 @@ components:
           type: integer
         commentCount:
           type: integer
+        viewerHasBooped:
+          type: boolean
+        viewerHasTreated:
+          type: boolean
       required:
         - id
         - mediaKey
@@ -193,6 +325,22 @@ components:
         - boopCount
         - treatCount
         - commentCount
+        - viewerHasBooped
+        - viewerHasTreated
+
+    FeedResponse:
+      type: object
+      description: Feed response wrapping posts and viewer state
+      properties:
+        posts:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedPost"
+        viewer:
+          $ref: "#/components/schemas/ViewerInfo"
+      required:
+        - posts
+        - viewer
 
     PetProfile:
       type: object
@@ -238,3 +386,35 @@ components:
         - text
         - authorUsername
         - createdAt
+
+    CommentBody:
+      type: object
+      description: Request body for creating a comment
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 280
+      required:
+        - text
+
+    BoopResult:
+      type: object
+      description: Result of a boop action
+      properties:
+        boopCount:
+          type: integer
+      required:
+        - boopCount
+
+    TreatResult:
+      type: object
+      description: Result of a treat action
+      properties:
+        treatCount:
+          type: integer
+        treatsRemainingToday:
+          type: integer
+      required:
+        - treatCount
+        - treatsRemainingToday

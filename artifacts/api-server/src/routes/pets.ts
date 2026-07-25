@@ -1,5 +1,12 @@
 import { Router, type IRouter } from "express";
-import { db, petsTable, postsTable, boopsTable, treatsTable, commentsTable } from "@workspace/db";
+import {
+  db,
+  petsTable,
+  postsTable,
+  boopsTable,
+  treatsTable,
+  commentsTable,
+} from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -8,10 +15,13 @@ const router: IRouter = Router();
  * GET /pets/:id
  *
  * Returns a pet profile (name, species, breed, bio) and all of its posts
- * with the same FeedPost shape (reaction counts included).
+ * with the same FeedPost shape (reaction counts + viewer flags).
+ *
+ * Requires a valid Clerk session token (enforced by requireClerkAuth).
  */
 router.get("/pets/:id", async (req, res) => {
   const { id } = req.params;
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
   // Fetch the pet row first so we can 404 cleanly
   const [pet] = await db
@@ -24,7 +34,14 @@ router.get("/pets/:id", async (req, res) => {
     return;
   }
 
-  // Fetch that pet's posts with reaction counts
+  const petSummary = {
+    id: pet.id,
+    name: pet.name,
+    species: pet.species,
+    breed: pet.breed ?? null,
+  };
+
+  // Fetch that pet's posts with reaction counts and viewer flags
   const rows = await db
     .select({
       id: postsTable.id,
@@ -35,6 +52,8 @@ router.get("/pets/:id", async (req, res) => {
       boopCount: sql<number>`count(distinct ${boopsTable.id})::int`,
       treatCount: sql<number>`count(distinct ${treatsTable.id})::int`,
       commentCount: sql<number>`count(distinct ${commentsTable.id})::int`,
+      viewerHasBooped: sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
+      viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
     })
     .from(postsTable)
     .leftJoin(boopsTable, eq(boopsTable.postId, postsTable.id))
@@ -43,13 +62,6 @@ router.get("/pets/:id", async (req, res) => {
     .where(eq(postsTable.petId, id))
     .groupBy(postsTable.id)
     .orderBy(desc(postsTable.createdAt));
-
-  const petSummary = {
-    id: pet.id,
-    name: pet.name,
-    species: pet.species,
-    breed: pet.breed ?? null,
-  };
 
   const posts = rows.map((r) => ({
     id: r.id,
@@ -61,6 +73,8 @@ router.get("/pets/:id", async (req, res) => {
     boopCount: r.boopCount,
     treatCount: r.treatCount,
     commentCount: r.commentCount,
+    viewerHasBooped: r.viewerHasBooped,
+    viewerHasTreated: r.viewerHasTreated,
   }));
 
   res.json({

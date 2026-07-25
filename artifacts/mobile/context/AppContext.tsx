@@ -2,50 +2,35 @@ import React, { createContext, useContext, useState, useCallback } from "react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-export interface Comment {
-  id: string;
-  author: string;
-  initials: string;
-  text: string;
-  timestamp: string;
-}
-
-export interface PetPost {
-  id: string;
-  imageKey: "hero" | "post1" | "post2";
-  caption: string;
-}
-
-export interface Pet {
-  id: string;
-  name: string;
-  breed: string;
-  caption: string;
-  bio: string;
-  posts: PetPost[];
-}
-
 interface AppContextType {
   // ── Reaction counts ──────────────────────────────────────────────────────
-  // Initialized from server on first data load; local taps increment them.
   boopCount: number;
   treatCount: number;
-  // Server baseline for the comment count; added to localComments.length
-  // for the ActionRail display.
+  // Server baseline comment count; incremented locally after each successful POST
   serverCommentCount: number;
-  // ── Local comment additions (optimistic, not yet persisted) ───────────────
-  comments: Comment[];
+  // ── Viewer state (initialized from server on first load) ──────────────────
+  viewerHasBooped: boolean;
+  viewerHasTreated: boolean;
+  treatsRemainingToday: number;
   // ── Other UI state ───────────────────────────────────────────────────────
   isInPack: boolean;
-  hasBoopedOnce: boolean;
-  hasTreatedOnce: boolean;
   // ── Actions ──────────────────────────────────────────────────────────────
+  /** Optimistic boop: increments count and sets viewerHasBooped immediately. */
   boop: () => void;
-  treat: () => void;
-  addComment: (text: string) => void;
+  /** Called on server-confirmed treat success. */
+  onTreatSuccess: (newTreatCount: number, treatsRemaining: number) => void;
+  /** Called after a comment is successfully posted. */
+  onCommentPosted: () => void;
   togglePack: () => void;
-  /** Called once when server data loads to seed the local reaction counts. */
-  initFromServer: (boops: number, treats: number, commentCount: number) => void;
+  /** Called once when server data loads to seed local state. */
+  initFromServer: (
+    boops: number,
+    treats: number,
+    commentCount: number,
+    viewerHasBooped: boolean,
+    viewerHasTreated: boolean,
+    treatsRemainingToday: number,
+  ) => void;
 }
 
 // ─── Context ─────────────────────────────────────────────────────────────────
@@ -53,38 +38,32 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  // Reaction counts — start at 0, initialized from server on first data load.
   const [boopCount, setBoopCount] = useState(0);
   const [treatCount, setTreatCount] = useState(0);
   const [serverCommentCount, setServerCommentCount] = useState(0);
 
-  // Local comments: optimistic additions from the comment input.
-  // Server comments are fetched directly via useGetPostComments in CommentSheet.
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [viewerHasBooped, setViewerHasBooped] = useState(false);
+  const [viewerHasTreated, setViewerHasTreated] = useState(false);
+  const [treatsRemainingToday, setTreatsRemainingToday] = useState(0);
 
   const [isInPack, setIsInPack] = useState(false);
-  const [hasBoopedOnce, setHasBoopedOnce] = useState(false);
-  const [hasTreatedOnce, setHasTreatedOnce] = useState(false);
 
   const boop = useCallback(() => {
     setBoopCount((n) => n + 1);
-    if (!hasBoopedOnce) setHasBoopedOnce(true);
-  }, [hasBoopedOnce]);
+    setViewerHasBooped(true);
+  }, []);
 
-  const treat = useCallback(() => {
-    setTreatCount((n) => n + 1);
-    if (!hasTreatedOnce) setHasTreatedOnce(true);
-  }, [hasTreatedOnce]);
+  const onTreatSuccess = useCallback(
+    (newTreatCount: number, treatsRemaining: number) => {
+      setTreatCount(newTreatCount);
+      setViewerHasTreated(true);
+      setTreatsRemainingToday(treatsRemaining);
+    },
+    [],
+  );
 
-  const addComment = useCallback((text: string) => {
-    const newComment: Comment = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-      author: "you",
-      initials: "YO",
-      text,
-      timestamp: "now",
-    };
-    setComments((prev) => [...prev, newComment]);
+  const onCommentPosted = useCallback(() => {
+    setServerCommentCount((n) => n + 1);
   }, []);
 
   const togglePack = useCallback(() => {
@@ -92,10 +71,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const initFromServer = useCallback(
-    (boops: number, treats: number, commentCount: number) => {
+    (
+      boops: number,
+      treats: number,
+      commentCount: number,
+      hasBooped: boolean,
+      hasTreated: boolean,
+      treatsRemaining: number,
+    ) => {
       setBoopCount(boops);
       setTreatCount(treats);
       setServerCommentCount(commentCount);
+      setViewerHasBooped(hasBooped);
+      setViewerHasTreated(hasTreated);
+      setTreatsRemainingToday(treatsRemaining);
     },
     [],
   );
@@ -106,13 +95,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         boopCount,
         treatCount,
         serverCommentCount,
-        comments,
+        viewerHasBooped,
+        viewerHasTreated,
+        treatsRemainingToday,
         isInPack,
-        hasBoopedOnce,
-        hasTreatedOnce,
         boop,
-        treat,
-        addComment,
+        onTreatSuccess,
+        onCommentPosted,
         togglePack,
         initFromServer,
       }}

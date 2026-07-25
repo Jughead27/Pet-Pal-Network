@@ -2,12 +2,12 @@
  * Home Feed — full-bleed single pet post.
  *
  * Data comes from GET /feed via useGetFeed().  The first (most recent) post
- * is featured.  Boop/treat reactions stay local — counts are seeded from the
- * server value on first load and incremented locally on each tap.
+ * is featured.  Boop reactions are instant and optimistic; counts are seeded
+ * from the server on first load.  Treat reactions are server-confirmed.
  *
  * Gestures:
  *   Single tap on media  → toggle chrome (name/rail/scrim fade 200ms)
- *   Double tap on media  → boop (same as rail Boop button)
+ *   Double tap on media  → boop (same as rail Boop button, optimistic)
  *   Tap "more/less"      → expand / collapse caption
  */
 
@@ -30,7 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useApp } from '@/context/AppContext';
-import { useGetFeed } from '@workspace/api-client-react';
+import { useGetFeed, useBoopPost } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import ActionRail from '@/components/ActionRail';
 import AddToPackLink from '@/components/AddToPackLink';
@@ -46,7 +46,6 @@ const RAIL_RIGHT_INSET   = 14;
 const RAIL_MARGIN        = 24;
 const RAIL_EXCLUSION_X   = SCREEN_WIDTH - RAIL_TOUCH_WIDTH - RAIL_RIGHT_INSET - RAIL_MARGIN;
 
-// Shared text-shadow style applied to all overlay text for legibility.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TEXT_SHADOW: any = { textShadow: '0px 1px 3px rgba(0,0,0,0.4)' };
 
@@ -71,21 +70,27 @@ export default function HomeScreen() {
   const { boop, initFromServer } = useApp();
 
   // ── Server data ──────────────────────────────────────────────────────────
-  const { data: feed, isLoading, isError } = useGetFeed();
-  const featuredPost = feed?.[0] ?? null;
+  const { data, isLoading, isError } = useGetFeed();
+  const featuredPost = data?.posts?.[0] ?? null;
   const hasInitialized = useRef(false);
 
-  // Seed local reaction counts from server on first load (once only)
+  // Seed local state from server on first successful load
   useEffect(() => {
-    if (featuredPost && !hasInitialized.current) {
+    if (data && featuredPost && !hasInitialized.current) {
       hasInitialized.current = true;
       initFromServer(
         featuredPost.boopCount,
         featuredPost.treatCount,
         featuredPost.commentCount,
+        featuredPost.viewerHasBooped,
+        featuredPost.viewerHasTreated,
+        data.viewer.treatsRemainingToday,
       );
     }
-  }, [featuredPost, initFromServer]);
+  }, [data, featuredPost, initFromServer]);
+
+  // ── Boop mutation for double-tap gesture (optimistic + background) ────────
+  const { mutate: doBoopPost } = useBoopPost();
 
   // ── Reduced motion ───────────────────────────────────────────────────────
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -143,8 +148,10 @@ export default function HomeScreen() {
     if (tapTimerRef.current !== null) {
       clearTimeout(tapTimerRef.current);
       tapTimerRef.current = null;
+      // Double-tap boop: optimistic + background request
       boop();
       spawnBoopPop();
+      if (featuredPost) doBoopPost({ id: featuredPost.id });
       return;
     }
     if (pendingTapRef.current) {
@@ -155,6 +162,7 @@ export default function HomeScreen() {
       pendingTapRef.current = false;
       boop();
       spawnBoopPop();
+      if (featuredPost) doBoopPost({ id: featuredPost.id });
       return;
     }
 
@@ -177,7 +185,7 @@ export default function HomeScreen() {
         }).start();
       }, 280);
     }
-  }, [boop, spawnBoopPop, bottomOffset, chromeOpacity]);
+  }, [boop, spawnBoopPop, bottomOffset, chromeOpacity, featuredPost, doBoopPost]);
 
   // ── Loading / error states ───────────────────────────────────────────────
   if (isLoading || (!featuredPost && !isError)) {
@@ -244,6 +252,7 @@ export default function HomeScreen() {
         ]}
       >
         <ActionRail
+          postId={featuredPost.id}
           onCommentPress={() => setCommentSheetVisible(true)}
           onSharePress={() => setShareSheetVisible(true)}
           onBoopFired={spawnBoopPop}
