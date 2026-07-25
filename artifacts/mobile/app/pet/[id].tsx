@@ -553,6 +553,21 @@ export default function PetProfileScreen() {
             <Text style={[styles.petName, { color: colors.foreground }]}>
               {pet.name}
             </Text>
+            {/* Edit profile affordance — pencil, owner-only */}
+            {pet.viewerOwnsPet && (
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({ pathname: '/pet/edit', params: { id: pet.id } })
+                }
+                style={styles.editProfileBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Edit pet profile"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.6}
+              >
+                <Feather name="edit-2" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
             <AddToPackLink
               petId={pet.id}
               initialInPack={pet.viewerInPack}
@@ -1408,8 +1423,11 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   profileSection: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, gap: 8 },
-  nameRow:  { flexDirection: "row", alignItems: "center", gap: 12 },
+  nameRow:  { flexDirection: "row", alignItems: "center", gap: 8 },
   petName:  { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: 0.2 },
+  editProfileBtn: {
+    padding: 6,
+  },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   breed:    { fontSize: 14, fontFamily: "Inter_500Medium", letterSpacing: 0.3 },
   bio:      { fontSize: 14, lineHeight: 20, fontFamily: "Inter_400Regular" },

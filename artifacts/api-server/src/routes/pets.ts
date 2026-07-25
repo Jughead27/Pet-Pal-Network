@@ -14,7 +14,7 @@ import {
   usersTable,
 } from "@workspace/db";
 import { eq, desc, sql, and, isNull, isNotNull } from "drizzle-orm";
-import { CreatePetBody } from "@workspace/api-zod";
+import { CreatePetBody, PatchPetBody } from "@workspace/api-zod";
 import { mediaTokenUrl, copyObject } from "../lib/r2.js";
 
 const router: IRouter = Router();
@@ -417,6 +417,133 @@ router.get("/me/pets", async (req, res) => {
         avatarFocusY: p.avatarFocusY ?? null,
       };
     }),
+  });
+});
+
+/**
+ * PATCH /pets/:id
+ *
+ * Updates one or more profile fields for a pet owned by the authenticated user.
+ * All body fields are optional; omitted fields are left unchanged.
+ *
+ * Species + breed resolution mirrors the POST /pets logic:
+ *   - speciesId provided → resolve authoritative name, clear existing breed
+ *   - breedId provided   → resolve authoritative name
+ *   - breedId null       → clear breed FK (use free-text breed if provided)
+ *   - breed only         → free-text ("Not listed") path
+ *
+ * Returns the updated Pet (without post lists; client invalidates pet profile).
+ */
+router.patch("/pets/:id", async (req, res) => {
+  const { id } = req.params;
+  const userId  = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  // Verify pet exists and caller is the owner
+  const [existing] = await db
+    .select({ id: petsTable.id, ownerId: petsTable.ownerId })
+    .from(petsTable)
+    .where(eq(petsTable.id, id))
+    .limit(1);
+
+  if (!existing) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (existing.ownerId !== userId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const parsed = PatchPetBody.safeParse(req.body);
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? "Invalid request";
+    res.status(400).json({ error: message });
+    return;
+  }
+
+  const { name, bio, speciesId, breedId, breed } = parsed.data;
+
+  const updates: {
+    name?:      string;
+    bio?:       string | null;
+    species?:   string;
+    speciesId?: string | null;
+    breed?:     string | null;
+    breedId?:   string | null;
+  } = {};
+
+  if (name !== undefined) updates.name = name;
+  if (bio  !== undefined) updates.bio  = bio ?? null;
+
+  // Resolve species FK → authoritative name
+  if (speciesId !== undefined) {
+    const [speciesRow] = await db
+      .select({ name: speciesTable.name })
+      .from(speciesTable)
+      .where(eq(speciesTable.id, speciesId))
+      .limit(1);
+    if (!speciesRow) {
+      res.status(400).json({ error: "Invalid speciesId" });
+      return;
+    }
+    updates.speciesId = speciesId;
+    updates.species   = speciesRow.name;
+    // Changing species clears the breed; breedId/breed in the same request
+    // will overwrite these defaults immediately below.
+    updates.breedId = null;
+    updates.breed   = null;
+  }
+
+  // Resolve breed — FK path, free-text path, or explicit clear
+  if (breedId !== undefined) {
+    if (breedId === null) {
+      updates.breedId = null;
+      updates.breed   = breed ?? null; // allow free-text in same request
+    } else {
+      const [breedRow] = await db
+        .select({ name: breedsTable.name })
+        .from(breedsTable)
+        .where(eq(breedsTable.id, breedId))
+        .limit(1);
+      if (!breedRow) {
+        res.status(400).json({ error: "Invalid breedId" });
+        return;
+      }
+      updates.breedId = breedId;
+      updates.breed   = breedRow.name;
+    }
+  } else if (breed !== undefined) {
+    // Free-text breed only — clear the FK
+    updates.breedId = null;
+    updates.breed   = breed ?? null;
+  }
+
+  if (Object.keys(updates).length === 0) {
+    res.status(400).json({ error: "No fields to update" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(petsTable)
+    .set(updates)
+    .where(eq(petsTable.id, id))
+    .returning();
+
+  res.json({
+    id:           updated.id,
+    ownerId:      updated.ownerId,
+    name:         updated.name,
+    species:      updated.species,
+    breed:        updated.breed     ?? null,
+    speciesId:    updated.speciesId ?? null,
+    breedId:      updated.breedId   ?? null,
+    bio:          updated.bio       ?? null,
+    createdAt:    updated.createdAt,
+    thumbnailUrl: null,   // client invalidates pet profile query to get full data
+    avatarUrl:    null,
+    avatarFocusX: null,
+    avatarFocusY: null,
   });
 });
 

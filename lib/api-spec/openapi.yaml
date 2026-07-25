@@ -395,6 +395,67 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /pets/{id}:
+    patch:
+      operationId: patchPet
+      tags: [pets]
+      summary: Update a pet's profile
+      description: >
+        Updates one or more profile fields for a pet owned by the caller.
+        All body fields are optional; omitted fields are left unchanged.
+        Setting bio to null clears it.
+        Providing speciesId causes the server to resolve the authoritative species name
+        from the catalogue (preventing client-side name drift) and clears the existing
+        breed — send breedId or breed in the same request to set a new one.
+        Providing breedId causes the server to resolve the authoritative breed name.
+        Setting breedId to null clears the breed FK; optionally pair with breed for
+        free-text ("Not listed") path.
+        Returns the updated Pet (without post lists; client invalidates the profile query).
+        403 unless the caller owns the pet.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PetPatchBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the pet's owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Pet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     get:
       operationId: getPet
       tags: [pets]
@@ -1239,6 +1300,40 @@ components:
           maxLength: 280
       required:
         - text
+
+    PetPatchBody:
+      type: object
+      description: >
+        Fields to update on a pet's profile. All fields are optional; omitted fields are
+        left unchanged. Set bio to null to clear it. Set breedId to null (with no breed
+        string) to clear the breed. When speciesId is provided the server mirrors the
+        authoritative name and clears the existing breed — send breedId or breed in the
+        same request to set a new one for the new species.
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Pet's display name.
+        bio:
+          type: string
+          nullable: true
+          description: Bio text. Null clears the bio.
+        speciesId:
+          type: string
+          description: FK to the species catalogue. Server resolves authoritative name.
+        breedId:
+          type: string
+          nullable: true
+          description: >
+            FK to the breeds catalogue. Server resolves authoritative name.
+            Null clears the FK breed link (pair with breed for free-text path).
+        breed:
+          type: string
+          nullable: true
+          description: >
+            Free-text breed for the "Not listed" path. Used when breedId is absent or null.
+            Null clears the free-text breed.
 
     AvatarPatchBody:
       type: object

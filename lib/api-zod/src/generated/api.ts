@@ -224,6 +224,43 @@ export const PatchPetAvatarResponse = zod.object({
 
 
 /**
+ * Updates one or more profile fields for a pet owned by the caller. All body fields are optional; omitted fields are left unchanged. Setting bio to null clears it. Providing speciesId causes the server to resolve the authoritative species name from the catalogue (preventing client-side name drift) and clears the existing breed — send breedId or breed in the same request to set a new one. Providing breedId causes the server to resolve the authoritative breed name. Setting breedId to null clears the breed FK; optionally pair with breed for free-text ("Not listed") path. Returns the updated Pet (without post lists; client invalidates the profile query). 403 unless the caller owns the pet.
+ * @summary Update a pet's profile
+ */
+export const PatchPetParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const patchPetBodyNameMax = 100;
+
+
+
+export const PatchPetBody = zod.object({
+  "name": zod.string().min(1).max(patchPetBodyNameMax).optional().describe('Pet\'s display name.'),
+  "bio": zod.string().nullish().describe('Bio text. Null clears the bio.'),
+  "speciesId": zod.string().optional().describe('FK to the species catalogue. Server resolves authoritative name.'),
+  "breedId": zod.string().nullish().describe('FK to the breeds catalogue. Server resolves authoritative name. Null clears the FK breed link (pair with breed for free-text path).\n'),
+  "breed": zod.string().nullish().describe('Free-text breed for the \"Not listed\" path. Used when breedId is absent or null. Null clears the free-text breed.\n')
+}).describe('Fields to update on a pet\'s profile. All fields are optional; omitted fields are left unchanged. Set bio to null to clear it. Set breedId to null (with no breed string) to clear the breed. When speciesId is provided the server mirrors the authoritative name and clears the existing breed — send breedId or breed in the same request to set a new one for the new species.\n')
+
+export const PatchPetResponse = zod.object({
+  "id": zod.string(),
+  "ownerId": zod.string(),
+  "name": zod.string(),
+  "species": zod.string(),
+  "breed": zod.string().nullish(),
+  "speciesId": zod.string().nullable(),
+  "breedId": zod.string().nullable(),
+  "bio": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar (preferred) or most recent non-archived post. Null when neither exists or when the source key is a seed key (resolved client-side from bundled assets).\n'),
+  "avatarUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar. Null when no avatar is set.'),
+  "avatarFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.'),
+  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.')
+}).describe('A pet owned by a user')
+
+
+/**
  * Returns a pet profile with its posts and reaction counts
  * @summary Get pet profile
  */

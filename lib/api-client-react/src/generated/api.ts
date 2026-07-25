@@ -40,6 +40,7 @@ import type {
   PatchPostBody,
   PatchPostResponse,
   Pet,
+  PetPatchBody,
   PetProfile,
   PostComment,
   PostCreated,
@@ -976,6 +977,79 @@ export const usePatchPetAvatar = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getPatchPetAvatarMutationOptions(options));
+    }
+
+export const getPatchPetUrl = (id: string,) => {
+
+
+
+
+  return `/api/pets/${id}`
+}
+
+/**
+ * Updates one or more profile fields for a pet owned by the caller. All body fields are optional; omitted fields are left unchanged. Setting bio to null clears it. Providing speciesId causes the server to resolve the authoritative species name from the catalogue (preventing client-side name drift) and clears the existing breed — send breedId or breed in the same request to set a new one. Providing breedId causes the server to resolve the authoritative breed name. Setting breedId to null clears the breed FK; optionally pair with breed for free-text ("Not listed") path. Returns the updated Pet (without post lists; client invalidates the profile query). 403 unless the caller owns the pet.
+ * @summary Update a pet's profile
+ */
+export const patchPet = async (id: string,
+    petPatchBody: PetPatchBody, options?: RequestInit): Promise<Pet> => {
+
+  return customFetch<Pet>(getPatchPetUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(petPatchBody)
+  }
+);}
+
+
+
+
+
+export const getPatchPetMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchPet>>, TError,{id: string;data: BodyType<PetPatchBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchPet>>, TError,{id: string;data: BodyType<PetPatchBody>}, TContext> => {
+
+const mutationKey = ['patchPet'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchPet>>, {id: string;data: BodyType<PetPatchBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchPet(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchPetMutationResult = NonNullable<Awaited<ReturnType<typeof patchPet>>>
+    export type PatchPetMutationBody = BodyType<PetPatchBody>
+    export type PatchPetMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update a pet's profile
+ */
+export const usePatchPet = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchPet>>, TError,{id: string;data: BodyType<PetPatchBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchPet>>,
+        TError,
+        {id: string;data: BodyType<PetPatchBody>},
+        TContext
+      > => {
+      return useMutation(getPatchPetMutationOptions(options));
     }
 
 export const getGetPetUrl = (id: string,) => {
