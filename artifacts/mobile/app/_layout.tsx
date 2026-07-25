@@ -17,7 +17,24 @@ import {
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider } from '@/context/AppContext';
-import { setAuthTokenGetter } from '@workspace/api-client-react';
+import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
+
+// Set the API base URL before any component renders.
+//
+// Why this is required on BOTH platforms:
+//   Web  — the Expo preview runs on a separate Expo subdomain
+//           (*.expo.kirk.replit.dev) while the /api proxy lives on the main
+//           Replit dev domain (*.replit.dev).  Relative fetch URLs like
+//           /api/feed resolve against the wrong origin and hit Metro, not the
+//           API server — which explains the zero /api/* entries in server logs.
+//   Native (Expo Go) — React Native fetch does not support relative URLs at
+//           all; they must be absolute.
+//
+// EXPO_PUBLIC_DOMAIN is injected as $REPLIT_DEV_DOMAIN by the dev script,
+// which is the domain where /api/* is proxied to port 8080.
+if (process.env.EXPO_PUBLIC_DOMAIN) {
+  setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
+}
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();

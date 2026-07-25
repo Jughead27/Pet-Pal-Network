@@ -1,1 +1,2 @@
 - [Clerk Auth Integration](clerk-auth-integration.md) — package versions, Metro blockList fix, SSO wiring, API middleware pattern.
+- [API Base URL — Expo domain split](api-base-url-expo-domain.md) — setBaseUrl required; relative fetch URLs hit the wrong host on both web and native.
