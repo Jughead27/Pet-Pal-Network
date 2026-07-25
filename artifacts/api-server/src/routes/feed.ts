@@ -9,7 +9,7 @@ import {
   configTable,
   packFollowsTable,
 } from "@workspace/db";
-import { and, eq, gte, desc, sql } from "drizzle-orm";
+import { and, eq, gte, desc, sql, isNull } from "drizzle-orm";
 import { mediaTokenUrl } from "../lib/r2.js";
 
 const router: IRouter = Router();
@@ -37,6 +37,7 @@ router.get("/feed", async (req, res) => {
       cropFocusX:  postsTable.cropFocusX,
       cropFocusY:  postsTable.cropFocusY,
       isNursery:   postsTable.isNursery,
+      archivedAt:  postsTable.archivedAt,
       createdAt:   postsTable.createdAt,
       petId:       petsTable.id,
       petName:     petsTable.name,
@@ -62,7 +63,7 @@ router.get("/feed", async (req, res) => {
     .leftJoin(boopsTable,    eq(boopsTable.postId,    postsTable.id))
     .leftJoin(treatsTable,   eq(treatsTable.postId,   postsTable.id))
     .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
-    .where(nurseryOnly ? eq(postsTable.isNursery, true) : undefined)
+    .where(and(isNull(postsTable.archivedAt), nurseryOnly ? eq(postsTable.isNursery, true) : undefined))
     .groupBy(postsTable.id, petsTable.id)
     .orderBy(desc(postsTable.createdAt));
 
@@ -90,6 +91,7 @@ router.get("/feed", async (req, res) => {
     cropFocusX:  r.cropFocusX  ?? null,
     cropFocusY:  r.cropFocusY  ?? null,
     isNursery:   r.isNursery,
+    archivedAt:  r.archivedAt ? r.archivedAt.toISOString() : null,
     createdAt:   r.createdAt,
     pet: {
       id:            r.petId,

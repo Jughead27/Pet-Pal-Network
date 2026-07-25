@@ -29,4 +29,8 @@ export interface PetProfile {
   /** Whether the viewer follows this pet's breed. Null when breedId is null. */
   viewerFollowsBreed: boolean | null;
   posts: FeedPost[];
+  /** Archived posts for this pet. Populated only when the viewer is the owner; always an empty array for non-owners. */
+  archivedPosts: FeedPost[];
+  /** Whether the authenticated viewer owns this pet. */
+  viewerOwnsPet: boolean;
 }

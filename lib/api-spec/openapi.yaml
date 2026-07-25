@@ -668,6 +668,91 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /posts/{id}/archive:
+    post:
+      operationId: archivePost
+      tags: [posts]
+      summary: Archive a post
+      description: >
+        Sets archived_at on a post owned by the caller. Idempotent — calling
+        twice leaves the post archived. 403 unless the caller owns the post's pet.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Archived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArchivePostResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Post not owned by caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /posts/{id}/unarchive:
+    post:
+      operationId: unarchivePost
+      tags: [posts]
+      summary: Unarchive a post
+      description: >
+        Clears archived_at on a post owned by the caller, restoring it on all
+        public surfaces. Idempotent. Reactions, comments, and media are intact.
+        403 unless caller owns the pet.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Unarchived
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArchivePostResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Post not owned by caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /pets:
     post:
       operationId: createPet
@@ -892,6 +977,11 @@ components:
           type: boolean
         viewerHasTreated:
           type: boolean
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Set when the post is archived; null when active.
       required:
         - id
         - mediaKey
@@ -899,6 +989,7 @@ components:
         - cropFocusX
         - cropFocusY
         - isNursery
+        - archivedAt
         - createdAt
         - pet
         - boopCount
@@ -963,6 +1054,16 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/FeedPost"
+        archivedPosts:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedPost"
+          description: >
+            Archived posts for this pet. Populated only when the viewer is the
+            owner; always an empty array for non-owners.
+        viewerOwnsPet:
+          type: boolean
+          description: Whether the authenticated viewer owns this pet.
       required:
         - id
         - name
@@ -972,6 +1073,23 @@ components:
         - viewerFollowsSpecies
         - viewerFollowsBreed
         - posts
+        - archivedPosts
+        - viewerOwnsPet
+
+    ArchivePostResponse:
+      type: object
+      description: Result of an archive or unarchive action
+      properties:
+        id:
+          type: string
+        archivedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: The new archived_at timestamp; null when the post has been unarchived.
+      required:
+        - id
+        - archivedAt
 
     PackResult:
       type: object

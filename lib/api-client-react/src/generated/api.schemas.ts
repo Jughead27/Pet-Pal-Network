@@ -55,6 +55,8 @@ export interface FeedPost {
   commentCount: number;
   viewerHasBooped: boolean;
   viewerHasTreated: boolean;
+  /** Set when the post is archived; null when active. */
+  archivedAt: string | null;
 }
 
 /**
@@ -87,6 +89,19 @@ export interface PetProfile {
   /** Whether the viewer follows this pet's breed. Null when breedId is null. */
   viewerFollowsBreed: boolean | null;
   posts: FeedPost[];
+  /** Archived posts for this pet. Populated only when the viewer is the owner; always an empty array for non-owners. */
+  archivedPosts: FeedPost[];
+  /** Whether the authenticated viewer owns this pet. */
+  viewerOwnsPet: boolean;
+}
+
+/**
+ * Result of an archive or unarchive action
+ */
+export interface ArchivePostResponse {
+  id: string;
+  /** The new archived_at timestamp; null when the post has been unarchived. */
+  archivedAt: string | null;
 }
 
 /**

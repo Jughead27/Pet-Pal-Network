@@ -1,0 +1,11 @@
+Scope: archive/unarchive posts. OpenAPI-first. Management stays in the pet-profile post modal per the placement rule. No edit/delete changes beyond row placement; no moderation features.
+
+Preservation clause: the modal's edit mode, delete flow, mutual-exclusion behavior, and all dismissal-path state resets are preserved exactly; enumerate before modifying. Feed, Nursery, and grid behavior for non-archived posts unchanged.
+
+Schema: posts.archived_at (timestamp, nullable, default null). Push.
+API: POST /posts/{id}/archive and POST /posts/{id}/unarchive — owner-only (403 otherwise), idempotent, returning the post's current archived state. Every public read excludes archived posts: Home feed, Nursery feed, pet-profile posts as seen by non-owners, and the pet's public post count. The owner viewing their own pet still sees only non-archived posts in the main grid, with archived ones accessible via item 4.
+Modal: owners get an Archive row between Edit and Delete (box/archive-outline icon, standard foreground — not destructive), inline confirm ("Archive this post? Only you will see it." — Cancel / Archive). On success: modal dismisses, all query families invalidate, the post vanishes from public surfaces. In the archived context (item 4), this row reads Unarchive ("Restore this post for everyone?") and restores fully — reactions, comments, and media all intact throughout, since nothing is ever deleted.
+Archived section: on a pet's profile visible only to its owner, below the post grid: a quiet "Archived (N)" row (hidden when N=0) opening a grid of archived posts in the same 3-column style; tapping opens the same modal in archived context.
+Mutual exclusion extends across all three states: opening any of edit / archive-confirm / delete-confirm closes the others. Apply identically to web, iOS, and Android. No react-native-reanimated imports.
+
+Acceptance test (physical iPhone + web): Archiving a test post removes it from Home, Nursery (if flagged), and the public grid, and it appears under Archived (1) with its boops/comments intact; the second account cannot see it anywhere; unarchiving restores it everywhere with counts intact; delete still works from both contexts; a pet with nothing archived shows no Archived row. Golden path unbroken: sign in → feed loads → boop persists → post flow works → sign out. pnpm run typecheck clean.

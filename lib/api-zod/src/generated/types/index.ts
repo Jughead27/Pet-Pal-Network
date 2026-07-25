@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './archivePostResponse';
 export * from './boopResult';
 export * from './breedItem';
 export * from './breedListResponse';

@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  ArchivePostResponse,
   BoopResult,
   BreedListResponse,
   CommentBody,
@@ -1489,6 +1490,150 @@ export const useDeletePost = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getDeletePostMutationOptions(options));
+    }
+
+export const getArchivePostUrl = (id: string,) => {
+
+
+
+
+  return `/api/posts/${id}/archive`
+}
+
+/**
+ * Sets archived_at on a post owned by the caller. Idempotent — calling twice leaves the post archived. 403 unless the caller owns the post's pet.
+ * @summary Archive a post
+ */
+export const archivePost = async (id: string, options?: RequestInit): Promise<ArchivePostResponse> => {
+
+  return customFetch<ArchivePostResponse>(getArchivePostUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getArchivePostMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archivePost>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archivePost>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['archivePost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archivePost>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  archivePost(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchivePostMutationResult = NonNullable<Awaited<ReturnType<typeof archivePost>>>
+
+    export type ArchivePostMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Archive a post
+ */
+export const useArchivePost = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archivePost>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof archivePost>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getArchivePostMutationOptions(options));
+    }
+
+export const getUnarchivePostUrl = (id: string,) => {
+
+
+
+
+  return `/api/posts/${id}/unarchive`
+}
+
+/**
+ * Clears archived_at on a post owned by the caller, restoring it on all public surfaces. Idempotent. Reactions, comments, and media are intact. 403 unless caller owns the pet.
+ * @summary Unarchive a post
+ */
+export const unarchivePost = async (id: string, options?: RequestInit): Promise<ArchivePostResponse> => {
+
+  return customFetch<ArchivePostResponse>(getUnarchivePostUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnarchivePostMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unarchivePost>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unarchivePost>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['unarchivePost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unarchivePost>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unarchivePost(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnarchivePostMutationResult = NonNullable<Awaited<ReturnType<typeof unarchivePost>>>
+
+    export type UnarchivePostMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Unarchive a post
+ */
+export const useUnarchivePost = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unarchivePost>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unarchivePost>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getUnarchivePostMutationOptions(options));
     }
 
 export const getCreatePetUrl = () => {

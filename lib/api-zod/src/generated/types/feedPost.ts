@@ -28,4 +28,6 @@ export interface FeedPost {
   commentCount: number;
   viewerHasBooped: boolean;
   viewerHasTreated: boolean;
+  /** Set when the post is archived; null when active. */
+  archivedAt: Date | null;
 }

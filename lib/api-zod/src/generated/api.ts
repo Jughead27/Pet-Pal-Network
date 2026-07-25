@@ -47,7 +47,8 @@ export const GetFeedResponse = zod.object({
   "treatCount": zod.number(),
   "commentCount": zod.number(),
   "viewerHasBooped": zod.boolean(),
-  "viewerHasTreated": zod.boolean()
+  "viewerHasTreated": zod.boolean(),
+  "archivedAt": zod.coerce.date().nullable().describe('Set when the post is archived; null when active.')
 }).describe('A post in the feed with reaction counts and viewer state')),
   "viewer": zod.object({
   "treatsRemainingToday": zod.number()
@@ -233,8 +234,34 @@ export const GetPetResponse = zod.object({
   "treatCount": zod.number(),
   "commentCount": zod.number(),
   "viewerHasBooped": zod.boolean(),
-  "viewerHasTreated": zod.boolean()
-}).describe('A post in the feed with reaction counts and viewer state'))
+  "viewerHasTreated": zod.boolean(),
+  "archivedAt": zod.coerce.date().nullable().describe('Set when the post is archived; null when active.')
+}).describe('A post in the feed with reaction counts and viewer state')),
+  "archivedPosts": zod.array(zod.object({
+  "id": zod.string(),
+  "caption": zod.string().nullish(),
+  "mediaKey": zod.string(),
+  "mediaUrl": zod.string().nullable().describe('Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client).'),
+  "cropFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for cover-crop rendering. null = center.'),
+  "cropFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for cover-crop rendering. null = center.'),
+  "isNursery": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "pet": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "species": zod.string(),
+  "breed": zod.string().nullish(),
+  "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet')
+}).describe('Minimal pet info embedded in feed posts'),
+  "boopCount": zod.number(),
+  "treatCount": zod.number(),
+  "commentCount": zod.number(),
+  "viewerHasBooped": zod.boolean(),
+  "viewerHasTreated": zod.boolean(),
+  "archivedAt": zod.coerce.date().nullable().describe('Set when the post is archived; null when active.')
+}).describe('A post in the feed with reaction counts and viewer state')).describe('Archived posts for this pet. Populated only when the viewer is the owner; always an empty array for non-owners.\n'),
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet.')
 }).describe('Full pet profile including posts')
 
 
@@ -366,6 +393,34 @@ export const DeletePostParams = zod.object({
 })
 
 export const DeletePostResponse = zod.void()
+
+
+/**
+ * Sets archived_at on a post owned by the caller. Idempotent — calling twice leaves the post archived. 403 unless the caller owns the post's pet.
+ * @summary Archive a post
+ */
+export const ArchivePostParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const ArchivePostResponse = zod.object({
+  "id": zod.string(),
+  "archivedAt": zod.coerce.date().nullable().describe('The new archived_at timestamp; null when the post has been unarchived.')
+}).describe('Result of an archive or unarchive action')
+
+
+/**
+ * Clears archived_at on a post owned by the caller, restoring it on all public surfaces. Idempotent. Reactions, comments, and media are intact. 403 unless caller owns the pet.
+ * @summary Unarchive a post
+ */
+export const UnarchivePostParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UnarchivePostResponse = zod.object({
+  "id": zod.string(),
+  "archivedAt": zod.coerce.date().nullable().describe('The new archived_at timestamp; null when the post has been unarchived.')
+}).describe('Result of an archive or unarchive action')
 
 
 /**

@@ -39,6 +39,8 @@ import {
   useUnfollowBreed,
   useDeletePost,
   usePatchPost,
+  useArchivePost,
+  useUnarchivePost,
   getGetFeedQueryKey,
   getGetPetQueryKey,
 } from "@workspace/api-client-react";
@@ -78,11 +80,13 @@ export default function PetProfileScreen() {
   const [packMembersOpen, setPackMembersOpen] = useState(false);
   // Local pack count — initialised from server, updated optimistically on toggle
   const [localPackCount, setLocalPackCount] = useState<number | null>(null);
-  // Delete-confirm and edit states for the post modal
-  const [deleteConfirm,  setDeleteConfirm]  = useState(false);
-  const [isEditMode,     setIsEditMode]     = useState(false);
-  const [draftCaption,   setDraftCaption]   = useState("");
-  const [draftIsNursery, setDraftIsNursery] = useState(false);
+  // Delete-confirm, archive-confirm, and edit states for the post modal
+  const [deleteConfirm,    setDeleteConfirm]    = useState(false);
+  const [archiveConfirm,   setArchiveConfirm]   = useState(false);
+  const [archivedExpanded, setArchivedExpanded] = useState(false);
+  const [isEditMode,       setIsEditMode]       = useState(false);
+  const [draftCaption,     setDraftCaption]     = useState("");
+  const [draftIsNursery,   setDraftIsNursery]   = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -125,10 +129,36 @@ export default function PetProfileScreen() {
     },
   });
 
+  // Archive / unarchive — both dismiss the modal and re-sync all affected queries
+  const { mutate: doArchive, isPending: isArchiving } = useArchivePost({
+    mutation: {
+      onSuccess: () => {
+        setSelectedPostId(null);
+        setArchiveConfirm(false);
+        queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
+        queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey({ nursery: true }) });
+      },
+    },
+  });
+
+  const { mutate: doUnarchive, isPending: isUnarchiving } = useUnarchivePost({
+    mutation: {
+      onSuccess: () => {
+        setSelectedPostId(null);
+        setArchiveConfirm(false);
+        queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
+        queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey({ nursery: true }) });
+      },
+    },
+  });
+
   // Closing the modal always resets all modal state so it's fresh next open
   const closePostModal = useCallback(() => {
     setSelectedPostId(null);
     setDeleteConfirm(false);
+    setArchiveConfirm(false);
     setIsEditMode(false);
   }, []);
 
@@ -241,7 +271,12 @@ export default function PetProfileScreen() {
     ? resolveMediaKey(pet.posts[0].mediaKey, pet.posts[0].mediaUrl)
     : resolveMediaKey("seed:hero");
 
-  const selectedPost: FeedPost | undefined = pet.posts.find((p) => p.id === selectedPostId);
+  const selectedPost: FeedPost | undefined =
+    pet.posts.find((p) => p.id === selectedPostId) ??
+    pet.archivedPosts?.find((p) => p.id === selectedPostId);
+
+  // True when the open post is currently archived (drives Archive ↔ Unarchive label)
+  const isSelectedPostArchived = !!selectedPost?.archivedAt;
 
   const handlePackSuccess = (result: PackResult) => {
     setLocalPackCount(result.packCount);
@@ -402,6 +437,49 @@ export default function PetProfileScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* ── Archived Section — owner only, hidden when empty ─────────── */}
+        {pet.archivedPosts && pet.archivedPosts.length > 0 && (
+          <>
+            <TouchableOpacity
+              onPress={() => setArchivedExpanded((v) => !v)}
+              style={[styles.archivedHeader, { borderTopColor: colors.border }]}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={`${archivedExpanded ? "Hide" : "Show"} archived posts, ${pet.archivedPosts.length} total`}
+            >
+              <Ionicons name="archive-outline" size={14} color={colors.mutedForeground} />
+              <Text style={[styles.archivedHeaderText, { color: colors.mutedForeground }]}>
+                Archived ({pet.archivedPosts.length})
+              </Text>
+              <Ionicons
+                name={archivedExpanded ? "chevron-up" : "chevron-down"}
+                size={14}
+                color={colors.mutedForeground}
+              />
+            </TouchableOpacity>
+            {archivedExpanded && (
+              <View style={styles.grid}>
+                {pet.archivedPosts.map((post) => (
+                  <TouchableOpacity
+                    key={post.id}
+                    onPress={() => setSelectedPostId(post.id)}
+                    activeOpacity={0.85}
+                    style={styles.gridItem}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View archived post: ${post.caption ?? ""}`}
+                  >
+                    <MediaImage
+                      source={resolveMediaKey(post.mediaKey, post.mediaUrl)}
+                      style={styles.gridImage}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </>
+        )}
       </ScrollView>
 
       {/* ── Pack Members Modal ── */}
@@ -609,7 +687,8 @@ export default function PetProfileScreen() {
                       >
                         <TouchableOpacity
                           onPress={() => {
-                            setDeleteConfirm(false); // mutually exclusive with edit
+                            setDeleteConfirm(false);    // mutually exclusive
+                            setArchiveConfirm(false);   // mutually exclusive
                             setDraftCaption(selectedPost.caption ?? "");
                             setDraftIsNursery(selectedPost.isNursery);
                             setIsEditMode(true);
@@ -626,6 +705,76 @@ export default function PetProfileScreen() {
                         </TouchableOpacity>
                       </View>
 
+                      {/* ── Archive / Unarchive section ───────────────────────── */}
+                      <View
+                        style={[
+                          styles.modalDeleteSection,
+                          { backgroundColor: colors.card, borderTopColor: colors.border },
+                        ]}
+                      >
+                        {!archiveConfirm ? (
+                          <TouchableOpacity
+                            onPress={() => {
+                              setIsEditMode(false);
+                              setDeleteConfirm(false);
+                              setArchiveConfirm(true);
+                            }}
+                            style={styles.modalDeleteRow}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel={isSelectedPostArchived ? "Restore this post" : "Archive this post"}
+                          >
+                            <Ionicons name="archive-outline" size={14} color={colors.foreground} />
+                            <Text style={[styles.modalDeleteLabel, { color: colors.foreground }]}>
+                              {isSelectedPostArchived ? "Unarchive post" : "Archive post"}
+                            </Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <View style={styles.modalConfirmBlock}>
+                            <Text style={[styles.modalConfirmText, { color: colors.foreground }]}>
+                              {isSelectedPostArchived
+                                ? "Restore this post for everyone?"
+                                : "Archive this post? Only you will see it."}
+                            </Text>
+                            <View style={styles.modalConfirmButtons}>
+                              <TouchableOpacity
+                                onPress={() => setArchiveConfirm(false)}
+                                disabled={isArchiving || isUnarchiving}
+                                style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+                                activeOpacity={0.7}
+                                accessibilityRole="button"
+                                accessibilityLabel="Cancel"
+                              >
+                                <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>
+                                  Cancel
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  if (!selectedPostId) return;
+                                  isSelectedPostArchived
+                                    ? doUnarchive({ id: selectedPostId })
+                                    : doArchive({ id: selectedPostId });
+                                }}
+                                disabled={isArchiving || isUnarchiving}
+                                style={[styles.modalDeleteBtn, { borderColor: colors.foreground }]}
+                                activeOpacity={0.7}
+                                accessibilityRole="button"
+                                accessibilityLabel={isSelectedPostArchived ? "Confirm restore" : "Confirm archive"}
+                              >
+                                {(isArchiving || isUnarchiving) ? (
+                                  <ActivityIndicator size="small" color={colors.foreground} />
+                                ) : (
+                                  <Text style={[styles.modalDeleteBtnText, { color: colors.foreground }]}>
+                                    {isSelectedPostArchived ? "Restore" : "Archive"}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+                      </View>
+
                       {/* ── Delete section ──────────────────────────────────── */}
                       <View
                         style={[
@@ -636,7 +785,8 @@ export default function PetProfileScreen() {
                         {!deleteConfirm ? (
                           <TouchableOpacity
                             onPress={() => {
-                              setIsEditMode(false); // mutually exclusive with edit
+                              setIsEditMode(false);     // mutually exclusive
+                              setArchiveConfirm(false); // mutually exclusive
                               setDeleteConfirm(true);
                             }}
                             style={styles.modalDeleteRow}
@@ -740,6 +890,21 @@ const styles = StyleSheet.create({
   statDivider: { width: StyleSheet.hairlineWidth, height: 36 },
   gridDivider: { borderTopWidth: StyleSheet.hairlineWidth, marginTop: 8 },
   grid:        { flexDirection: "row", flexWrap: "wrap", gap: 2 },
+  archivedHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 8,
+  },
+  archivedHeaderText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    letterSpacing: 0.2,
+  },
   gridItem:    { width: GRID_ITEM_SIZE, height: GRID_ITEM_SIZE },
   gridImage:   { width: "100%", height: "100%" },
   modalOverlay: {

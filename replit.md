@@ -70,6 +70,7 @@ A pet-only social network: pets are the profiles, humans are accounts that act o
 - Deliberately accepted platform divergences — do NOT "fix": iOS system nav height + safe-area insets, hairline borders, CoreText font rendering, status bar behavior; Android nav bar uses a solid background (no blur).
 - REGRESSION RULE: before rewriting or substantially modifying any screen or component, enumerate its existing capabilities and preserve every one unless the prompt explicitly says to remove it. Losing existing functionality (e.g., a sign-out button, a navigation path, an empty state) is a failed delivery even if the new feature works.
 - After any delivery, verify the golden path still works: sign in → feed loads → boop persists → post a photo → sign out.
+- Express 5's router rejects * wildcard routes — use regex routes, and media routes can't use header auth for <img> loads — signed-URL tokens instead.
 
 ## User preferences
 

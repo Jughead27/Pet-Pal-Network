@@ -309,6 +309,76 @@ router.delete("/posts/:id", async (req, res) => {
 });
 
 /**
+ * POST /posts/:id/archive
+ *
+ * Sets archived_at on a post owned by the authenticated user, hiding it from
+ * all public surfaces (feed, nursery, pet grid) while leaving reactions,
+ * comments, and media fully intact. Idempotent — safe to call multiple times.
+ */
+router.post("/posts/:id/archive", async (req, res) => {
+  const { id } = req.params;
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  const [postRow] = await db
+    .select({ petOwnerId: petsTable.ownerId })
+    .from(postsTable)
+    .innerJoin(petsTable, eq(petsTable.id, postsTable.petId))
+    .where(eq(postsTable.id, id));
+
+  if (!postRow) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (postRow.petOwnerId !== userId) {
+    res.status(403).json({ error: "You do not own this post" });
+    return;
+  }
+
+  const [updated] = await db
+    .update(postsTable)
+    .set({ archivedAt: new Date() })
+    .where(eq(postsTable.id, id))
+    .returning({ id: postsTable.id, archivedAt: postsTable.archivedAt });
+
+  res.json({ id: updated.id, archivedAt: updated.archivedAt!.toISOString() });
+});
+
+/**
+ * POST /posts/:id/unarchive
+ *
+ * Clears archived_at on a post owned by the authenticated user, restoring it
+ * on all public surfaces. Idempotent. All reactions and comments are intact.
+ */
+router.post("/posts/:id/unarchive", async (req, res) => {
+  const { id } = req.params;
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  const [postRow] = await db
+    .select({ petOwnerId: petsTable.ownerId })
+    .from(postsTable)
+    .innerJoin(petsTable, eq(petsTable.id, postsTable.petId))
+    .where(eq(postsTable.id, id));
+
+  if (!postRow) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (postRow.petOwnerId !== userId) {
+    res.status(403).json({ error: "You do not own this post" });
+    return;
+  }
+
+  await db
+    .update(postsTable)
+    .set({ archivedAt: null })
+    .where(eq(postsTable.id, id));
+
+  res.json({ id, archivedAt: null });
+});
+
+/**
  * POST /posts/:id/comments
  *
  * Creates a comment on a post, returns it with the author's username.

@@ -12,7 +12,7 @@ import {
   interestFollowsTable,
   usersTable,
 } from "@workspace/db";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, isNull, isNotNull } from "drizzle-orm";
 import { CreatePetBody } from "@workspace/api-zod";
 import { mediaTokenUrl } from "../lib/r2.js";
 
@@ -91,15 +91,16 @@ router.get("/pets/:id", async (req, res) => {
     ? ((breedFollowRows as { n: number }[])[0]?.n ?? 0) > 0
     : null;
 
+  const viewerIsOwner = pet.ownerId === userId;
+
   const petSummary = {
     id:            pet.id,
     name:          pet.name,
     species:       pet.species,
     breed:         pet.breed ?? null,
     viewerInPack,
-    // True when the signed-in user owns this pet — drives the delete affordance
-    // in the post modal. Computed from the already-fetched pet row; no extra query.
-    viewerOwnsPet: pet.ownerId === userId,
+    // True when the signed-in user owns this pet — drives edit/archive/delete affordances.
+    viewerOwnsPet: viewerIsOwner,
   };
 
   // Fetch that pet's posts with reaction counts and viewer flags
@@ -111,6 +112,7 @@ router.get("/pets/:id", async (req, res) => {
       cropFocusX:      postsTable.cropFocusX,
       cropFocusY:      postsTable.cropFocusY,
       isNursery:       postsTable.isNursery,
+      archivedAt:      postsTable.archivedAt,
       createdAt:       postsTable.createdAt,
       boopCount:       sql<number>`count(distinct ${boopsTable.id})::int`,
       treatCount:      sql<number>`count(distinct ${treatsTable.id})::int`,
@@ -122,7 +124,7 @@ router.get("/pets/:id", async (req, res) => {
     .leftJoin(boopsTable,    eq(boopsTable.postId,    postsTable.id))
     .leftJoin(treatsTable,   eq(treatsTable.postId,   postsTable.id))
     .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
-    .where(eq(postsTable.petId, id))
+    .where(and(eq(postsTable.petId, id), isNull(postsTable.archivedAt)))
     .groupBy(postsTable.id)
     .orderBy(desc(postsTable.createdAt));
 
@@ -134,6 +136,52 @@ router.get("/pets/:id", async (req, res) => {
     cropFocusX:       r.cropFocusX ?? null,
     cropFocusY:       r.cropFocusY ?? null,
     isNursery:        r.isNursery,
+    archivedAt:       r.archivedAt ? r.archivedAt.toISOString() : null,
+    createdAt:        r.createdAt,
+    pet:              petSummary,
+    boopCount:        r.boopCount,
+    treatCount:       r.treatCount,
+    commentCount:     r.commentCount,
+    viewerHasBooped:  r.viewerHasBooped,
+    viewerHasTreated: r.viewerHasTreated,
+  }));
+
+  // Archived posts — only fetched for the pet's owner; empty array for everyone else.
+  const archivedPostRows = viewerIsOwner
+    ? await db
+        .select({
+          id:               postsTable.id,
+          caption:          postsTable.caption,
+          mediaKey:         postsTable.mediaKey,
+          cropFocusX:       postsTable.cropFocusX,
+          cropFocusY:       postsTable.cropFocusY,
+          isNursery:        postsTable.isNursery,
+          archivedAt:       postsTable.archivedAt,
+          createdAt:        postsTable.createdAt,
+          boopCount:        sql<number>`count(distinct ${boopsTable.id})::int`,
+          treatCount:       sql<number>`count(distinct ${treatsTable.id})::int`,
+          commentCount:     sql<number>`count(distinct ${commentsTable.id})::int`,
+          viewerHasBooped:  sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
+          viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
+        })
+        .from(postsTable)
+        .leftJoin(boopsTable,    eq(boopsTable.postId,    postsTable.id))
+        .leftJoin(treatsTable,   eq(treatsTable.postId,   postsTable.id))
+        .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
+        .where(and(eq(postsTable.petId, id), isNotNull(postsTable.archivedAt)))
+        .groupBy(postsTable.id)
+        .orderBy(desc(postsTable.archivedAt))
+    : [];
+
+  const archivedPosts = archivedPostRows.map((r) => ({
+    id:               r.id,
+    caption:          r.caption ?? null,
+    mediaKey:         r.mediaKey,
+    mediaUrl:         mediaTokenUrl(r.mediaKey),
+    cropFocusX:       r.cropFocusX ?? null,
+    cropFocusY:       r.cropFocusY ?? null,
+    isNursery:        r.isNursery,
+    archivedAt:       r.archivedAt ? r.archivedAt.toISOString() : null,
     createdAt:        r.createdAt,
     pet:              petSummary,
     boopCount:        r.boopCount,
@@ -155,7 +203,9 @@ router.get("/pets/:id", async (req, res) => {
     viewerInPack,
     viewerFollowsSpecies,
     viewerFollowsBreed,
+    viewerOwnsPet:       viewerIsOwner,
     posts,
+    archivedPosts,
   });
 });
 

@@ -17,7 +17,8 @@ export const postsTable = pgTable(
     // Focal point for cover-crop rendering (0–1 each axis). null = center (default cover behavior).
     cropFocusX: real("crop_focus_x"),
     cropFocusY: real("crop_focus_y"),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt:  timestamp("created_at").defaultNow().notNull(),
+    archivedAt: timestamp("archived_at"),
   },
   (table) => [
     index("posts_pet_id_idx").on(table.petId),
