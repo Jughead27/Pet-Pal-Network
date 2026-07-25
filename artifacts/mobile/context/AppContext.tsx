@@ -26,65 +26,42 @@ export interface Pet {
 }
 
 interface AppContextType {
-  pet: Pet;
+  // ── Reaction counts ──────────────────────────────────────────────────────
+  // Initialized from server on first data load; local taps increment them.
   boopCount: number;
   treatCount: number;
+  // Server baseline for the comment count; added to localComments.length
+  // for the ActionRail display.
+  serverCommentCount: number;
+  // ── Local comment additions (optimistic, not yet persisted) ───────────────
   comments: Comment[];
+  // ── Other UI state ───────────────────────────────────────────────────────
   isInPack: boolean;
-  // Whether the user has tapped Boop at least once (for teaching label)
   hasBoopedOnce: boolean;
-  // Whether the user has tapped Treat at least once (for teaching label)
   hasTreatedOnce: boolean;
+  // ── Actions ──────────────────────────────────────────────────────────────
   boop: () => void;
   treat: () => void;
   addComment: (text: string) => void;
   togglePack: () => void;
+  /** Called once when server data loads to seed the local reaction counts. */
+  initFromServer: (boops: number, treats: number, commentCount: number) => void;
 }
-
-// ─── Sample Data ─────────────────────────────────────────────────────────────
-
-const RIPLEY: Pet = {
-  id: "RIPLEY",
-  name: "Finn",
-  breed: "Crowntail Betta",
-  caption: "Flaring at my own reflection again.",
-  bio: "Professional bubble-nest architect.\nMood: iridescent.",
-  posts: [
-    { id: "post-1", imageKey: "hero", caption: "Morning flare session." },
-    { id: "post-2", imageKey: "post1", caption: "The fins. They flow." },
-    {
-      id: "post-3",
-      imageKey: "post2",
-      caption: "Close enough to count scales.",
-    },
-  ],
-};
-
-const INITIAL_COMMENTS: Comment[] = [
-  {
-    id: "c1",
-    author: "aqua.keeper",
-    initials: "AK",
-    text: "Those fins are absolutely spectacular.",
-    timestamp: "2h",
-  },
-  {
-    id: "c2",
-    author: "fin.fancier",
-    initials: "FF",
-    text: "Finn is living their best life.",
-    timestamp: "45m",
-  },
-];
 
 // ─── Context ─────────────────────────────────────────────────────────────────
 
 const AppContext = createContext<AppContextType | null>(null);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [boopCount, setBoopCount] = useState(247);
-  const [treatCount, setTreatCount] = useState(89);
-  const [comments, setComments] = useState<Comment[]>(INITIAL_COMMENTS);
+  // Reaction counts — start at 0, initialized from server on first data load.
+  const [boopCount, setBoopCount] = useState(0);
+  const [treatCount, setTreatCount] = useState(0);
+  const [serverCommentCount, setServerCommentCount] = useState(0);
+
+  // Local comments: optimistic additions from the comment input.
+  // Server comments are fetched directly via useGetPostComments in CommentSheet.
+  const [comments, setComments] = useState<Comment[]>([]);
+
   const [isInPack, setIsInPack] = useState(false);
   const [hasBoopedOnce, setHasBoopedOnce] = useState(false);
   const [hasTreatedOnce, setHasTreatedOnce] = useState(false);
@@ -114,12 +91,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setIsInPack((v) => !v);
   }, []);
 
+  const initFromServer = useCallback(
+    (boops: number, treats: number, commentCount: number) => {
+      setBoopCount(boops);
+      setTreatCount(treats);
+      setServerCommentCount(commentCount);
+    },
+    [],
+  );
+
   return (
     <AppContext.Provider
       value={{
-        pet: RIPLEY,
         boopCount,
         treatCount,
+        serverCommentCount,
         comments,
         isInPack,
         hasBoopedOnce,
@@ -128,6 +114,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         treat,
         addComment,
         togglePack,
+        initFromServer,
       }}
     >
       {children}

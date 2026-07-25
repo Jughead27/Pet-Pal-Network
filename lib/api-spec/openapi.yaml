@@ -10,6 +10,12 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: feed
+    description: Feed operations
+  - name: pets
+    description: Pet operations
+  - name: posts
+    description: Post operations
 paths:
   /healthz:
     get:
@@ -24,7 +30,101 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /feed:
+    get:
+      operationId: getFeed
+      tags: [feed]
+      summary: Get feed
+      description: Returns recency-ordered posts with pet info and reaction counts
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FeedPost"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /pets/{id}:
+    get:
+      operationId: getPet
+      tags: [pets]
+      summary: Get pet profile
+      description: Returns a pet profile with its posts and reaction counts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PetProfile"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /posts/{id}/comments:
+    get:
+      operationId: getPostComments
+      tags: [posts]
+      summary: Get post comments
+      description: Returns comments on a post ordered by creation time
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PostComment"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+
   schemas:
     HealthStatus:
       type: object
@@ -34,3 +134,107 @@ components:
       required:
         - status
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+
+    PetSummary:
+      type: object
+      description: Minimal pet info embedded in feed posts
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        species:
+          type: string
+        breed:
+          type: string
+          nullable: true
+      required:
+        - id
+        - name
+        - species
+
+    FeedPost:
+      type: object
+      description: A post in the feed with reaction counts
+      properties:
+        id:
+          type: string
+        caption:
+          type: string
+          nullable: true
+        mediaKey:
+          type: string
+        isNursery:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        pet:
+          $ref: "#/components/schemas/PetSummary"
+        boopCount:
+          type: integer
+        treatCount:
+          type: integer
+        commentCount:
+          type: integer
+      required:
+        - id
+        - mediaKey
+        - isNursery
+        - createdAt
+        - pet
+        - boopCount
+        - treatCount
+        - commentCount
+
+    PetProfile:
+      type: object
+      description: Full pet profile including posts
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        species:
+          type: string
+        breed:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        posts:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedPost"
+      required:
+        - id
+        - name
+        - species
+        - posts
+
+    PostComment:
+      type: object
+      description: A comment on a post
+      properties:
+        id:
+          type: string
+        text:
+          type: string
+        authorUsername:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - text
+        - authorUsername
+        - createdAt

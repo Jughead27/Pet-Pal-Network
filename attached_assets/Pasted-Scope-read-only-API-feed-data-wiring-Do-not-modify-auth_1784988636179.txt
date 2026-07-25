@@ -1,0 +1,13 @@
+Scope: read-only API + feed data wiring. Do not modify auth screens, nav bar, icons, or the boop/treat press behavior (reactions stay local-state until the next phase). No write endpoints yet except the user-provisioning described below.
+
+OpenAPI-first — define in lib/api-spec/openapi.yaml, then codegen, then implement in artifacts/api-server:
+GET /feed — recency-ordered posts, each with: id, caption, media_key, is_nursery, created_at, pet (id, name, species, breed), boop_count, treat_count, comment_count.
+GET /pets/{id} — pet profile (name, species, breed, bio) plus its posts with the same shape.
+GET /posts/{id}/comments — comments with author username and created_at.
+User provisioning: in the auth middleware (or a small helper it calls), after verifying the Clerk token, ensure a row exists in users for that Clerk ID — create it on first sight with a username derived from their email prefix (de-duplicated if taken). Every authenticated request may assume the user row exists afterward.
+Seed script (idempotent): create a seed user (username aqua.keeper) and a second (fin.fancier); create pet Finn (Crowntail Betta, bio "Professional bubble-nest architect.\nMood: iridescent.") owned by the seed user; create his three posts with captions from AppContext, using media_key values seed:hero, seed:post1, seed:post2; attach the two existing comments to the first post from those two users.
+Media bridge (temporary, explicit): in the mobile app, posts whose media_key starts with seed: render the corresponding bundled local images (hero/post1/post2). Remote URLs come in a later phase — do not build any upload or R2 code now.
+Wire the app: feed screen, pet detail, and comment sheet read from the new endpoints via the generated React Query hooks instead of AppContext's hardcoded constants. Boop/treat taps keep their current local-only behavior (pops, haptics, local count increments), initialized from the server counts. Loading and error states: minimal, in the existing design language.
+Apply identically to web, iOS, and Android. No react-native-reanimated imports.
+
+Acceptance test: With the database as the only source: the feed shows Finn's three posts (server-ordered), his profile opens, and the first post shows the two seeded comments. Boop/treat counts display the real database totals (near zero — the hardcoded 247/89 disappear, which is correct). Signing in with a brand-new account creates a users row automatically. pnpm run typecheck passes clean.

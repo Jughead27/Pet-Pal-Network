@@ -1,31 +1,93 @@
 /**
- * CommentSheet — modal sheet showing comments and a text input.
+ * CommentSheet — modal sheet showing server comments and a local-add input.
+ *
+ * Server comments are fetched via useGetPostComments(postId).
+ * New comments added locally via AppContext.addComment are shown below them
+ * (optimistic — not yet persisted; write endpoints come in the next phase).
  */
 
 import React, { useState, useRef } from 'react';
 import {
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
   Modal,
-  View,
+  Platform,
+  Pressable,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  FlatList,
-  StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
+  View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useApp, Comment } from '@/context/AppContext';
+import { useGetPostComments } from '@workspace/api-client-react';
+import type { PostComment } from '@workspace/api-client-react';
 
 interface Props {
   visible: boolean;
   onClose: () => void;
+  postId: string | null;
 }
 
-function CommentRow({ comment, colors }: { comment: Comment; colors: ReturnType<typeof useColors> }) {
+// ─── Row components ──────────────────────────────────────────────────────────
+
+function ServerCommentRow({
+  comment,
+  colors,
+}: {
+  comment: PostComment;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const initials = comment.authorUsername
+    .split(/[._-]/)
+    .map((s) => s[0]?.toUpperCase() ?? '')
+    .slice(0, 2)
+    .join('');
+
+  // Relative timestamp: show "now" for items without a meaningful date diff
+  const relativeTime = (() => {
+    const diff = Date.now() - new Date(comment.createdAt).getTime();
+    const mins = Math.floor(diff / 60_000);
+    if (mins < 1) return 'now';
+    if (mins < 60) return `${mins}m`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h`;
+    return `${Math.floor(hrs / 24)}d`;
+  })();
+
+  return (
+    <View style={styles.commentRow}>
+      <View style={[styles.avatar, { backgroundColor: colors.card }]}>
+        <Text style={[styles.avatarText, { color: colors.primary }]}>
+          {initials || '?'}
+        </Text>
+      </View>
+      <View style={styles.commentContent}>
+        <Text style={[styles.commentAuthor, { color: colors.foreground }]}>
+          {comment.authorUsername}
+          <Text style={[styles.commentTime, { color: colors.mutedForeground }]}>
+            {'  '}{relativeTime}
+          </Text>
+        </Text>
+        <Text style={[styles.commentText, { color: colors.foreground }]}>
+          {comment.text}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+function LocalCommentRow({
+  comment,
+  colors,
+}: {
+  comment: Comment;
+  colors: ReturnType<typeof useColors>;
+}) {
   return (
     <View style={styles.commentRow}>
       <View style={[styles.avatar, { backgroundColor: colors.card }]}>
@@ -48,12 +110,23 @@ function CommentRow({ comment, colors }: { comment: Comment; colors: ReturnType<
   );
 }
 
-export default function CommentSheet({ visible, onClose }: Props) {
+// ─── CommentSheet ─────────────────────────────────────────────────────────────
+
+export default function CommentSheet({ visible, onClose, postId }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { comments, pet, addComment } = useApp();
+  const { comments: localComments, addComment } = useApp();
   const [draft, setDraft] = useState('');
   const inputRef = useRef<TextInput>(null);
+
+  // Fetch server comments — disabled when no postId.
+  // We cast the query options because orval's generated type requires `queryKey`
+  // but the hook's implementation always provides it from the path template.
+  const { data: serverComments, isLoading } = useGetPostComments(
+    postId ?? '',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    { query: { enabled: !!postId && visible } as any },
+  );
 
   const handleSend = () => {
     const trimmed = draft.trim();
@@ -61,6 +134,16 @@ export default function CommentSheet({ visible, onClose }: Props) {
     addComment(trimmed);
     setDraft('');
   };
+
+  // Combine: server comments first (chronological), then local additions
+  type ListItem =
+    | { kind: 'server'; data: PostComment }
+    | { kind: 'local'; data: Comment };
+
+  const items: ListItem[] = [
+    ...(serverComments ?? []).map((c) => ({ kind: 'server' as const, data: c })),
+    ...localComments.map((c) => ({ kind: 'local' as const, data: c })),
+  ];
 
   return (
     <Modal
@@ -82,21 +165,33 @@ export default function CommentSheet({ visible, onClose }: Props) {
         </View>
 
         {/* Comments list */}
-        <FlatList
-          data={comments}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <CommentRow comment={item} colors={colors} />}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          ListEmptyComponent={
-            <View style={styles.emptyState}>
-              <Feather name="message-circle" size={32} color={colors.mutedForeground} />
-              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                No comments yet.{'\n'}Be the first to say something.
-              </Text>
-            </View>
-          }
-        />
+        {isLoading ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : (
+          <FlatList
+            data={items}
+            keyExtractor={(item) => `${item.kind}-${item.data.id}`}
+            renderItem={({ item }) =>
+              item.kind === 'server' ? (
+                <ServerCommentRow comment={item.data} colors={colors} />
+              ) : (
+                <LocalCommentRow comment={item.data} colors={colors} />
+              )
+            }
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              <View style={styles.emptyState}>
+                <Feather name="message-circle" size={32} color={colors.mutedForeground} />
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                  No comments yet.{'\n'}Be the first to say something.
+                </Text>
+              </View>
+            }
+          />
+        )}
 
         {/* Input */}
         <KeyboardAvoidingView
@@ -117,7 +212,7 @@ export default function CommentSheet({ visible, onClose }: Props) {
               ref={inputRef}
               value={draft}
               onChangeText={setDraft}
-              placeholder={`Comment on ${pet.name}...`}
+              placeholder="Add a comment…"
               placeholderTextColor={colors.mutedForeground}
               style={[
                 styles.input,
@@ -185,6 +280,11 @@ const styles = StyleSheet.create({
     right: 16,
     bottom: 14,
     padding: 4,
+  },
+  loadingState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   listContent: {
     paddingHorizontal: 16,

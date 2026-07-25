@@ -31,7 +31,6 @@ interface ShareOption {
 export default function ShareSheet({ visible, onClose }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { pet } = useApp();
 
   const handleOption = (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -77,7 +76,7 @@ export default function ShareSheet({ visible, onClose }: Props) {
         {/* Title */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            Share {pet.name}
+            Share
           </Text>
           <TouchableOpacity onPress={onClose} accessibilityRole="button">
             <Ionicons name="close" size={22} color={colors.mutedForeground} />

@@ -161,6 +161,7 @@ export default function ActionRail({
     boopCount,
     treatCount,
     comments,
+    serverCommentCount,
     hasBoopedOnce,
     hasTreatedOnce,
   } = useApp();
@@ -187,6 +188,9 @@ export default function ActionRail({
     treat();
     onTreatFired?.();
   };
+
+  // Comment count = server baseline + locally added comments (optimistic)
+  const commentCount = serverCommentCount + comments.length;
 
   return (
     <View style={styles.rail}>
@@ -217,7 +221,7 @@ export default function ActionRail({
         renderIcon={(color) => (
           <Ionicons name="chatbubble-outline" size={20} color={color} />
         )}
-        count={comments.length}
+        count={commentCount}
         onPress={onCommentPress}
         testID="comment-button"
       />
