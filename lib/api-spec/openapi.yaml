@@ -581,6 +581,54 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /posts/{id}:
+    patch:
+      operationId: patchPost
+      tags: [posts]
+      summary: Update a post
+      description: >
+        Updates caption and/or isNursery on a post owned by the caller
+        (ownership checked via the post's pet). caption may be set, changed,
+        or cleared to null. Omitted fields are left unchanged.
+        403 unless the caller owns the post's pet.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatchPostBody"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatchPostResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Post not owned by caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       operationId: deletePost
       tags: [posts]
@@ -1187,6 +1235,31 @@ components:
         - mediaKey
         - isNursery
         - createdAt
+
+    PatchPostBody:
+      type: object
+      description: Fields to update on an existing post. Omitted fields are unchanged.
+      properties:
+        caption:
+          type: string
+          nullable: true
+          maxLength: 280
+          description: New caption; null clears it.
+        isNursery:
+          type: boolean
+          description: Whether this is a Nursery (baby/hatchling) post.
+
+    PatchPostResponse:
+      type: object
+      required: [id, caption, isNursery]
+      properties:
+        id:
+          type: string
+        caption:
+          type: string
+          nullable: true
+        isNursery:
+          type: boolean
 
     InterestFollowResult:
       type: object

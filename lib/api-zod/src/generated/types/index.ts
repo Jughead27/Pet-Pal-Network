@@ -26,6 +26,8 @@ export * from './packedPetItem';
 export * from './packMemberItem';
 export * from './packMembersResponse';
 export * from './packResult';
+export * from './patchPostBody';
+export * from './patchPostResponse';
 export * from './pet';
 export * from './petProfile';
 export * from './petSummary';

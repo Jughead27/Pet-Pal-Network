@@ -208,6 +208,59 @@ router.post("/posts/:id/treats", async (req, res) => {
 });
 
 /**
+ * PATCH /posts/:id
+ *
+ * Updates caption and/or isNursery on a post owned by the authenticated user
+ * (ownership via pet). Either field is optional — omitting a field leaves it
+ * unchanged. caption may be set to null to clear it. Returns the updated fields.
+ */
+router.patch("/posts/:id", async (req, res) => {
+  const { id } = req.params;
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  const [postRow] = await db
+    .select({
+      caption:    postsTable.caption,
+      isNursery:  postsTable.isNursery,
+      petOwnerId: petsTable.ownerId,
+    })
+    .from(postsTable)
+    .innerJoin(petsTable, eq(petsTable.id, postsTable.petId))
+    .where(eq(postsTable.id, id));
+
+  if (!postRow) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (postRow.petOwnerId !== userId) {
+    res.status(403).json({ error: "You do not own this post" });
+    return;
+  }
+
+  const body = req.body as { caption?: string | null; isNursery?: boolean };
+  // Merge: omitted field keeps existing value; explicit null caption clears it.
+  const nextCaption   = "caption" in body ? (body.caption ?? null) : postRow.caption;
+  const nextIsNursery = typeof body.isNursery === "boolean" ? body.isNursery : postRow.isNursery;
+
+  const [updated] = await db
+    .update(postsTable)
+    .set({ caption: nextCaption, isNursery: nextIsNursery })
+    .where(eq(postsTable.id, id))
+    .returning({
+      id:        postsTable.id,
+      caption:   postsTable.caption,
+      isNursery: postsTable.isNursery,
+    });
+
+  res.json({
+    id:        updated.id,
+    caption:   updated.caption ?? null,
+    isNursery: updated.isNursery,
+  });
+});
+
+/**
  * DELETE /posts/:id
  *
  * Deletes a post owned by the authenticated user (ownership is checked via

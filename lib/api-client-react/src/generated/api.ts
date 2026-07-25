@@ -34,6 +34,8 @@ import type {
   MyPetsResponse,
   PackMembersResponse,
   PackResult,
+  PatchPostBody,
+  PatchPostResponse,
   Pet,
   PetProfile,
   PostComment,
@@ -1342,6 +1344,79 @@ export const useCreatePost = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreatePostMutationOptions(options));
+    }
+
+export const getPatchPostUrl = (id: string,) => {
+
+
+
+
+  return `/api/posts/${id}`
+}
+
+/**
+ * Updates caption and/or isNursery on a post owned by the caller (ownership checked via the post's pet). caption may be set, changed, or cleared to null. Omitted fields are left unchanged. 403 unless the caller owns the post's pet.
+ * @summary Update a post
+ */
+export const patchPost = async (id: string,
+    patchPostBody: PatchPostBody, options?: RequestInit): Promise<PatchPostResponse> => {
+
+  return customFetch<PatchPostResponse>(getPatchPostUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(patchPostBody)
+  }
+);}
+
+
+
+
+
+export const getPatchPostMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchPost>>, TError,{id: string;data: BodyType<PatchPostBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchPost>>, TError,{id: string;data: BodyType<PatchPostBody>}, TContext> => {
+
+const mutationKey = ['patchPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchPost>>, {id: string;data: BodyType<PatchPostBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchPost(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchPostMutationResult = NonNullable<Awaited<ReturnType<typeof patchPost>>>
+    export type PatchPostMutationBody = BodyType<PatchPostBody>
+    export type PatchPostMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update a post
+ */
+export const usePatchPost = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchPost>>, TError,{id: string;data: BodyType<PatchPostBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchPost>>,
+        TError,
+        {id: string;data: BodyType<PatchPostBody>},
+        TContext
+      > => {
+      return useMutation(getPatchPostMutationOptions(options));
     }
 
 export const getDeletePostUrl = (id: string,) => {

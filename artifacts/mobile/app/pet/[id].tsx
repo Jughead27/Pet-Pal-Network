@@ -12,12 +12,14 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -36,6 +38,7 @@ import {
   useFollowBreed,
   useUnfollowBreed,
   useDeletePost,
+  usePatchPost,
   getGetFeedQueryKey,
   getGetPetQueryKey,
 } from "@workspace/api-client-react";
@@ -75,8 +78,11 @@ export default function PetProfileScreen() {
   const [packMembersOpen, setPackMembersOpen] = useState(false);
   // Local pack count — initialised from server, updated optimistically on toggle
   const [localPackCount, setLocalPackCount] = useState<number | null>(null);
-  // Delete-confirm state for the post modal
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  // Delete-confirm and edit states for the post modal
+  const [deleteConfirm,  setDeleteConfirm]  = useState(false);
+  const [isEditMode,     setIsEditMode]     = useState(false);
+  const [draftCaption,   setDraftCaption]   = useState("");
+  const [draftIsNursery, setDraftIsNursery] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -86,6 +92,7 @@ export default function PetProfileScreen() {
       onSuccess: () => {
         setSelectedPostId(null);
         setDeleteConfirm(false);
+        setIsEditMode(false);
         queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
         queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey({ nursery: true }) });
@@ -93,10 +100,36 @@ export default function PetProfileScreen() {
     },
   });
 
-  // Closing the modal always resets the confirm state so it's fresh next open
+  // Edit mutation — patches caption/isNursery; updates cache immediately then
+  // invalidates so the grid, Home feed, and Nursery feed all reflect the change.
+  const { mutate: doEdit, isPending: isSaving } = usePatchPost({
+    mutation: {
+      onSuccess: (data) => {
+        // Write new values into the cached pet profile so view mode is instant
+        queryClient.setQueryData(getGetPetQueryKey(petId ?? ""), (old: any) => {
+          if (!old) return old;
+          return {
+            ...old,
+            posts: old.posts.map((p: any) =>
+              p.id === selectedPostId
+                ? { ...p, caption: data.caption, isNursery: data.isNursery }
+                : p,
+            ),
+          };
+        });
+        setIsEditMode(false);
+        queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
+        queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey({ nursery: true }) });
+      },
+    },
+  });
+
+  // Closing the modal always resets all modal state so it's fresh next open
   const closePostModal = useCallback(() => {
     setSelectedPostId(null);
     setDeleteConfirm(false);
+    setIsEditMode(false);
   }, []);
 
   // Pack members — fetched when component mounts; React Query caches the result
@@ -447,6 +480,10 @@ export default function PetProfileScreen() {
         transparent
         onRequestClose={closePostModal}
       >
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
         <Pressable style={styles.modalOverlay} onPress={closePostModal}>
           <View style={styles.modalContent}>
             {selectedPost && (
@@ -465,65 +502,192 @@ export default function PetProfileScreen() {
                   </Text>
                 </View>
 
-                {/* Delete affordance — visible only to the pet's owner */}
+                {/* Edit & delete affordances — visible only to the pet's owner */}
                 {selectedPost.pet.viewerOwnsPet && (
-                  <View
-                    style={[
-                      styles.modalDeleteSection,
-                      { backgroundColor: colors.card, borderTopColor: colors.border },
-                    ]}
-                  >
-                    {!deleteConfirm ? (
-                      <TouchableOpacity
-                        onPress={() => setDeleteConfirm(true)}
-                        style={styles.modalDeleteRow}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel="Delete this post"
+                  isEditMode ? (
+                    /* ── Edit form ──────────────────────────────────────────── */
+                    <View
+                      style={[
+                        styles.modalEditSection,
+                        { backgroundColor: colors.card, borderTopColor: colors.border },
+                      ]}
+                    >
+                      <TextInput
+                        style={[
+                          styles.modalEditInput,
+                          {
+                            backgroundColor: colors.secondary,
+                            borderColor: colors.border,
+                            color: colors.foreground,
+                          },
+                        ]}
+                        value={draftCaption}
+                        onChangeText={setDraftCaption}
+                        placeholder="Say something about your pet… (optional)"
+                        placeholderTextColor={colors.mutedForeground}
+                        selectionColor={colors.primary}
+                        multiline
+                        returnKeyType="done"
+                        blurOnSubmit
+                        maxLength={280}
+                      />
+                      {/* Nursery toggle */}
+                      <Pressable
+                        style={[styles.modalToggleRow, { borderTopColor: colors.border }]}
+                        onPress={() => setDraftIsNursery((v) => !v)}
+                        accessibilityRole="switch"
+                        accessibilityState={{ checked: draftIsNursery }}
+                        accessibilityLabel="Nursery post"
                       >
-                        <Ionicons name="trash-outline" size={14} color={colors.destructive} />
-                        <Text style={[styles.modalDeleteLabel, { color: colors.destructive }]}>
-                          Delete post
-                        </Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <View style={styles.modalConfirmBlock}>
-                        <Text style={[styles.modalConfirmText, { color: colors.foreground }]}>
-                          Delete this post? This can't be undone.
-                        </Text>
-                        <View style={styles.modalConfirmButtons}>
+                        <View style={styles.modalToggleInfo}>
+                          <Text style={[styles.modalToggleLabel, { color: colors.foreground }]}>
+                            Nursery
+                          </Text>
+                          <Text style={[styles.modalToggleSub, { color: colors.mutedForeground }]}>
+                            Mark as a hatchling or baby post
+                          </Text>
+                        </View>
+                        <View
+                          style={[
+                            styles.modalTrack,
+                            { backgroundColor: draftIsNursery ? colors.primary : colors.border },
+                          ]}
+                        >
+                          <View style={[styles.modalThumb, draftIsNursery && styles.modalThumbOn]} />
+                        </View>
+                      </Pressable>
+                      {/* Cancel / Save */}
+                      <View style={[styles.modalConfirmButtons, styles.modalEditActions]}>
+                        <TouchableOpacity
+                          onPress={() => setIsEditMode(false)}
+                          disabled={isSaving}
+                          style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel="Cancel editing"
+                        >
+                          <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>
+                            Cancel
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() =>
+                            selectedPostId &&
+                            doEdit({
+                              id: selectedPostId,
+                              data: {
+                                caption: draftCaption.trim() || null,
+                                isNursery: draftIsNursery,
+                              },
+                            })
+                          }
+                          disabled={isSaving}
+                          style={[styles.modalDeleteBtn, { borderColor: colors.primary }]}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel="Save changes"
+                        >
+                          {isSaving ? (
+                            <ActivityIndicator size="small" color={colors.primary} />
+                          ) : (
+                            <Text style={[styles.modalDeleteBtnText, { color: colors.primary }]}>
+                              Save
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : (
+                    <>
+                      {/* ── Edit row ────────────────────────────────────────── */}
+                      <View
+                        style={[
+                          styles.modalDeleteSection,
+                          { backgroundColor: colors.card, borderTopColor: colors.border },
+                        ]}
+                      >
+                        <TouchableOpacity
+                          onPress={() => {
+                            setDeleteConfirm(false); // mutually exclusive with edit
+                            setDraftCaption(selectedPost.caption ?? "");
+                            setDraftIsNursery(selectedPost.isNursery);
+                            setIsEditMode(true);
+                          }}
+                          style={styles.modalDeleteRow}
+                          activeOpacity={0.7}
+                          accessibilityRole="button"
+                          accessibilityLabel="Edit this post"
+                        >
+                          <Ionicons name="pencil-outline" size={14} color={colors.foreground} />
+                          <Text style={[styles.modalDeleteLabel, { color: colors.foreground }]}>
+                            Edit post
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* ── Delete section ──────────────────────────────────── */}
+                      <View
+                        style={[
+                          styles.modalDeleteSection,
+                          { backgroundColor: colors.card, borderTopColor: colors.border },
+                        ]}
+                      >
+                        {!deleteConfirm ? (
                           <TouchableOpacity
-                            onPress={() => setDeleteConfirm(false)}
-                            disabled={isDeleting}
-                            style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+                            onPress={() => {
+                              setIsEditMode(false); // mutually exclusive with edit
+                              setDeleteConfirm(true);
+                            }}
+                            style={styles.modalDeleteRow}
                             activeOpacity={0.7}
                             accessibilityRole="button"
-                            accessibilityLabel="Cancel"
+                            accessibilityLabel="Delete this post"
                           >
-                            <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>
-                              Cancel
+                            <Ionicons name="trash-outline" size={14} color={colors.destructive} />
+                            <Text style={[styles.modalDeleteLabel, { color: colors.destructive }]}>
+                              Delete post
                             </Text>
                           </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => selectedPostId && doDelete({ id: selectedPostId })}
-                            disabled={isDeleting}
-                            style={[styles.modalDeleteBtn, { borderColor: colors.destructive }]}
-                            activeOpacity={0.7}
-                            accessibilityRole="button"
-                            accessibilityLabel="Confirm delete"
-                          >
-                            {isDeleting ? (
-                              <ActivityIndicator size="small" color={colors.destructive} />
-                            ) : (
-                              <Text style={[styles.modalDeleteBtnText, { color: colors.destructive }]}>
-                                Delete
-                              </Text>
-                            )}
-                          </TouchableOpacity>
-                        </View>
+                        ) : (
+                          <View style={styles.modalConfirmBlock}>
+                            <Text style={[styles.modalConfirmText, { color: colors.foreground }]}>
+                              Delete this post? This can't be undone.
+                            </Text>
+                            <View style={styles.modalConfirmButtons}>
+                              <TouchableOpacity
+                                onPress={() => setDeleteConfirm(false)}
+                                disabled={isDeleting}
+                                style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+                                activeOpacity={0.7}
+                                accessibilityRole="button"
+                                accessibilityLabel="Cancel"
+                              >
+                                <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>
+                                  Cancel
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => selectedPostId && doDelete({ id: selectedPostId })}
+                                disabled={isDeleting}
+                                style={[styles.modalDeleteBtn, { borderColor: colors.destructive }]}
+                                activeOpacity={0.7}
+                                accessibilityRole="button"
+                                accessibilityLabel="Confirm delete"
+                              >
+                                {isDeleting ? (
+                                  <ActivityIndicator size="small" color={colors.destructive} />
+                                ) : (
+                                  <Text style={[styles.modalDeleteBtnText, { color: colors.destructive }]}>
+                                    Delete
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
                       </View>
-                    )}
-                  </View>
+                    </>
+                  )
                 )}
 
                 <TouchableOpacity
@@ -538,6 +702,7 @@ export default function PetProfileScreen() {
             )}
           </View>
         </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -701,5 +866,66 @@ const styles = StyleSheet.create({
     position: "absolute", top: 12, right: 12,
     width: 32, height: 32, borderRadius: 16,
     alignItems: "center", justifyContent: "center",
+  },
+
+  // ── Edit mode ──────────────────────────────────────────────────────────────
+  modalEditSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+  },
+  modalEditInput: {
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === "ios" ? 13 : 10,
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    minHeight: 72,
+    textAlignVertical: "top",
+  },
+  modalEditActions: {
+    paddingBottom: 14,
+  },
+  modalToggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 14,
+    paddingTop: 14,
+    paddingBottom: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  modalToggleInfo: { flex: 1, marginRight: 12 },
+  modalToggleLabel: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+  },
+  modalToggleSub: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    marginTop: 2,
+  },
+  modalTrack: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    justifyContent: "center",
+    paddingHorizontal: 3,
+  },
+  modalThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.25,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  modalThumbOn: {
+    alignSelf: "flex-end",
   },
 });

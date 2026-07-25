@@ -262,6 +262,25 @@ export interface PostCreated {
 }
 
 /**
+ * Fields to update on an existing post. Omitted fields are unchanged.
+ */
+export interface PatchPostBody {
+  /**
+     * New caption; null clears it.
+     * @maxLength 280
+     */
+  caption?: string | null;
+  /** Whether this is a Nursery (baby/hatchling) post. */
+  isNursery?: boolean;
+}
+
+export interface PatchPostResponse {
+  id: string;
+  caption: string | null;
+  isNursery: boolean;
+}
+
+/**
  * Result of a species or breed follow/unfollow action
  */
 export interface InterestFollowResult {

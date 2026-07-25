@@ -334,6 +334,30 @@ export const CreatePostResponse = zod.object({
 
 
 /**
+ * Updates caption and/or isNursery on a post owned by the caller (ownership checked via the post's pet). caption may be set, changed, or cleared to null. Omitted fields are left unchanged. 403 unless the caller owns the post's pet.
+ * @summary Update a post
+ */
+export const PatchPostParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const patchPostBodyCaptionMax = 280;
+
+
+
+export const PatchPostBody = zod.object({
+  "caption": zod.string().max(patchPostBodyCaptionMax).nullish().describe('New caption; null clears it.'),
+  "isNursery": zod.boolean().optional().describe('Whether this is a Nursery (baby\/hatchling) post.')
+}).describe('Fields to update on an existing post. Omitted fields are unchanged.')
+
+export const PatchPostResponse = zod.object({
+  "id": zod.string(),
+  "caption": zod.string().nullable(),
+  "isNursery": zod.boolean()
+})
+
+
+/**
  * Deletes a post owned by the caller (via pet ownership). In a transaction, removes boops, treats, comments, and the post row. Best-effort deletes the R2 object (failures are logged, not propagated). Seed keys (seed:*) skip the R2 step. Returns 204 on success.
  * @summary Delete a post
  */
