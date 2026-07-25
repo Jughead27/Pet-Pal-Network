@@ -7,6 +7,7 @@
 
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import { createHmac, timingSafeEqual } from "crypto";
 
 export const R2_BUCKET = process.env.R2_BUCKET_NAME ?? "petproject-media";
 
@@ -52,6 +53,52 @@ export async function presignGet(mediaKey: string): Promise<string | null> {
     new GetObjectCommand({ Bucket: R2_BUCKET, Key: mediaKey }),
     { expiresIn: 3600 },
   );
+}
+
+// ── Stable media URL helpers ──────────────────────────────────────────────────
+// Instead of shipping perishable presigned URLs in API responses, every
+// feed/pet response returns a stable /api/media/<key>?exp=<ts>&t=<hmac> URL.
+// The /api/media route validates the HMAC and issues a fresh presigned redirect.
+// Token expiry: 48 h — well beyond any realistic browsing session.
+
+const MEDIA_EXPIRY_S = 60 * 60 * 48;
+
+/**
+ * Returns a stable `/api/media/…` URL for a media key, signed with
+ * SESSION_SECRET so only the server can issue valid tokens.
+ * Returns null for seed: keys (those use bundled local assets).
+ */
+export function mediaTokenUrl(mediaKey: string): string | null {
+  if (mediaKey.startsWith("seed:")) return null;
+  const secret = process.env.SESSION_SECRET ?? "";
+  const exp    = Math.floor(Date.now() / 1000) + MEDIA_EXPIRY_S;
+  const t      = createHmac("sha256", secret)
+    .update(`${mediaKey}:${exp}`)
+    .digest("hex");
+  // Encode each path segment individually so slashes stay as path separators.
+  const urlKey = mediaKey.split("/").map(encodeURIComponent).join("/");
+  return `/api/media/${urlKey}?exp=${exp}&t=${t}`;
+}
+
+/**
+ * Verifies an HMAC media token.  Returns false on any mismatch or if the
+ * token has expired.  Uses a timing-safe comparison to prevent oracle attacks.
+ */
+export function verifyMediaToken(key: string, exp: string, t: string): boolean {
+  const expNum = parseInt(exp, 10);
+  if (isNaN(expNum) || expNum < Math.floor(Date.now() / 1000)) return false;
+  const secret   = process.env.SESSION_SECRET ?? "";
+  const expected = createHmac("sha256", secret)
+    .update(`${key}:${exp}`)
+    .digest("hex");
+  try {
+    const tBuf = Buffer.from(t,        "hex");
+    const eBuf = Buffer.from(expected, "hex");
+    if (tBuf.length !== eBuf.length) return false;
+    return timingSafeEqual(tBuf, eBuf);
+  } catch {
+    return false;
+  }
 }
 
 /**

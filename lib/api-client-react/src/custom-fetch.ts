@@ -30,6 +30,15 @@ export function setBaseUrl(url: string | null): void {
 }
 
 /**
+ * Returns the currently configured base URL (set via setBaseUrl).
+ * Used by resolveMediaKey on native to convert relative /api/media/…
+ * paths to absolute URLs that RN's Image component can load directly.
+ */
+export function getBaseUrl(): string | null {
+  return _baseUrl;
+}
+
+/**
  * Register a getter that supplies a bearer auth token.  Before every fetch
  * the getter is invoked; when it returns a non-null string, an
  * `Authorization: Bearer <token>` header is attached to the request.

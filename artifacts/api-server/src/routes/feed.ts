@@ -10,7 +10,7 @@ import {
   packFollowsTable,
 } from "@workspace/db";
 import { and, eq, gte, desc, sql } from "drizzle-orm";
-import { presignGet } from "../lib/r2.js";
+import { mediaTokenUrl } from "../lib/r2.js";
 
 const router: IRouter = Router();
 
@@ -81,31 +81,30 @@ router.get("/feed", async (req, res) => {
     .where(and(eq(treatsTable.userId, userId), gte(treatsTable.createdAt, today)));
   const treatsRemainingToday = Math.max(0, dailyLimit - (countRow?.todayTreats ?? 0));
 
-  const posts = await Promise.all(
-    rows.map(async (r) => ({
-      id:          r.id,
-      caption:     r.caption ?? null,
-      mediaKey:    r.mediaKey,
-      mediaUrl:    await presignGet(r.mediaKey),
-      cropFocusX:  r.cropFocusX  ?? null,
-      cropFocusY:  r.cropFocusY  ?? null,
-      isNursery:   r.isNursery,
-      createdAt:   r.createdAt,
-      pet: {
-        id:            r.petId,
-        name:          r.petName,
-        species:       r.petSpecies,
-        breed:         r.petBreed ?? null,
-        viewerInPack:  r.viewerInPack,
-        viewerOwnsPet: r.viewerOwnsPet,
-      },
-      boopCount:        r.boopCount,
-      treatCount:       r.treatCount,
-      commentCount:     r.commentCount,
-      viewerHasBooped:  r.viewerHasBooped,
-      viewerHasTreated: r.viewerHasTreated,
-    })),
-  );
+  // mediaTokenUrl is synchronous — no Promise.all needed
+  const posts = rows.map((r) => ({
+    id:          r.id,
+    caption:     r.caption ?? null,
+    mediaKey:    r.mediaKey,
+    mediaUrl:    mediaTokenUrl(r.mediaKey),
+    cropFocusX:  r.cropFocusX  ?? null,
+    cropFocusY:  r.cropFocusY  ?? null,
+    isNursery:   r.isNursery,
+    createdAt:   r.createdAt,
+    pet: {
+      id:            r.petId,
+      name:          r.petName,
+      species:       r.petSpecies,
+      breed:         r.petBreed ?? null,
+      viewerInPack:  r.viewerInPack,
+      viewerOwnsPet: r.viewerOwnsPet,
+    },
+    boopCount:        r.boopCount,
+    treatCount:       r.treatCount,
+    commentCount:     r.commentCount,
+    viewerHasBooped:  r.viewerHasBooped,
+    viewerHasTreated: r.viewerHasTreated,
+  }));
 
   res.json({ posts, viewer: { treatsRemainingToday } });
 });

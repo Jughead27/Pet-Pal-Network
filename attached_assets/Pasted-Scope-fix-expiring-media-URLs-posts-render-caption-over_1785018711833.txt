@@ -1,0 +1,11 @@
+Scope: fix expiring media URLs (posts render caption over black when presigned GET URLs lapse under cached feed data). Replace perishable URLs with a stable authenticated media route. Touch only media URL generation/serving and the image components' error handling.
+
+Preservation clause: focal-point rendering, the seed: local-bridge convention, thumbnails, framing, and all feed/grid behavior preserved exactly.
+
+Confirm first: reproduce one black post and verify the image request is failing with an expired-signature 403 from R2; report confirmation in one line before proceeding.
+Stable media route: GET /api/media/{key} (auth-gated like everything else) — validates the key shape, generates a fresh short-lived presigned R2 GET, and responds 302 redirect to it, with Cache-Control allowing brief client caching (e.g., minutes) so scrolling doesn't re-hit the API per frame. seed: keys are never routed here (local bridge unchanged).
+Feed/pet/thumbnail responses return the stable /api/media/{key} URL as mediaUrl instead of a presigned URL — no expiry can ever ship to the client again. Ensure the image components' requests carry auth to this route on all platforms (headers on native; on web whichever mechanism the route supports — if header-auth on <img> is impractical on web, a short-lived signed token in the media URL's query, issued with the feed response, is acceptable, with expiry ≥ 24h).
+Graceful failure: image components get an onError state — a subtle paw-glyph placeholder on the dark background instead of silent black — with one automatic retry.
+Apply identically to web, iOS, and Android. No react-native-reanimated imports.
+
+Acceptance test: All existing posts render their images again; leaving the app open past the old expiry window and returning shows images still loading (no black posts ever); a deliberately bad key renders the paw placeholder, not a void. Golden path unbroken: sign in → feed loads → boop persists → post flow works → sign out. pnpm run typecheck clean

@@ -13,7 +13,6 @@
 import React from 'react';
 import {
   Dimensions,
-  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -21,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import MediaImage from '@/components/MediaImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -78,7 +78,7 @@ export default function PostDetailScreen() {
       >
         {/* Full-frame contain-fit photo */}
         <View style={[styles.photoWrapper, { paddingTop: topInset + 52 }]}>
-          <Image
+          <MediaImage
             source={photoSource}
             style={styles.photo}
             resizeMode="contain"

@@ -14,7 +14,7 @@ import {
 } from "@workspace/db";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { CreatePetBody } from "@workspace/api-zod";
-import { presignGet } from "../lib/r2.js";
+import { mediaTokenUrl } from "../lib/r2.js";
 
 const router: IRouter = Router();
 
@@ -126,24 +126,22 @@ router.get("/pets/:id", async (req, res) => {
     .groupBy(postsTable.id)
     .orderBy(desc(postsTable.createdAt));
 
-  const posts = await Promise.all(
-    rows.map(async (r) => ({
-      id:               r.id,
-      caption:          r.caption ?? null,
-      mediaKey:         r.mediaKey,
-      mediaUrl:         await presignGet(r.mediaKey),
-      cropFocusX:       r.cropFocusX ?? null,
-      cropFocusY:       r.cropFocusY ?? null,
-      isNursery:        r.isNursery,
-      createdAt:        r.createdAt,
-      pet:              petSummary,
-      boopCount:        r.boopCount,
-      treatCount:       r.treatCount,
-      commentCount:     r.commentCount,
-      viewerHasBooped:  r.viewerHasBooped,
-      viewerHasTreated: r.viewerHasTreated,
-    })),
-  );
+  const posts = rows.map((r) => ({
+    id:               r.id,
+    caption:          r.caption ?? null,
+    mediaKey:         r.mediaKey,
+    mediaUrl:         mediaTokenUrl(r.mediaKey),
+    cropFocusX:       r.cropFocusX ?? null,
+    cropFocusY:       r.cropFocusY ?? null,
+    isNursery:        r.isNursery,
+    createdAt:        r.createdAt,
+    pet:              petSummary,
+    boopCount:        r.boopCount,
+    treatCount:       r.treatCount,
+    commentCount:     r.commentCount,
+    viewerHasBooped:  r.viewerHasBooped,
+    viewerHasTreated: r.viewerHasTreated,
+  }));
 
   res.json({
     id:                  pet.id,

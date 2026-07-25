@@ -11,7 +11,6 @@ import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -23,6 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import MediaImage from "@/components/MediaImage";
 import { useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -269,7 +269,7 @@ export default function PetProfileScreen() {
       >
         {/* ── Hero ── */}
         <View style={styles.heroWrapper}>
-          <Image
+          <MediaImage
             source={heroSource}
             style={[styles.heroImage, { height: HERO_HEIGHT }]}
             resizeMode="cover"
@@ -394,7 +394,7 @@ export default function PetProfileScreen() {
               accessibilityRole="button"
               accessibilityLabel={`View post: ${post.caption ?? ""}`}
             >
-              <Image
+              <MediaImage
                 source={resolveMediaKey(post.mediaKey, post.mediaUrl)}
                 style={styles.gridImage}
                 resizeMode="cover"
@@ -488,7 +488,8 @@ export default function PetProfileScreen() {
           <View style={styles.modalContent}>
             {selectedPost && (
               <>
-                <Image
+                <MediaImage
+                  key={selectedPostId ?? undefined}
                   source={resolveMediaKey(selectedPost.mediaKey, selectedPost.mediaUrl)}
                   style={styles.modalImage}
                   resizeMode="contain"

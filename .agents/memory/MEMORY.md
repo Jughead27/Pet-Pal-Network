@@ -6,3 +6,4 @@
 - [Species + Breeds Integration](species-breeds-integration.md) — dist rebuild rule, api-zod index constraint, enabled query pattern, seed script, "Not listed" path.
 - [Pack Follows Architecture](pack-follows-architecture.md) — PackContext for cross-post consistency, auto-pack on create, EXISTS subquery in feed, Metro cache restart after codegen.
 - [Interest Follows Architecture](interest-follows-architecture.md) — species/breed follows, partial unique indexes, FollowsContext, InterestChip, profile manage list, tsc --build --force after orval.
+- [Stable Media URL Architecture](stable-media-urls.md) — HMAC-signed /api/media/* route replaces perishable presigned URLs; regex route required for path-to-regexp v8 (Express 5).

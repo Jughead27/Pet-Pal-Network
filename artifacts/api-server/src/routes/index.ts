@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
+import mediaRouter  from "./media";
 import feedRouter from "./feed";
 import petsRouter from "./pets";
 import postsRouter from "./posts";
@@ -14,6 +15,7 @@ const router: IRouter = Router();
 // ─── Public routes ────────────────────────────────────────────────────────────
 // Mounted BEFORE requireClerkAuth — always reachable without a token.
 router.use(healthRouter); // GET /healthz
+router.use(mediaRouter);  // GET /media/* — HMAC-token-gated, no Clerk session
 
 // ─── Auth boundary ────────────────────────────────────────────────────────────
 // Every route registered after this point requires a valid Clerk session token.
