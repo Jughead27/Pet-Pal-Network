@@ -3,6 +3,7 @@ import healthRouter from "./health";
 import feedRouter from "./feed";
 import petsRouter from "./pets";
 import postsRouter from "./posts";
+import uploadsRouter from "./uploads";
 import { requireClerkAuth } from "../middlewares/requireClerkAuth";
 
 const router: IRouter = Router();
@@ -17,8 +18,9 @@ router.use(healthRouter); // GET /healthz
 router.use(requireClerkAuth);
 
 // ─── Protected routes ─────────────────────────────────────────────────────────
-router.use(feedRouter);  // GET /feed
-router.use(petsRouter);  // GET /pets/:id
-router.use(postsRouter); // GET /posts/:id/comments
+router.use(feedRouter);    // GET /feed
+router.use(petsRouter);    // GET /pets/:id  POST /pets  GET /me/pets
+router.use(postsRouter);   // GET /posts/:id/comments  POST /posts/:id/{boops,treats,comments}
+router.use(uploadsRouter); // POST /uploads/presign
 
 export default router;

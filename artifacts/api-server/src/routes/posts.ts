@@ -10,8 +10,63 @@ import {
   usersTable,
 } from "@workspace/db";
 import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { CreatePostBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+/**
+ * POST /posts
+ *
+ * Creates a post for a pet owned by the authenticated user.
+ * Returns 403 if the pet is not owned by the caller.
+ */
+router.post("/posts", async (req, res) => {
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  const parsed = CreatePostBody.safeParse(req.body);
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? "Invalid request";
+    res.status(400).json({ error: message });
+    return;
+  }
+
+  const { petId, mediaKey, caption, isNursery } = parsed.data;
+
+  // Verify pet exists and is owned by caller
+  const [pet] = await db
+    .select({ ownerId: petsTable.ownerId })
+    .from(petsTable)
+    .where(eq(petsTable.id, petId));
+
+  if (!pet) {
+    res.status(404).json({ error: "Pet not found" });
+    return;
+  }
+
+  if (pet.ownerId !== userId) {
+    res.status(403).json({ error: "You do not own this pet" });
+    return;
+  }
+
+  const [post] = await db
+    .insert(postsTable)
+    .values({
+      petId,
+      mediaKey,
+      caption: caption ?? null,
+      isNursery: isNursery ?? false,
+    })
+    .returning();
+
+  res.status(201).json({
+    id:        post.id,
+    petId:     post.petId,
+    mediaKey:  post.mediaKey,
+    caption:   post.caption ?? null,
+    isNursery: post.isNursery,
+    createdAt: post.createdAt,
+  });
+});
 
 /**
  * GET /posts/:id/comments

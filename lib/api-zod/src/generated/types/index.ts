@@ -9,6 +9,7 @@
 export * from './boopResult';
 export * from './commentBody';
 export * from './createPetBody';
+export * from './createPostBody';
 export * from './errorResponse';
 export * from './feedPost';
 export * from './feedResponse';
@@ -18,5 +19,9 @@ export * from './pet';
 export * from './petProfile';
 export * from './petSummary';
 export * from './postComment';
+export * from './postCreated';
+export * from './presignBody';
+export * from './presignBodyContentType';
+export * from './presignResult';
 export * from './treatResult';
 export * from './viewerInfo';

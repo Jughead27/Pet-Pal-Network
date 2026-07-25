@@ -26,6 +26,7 @@ export const GetFeedResponse = zod.object({
   "id": zod.string(),
   "caption": zod.string().nullish(),
   "mediaKey": zod.string(),
+  "mediaUrl": zod.string().nullable().describe('Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client).'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -64,6 +65,7 @@ export const GetPetResponse = zod.object({
   "id": zod.string(),
   "caption": zod.string().nullish(),
   "mediaKey": zod.string(),
+  "mediaUrl": zod.string().nullable().describe('Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client).'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -106,6 +108,50 @@ export const TreatPostResponse = zod.object({
   "treatCount": zod.number(),
   "treatsRemainingToday": zod.number()
 }).describe('Result of a treat action')
+
+
+/**
+ * Returns a short-lived presigned PUT URL for uploading directly to R2, plus the mediaKey to use when creating the post. contentType must be image/jpeg, image/png, or image/webp. sizeBytes must be ≤ 10 MB (10485760).
+ * @summary Get a presigned upload URL
+ */
+export const presignUploadBodySizeBytesMax = 10485760;
+
+
+
+export const PresignUploadBody = zod.object({
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp']),
+  "sizeBytes": zod.number().min(1).max(presignUploadBodySizeBytesMax)
+}).describe('Request body for obtaining a presigned upload URL')
+
+export const PresignUploadResponse = zod.object({
+  "uploadUrl": zod.string(),
+  "mediaKey": zod.string()
+}).describe('Presigned PUT URL and the media key to use when creating the post')
+
+
+/**
+ * Creates a post for a pet owned by the caller. Returns 403 if the pet is not owned by the caller.
+ * @summary Create a post
+ */
+export const createPostBodyCaptionMax = 280;
+
+
+
+export const CreatePostBody = zod.object({
+  "petId": zod.string(),
+  "mediaKey": zod.string(),
+  "caption": zod.string().max(createPostBodyCaptionMax).optional(),
+  "isNursery": zod.boolean().optional()
+}).describe('Request body for creating a post')
+
+export const CreatePostResponse = zod.object({
+  "id": zod.string(),
+  "petId": zod.string(),
+  "mediaKey": zod.string(),
+  "caption": zod.string().nullish(),
+  "isNursery": zod.boolean(),
+  "createdAt": zod.coerce.date()
+}).describe('The newly created post')
 
 
 /**

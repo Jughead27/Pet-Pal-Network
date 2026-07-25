@@ -79,7 +79,7 @@ export default function PetProfileScreen() {
 
   // Hero image: first post's media key (most recent)
   const heroSource = pet.posts.length > 0
-    ? resolveMediaKey(pet.posts[0].mediaKey)
+    ? resolveMediaKey(pet.posts[0].mediaKey, pet.posts[0].mediaUrl)
     : resolveMediaKey("seed:hero");
 
   const selectedPost: FeedPost | undefined =
@@ -181,7 +181,7 @@ export default function PetProfileScreen() {
               accessibilityLabel={`View post: ${post.caption ?? ""}`}
             >
               <Image
-                source={resolveMediaKey(post.mediaKey)}
+                source={resolveMediaKey(post.mediaKey, post.mediaUrl)}
                 style={styles.gridImage}
                 resizeMode="cover"
               />
@@ -202,7 +202,7 @@ export default function PetProfileScreen() {
             {selectedPost && (
               <>
                 <Image
-                  source={resolveMediaKey(selectedPost.mediaKey)}
+                  source={resolveMediaKey(selectedPost.mediaKey, selectedPost.mediaUrl)}
                   style={styles.modalImage}
                   resizeMode="cover"
                 />

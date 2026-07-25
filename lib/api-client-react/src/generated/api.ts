@@ -23,6 +23,7 @@ import type {
   BoopResult,
   CommentBody,
   CreatePetBody,
+  CreatePostBody,
   ErrorResponse,
   FeedResponse,
   HealthStatus,
@@ -30,6 +31,9 @@ import type {
   Pet,
   PetProfile,
   PostComment,
+  PostCreated,
+  PresignBody,
+  PresignResult,
   TreatResult
 } from './api.schemas';
 
@@ -436,6 +440,150 @@ export const useTreatPost = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getTreatPostMutationOptions(options));
+    }
+
+export const getPresignUploadUrl = () => {
+
+
+
+
+  return `/api/uploads/presign`
+}
+
+/**
+ * Returns a short-lived presigned PUT URL for uploading directly to R2, plus the mediaKey to use when creating the post. contentType must be image/jpeg, image/png, or image/webp. sizeBytes must be ≤ 10 MB (10485760).
+ * @summary Get a presigned upload URL
+ */
+export const presignUpload = async (presignBody: PresignBody, options?: RequestInit): Promise<PresignResult> => {
+
+  return customFetch<PresignResult>(getPresignUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(presignBody)
+  }
+);}
+
+
+
+
+
+export const getPresignUploadMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof presignUpload>>, TError,{data: BodyType<PresignBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof presignUpload>>, TError,{data: BodyType<PresignBody>}, TContext> => {
+
+const mutationKey = ['presignUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof presignUpload>>, {data: BodyType<PresignBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  presignUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PresignUploadMutationResult = NonNullable<Awaited<ReturnType<typeof presignUpload>>>
+    export type PresignUploadMutationBody = BodyType<PresignBody>
+    export type PresignUploadMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Get a presigned upload URL
+ */
+export const usePresignUpload = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof presignUpload>>, TError,{data: BodyType<PresignBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof presignUpload>>,
+        TError,
+        {data: BodyType<PresignBody>},
+        TContext
+      > => {
+      return useMutation(getPresignUploadMutationOptions(options));
+    }
+
+export const getCreatePostUrl = () => {
+
+
+
+
+  return `/api/posts`
+}
+
+/**
+ * Creates a post for a pet owned by the caller. Returns 403 if the pet is not owned by the caller.
+ * @summary Create a post
+ */
+export const createPost = async (createPostBody: CreatePostBody, options?: RequestInit): Promise<PostCreated> => {
+
+  return customFetch<PostCreated>(getCreatePostUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createPostBody)
+  }
+);}
+
+
+
+
+
+export const getCreatePostMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPost>>, TError,{data: BodyType<CreatePostBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPost>>, TError,{data: BodyType<CreatePostBody>}, TContext> => {
+
+const mutationKey = ['createPost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPost>>, {data: BodyType<CreatePostBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPost(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePostMutationResult = NonNullable<Awaited<ReturnType<typeof createPost>>>
+    export type CreatePostMutationBody = BodyType<CreatePostBody>
+    export type CreatePostMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a post
+ */
+export const useCreatePost = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPost>>, TError,{data: BodyType<CreatePostBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPost>>,
+        TError,
+        {data: BodyType<CreatePostBody>},
+        TContext
+      > => {
+      return useMutation(getCreatePostMutationOptions(options));
     }
 
 export const getCreatePetUrl = () => {

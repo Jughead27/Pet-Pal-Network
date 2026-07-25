@@ -1,28 +1,34 @@
 /**
  * mediaKey → image source bridge.
  *
- * Posts whose mediaKey starts with "seed:" map to the corresponding bundled
- * local asset.  All other keys are treated as remote URLs (returned as a
- * { uri } object) — remote upload support comes in a later phase.
+ * Posts whose mediaKey starts with "seed:" map to bundled local assets.
+ * For all other keys, use the presigned mediaUrl returned by the server.
+ * Falls back to treating mediaKey as a bare URI if mediaUrl is absent.
  *
  * Usage:
- *   <Image source={resolveMediaKey(post.mediaKey)} />
+ *   <Image source={resolveMediaKey(post.mediaKey, post.mediaUrl)} />
  */
 import type { ImageSourcePropType } from 'react-native';
 
-// Bundled seed assets — cast individually so the union collapses to
-// ImageSourcePropType rather than an opaque `ReturnType<typeof require>`.
+// Bundled seed assets
 const SEED_IMAGES: Record<string, ImageSourcePropType> = {
   'seed:hero':  require('@/assets/images/ripley-hero.jpg') as ImageSourcePropType,
   'seed:post1': require('@/assets/images/ripley-post1.jpg') as ImageSourcePropType,
   'seed:post2': require('@/assets/images/ripley-post2.jpg') as ImageSourcePropType,
 };
 
-/** Returns a React Native `Image` source for the given media key. */
-export function resolveMediaKey(mediaKey: string): ImageSourcePropType {
-  if (mediaKey in SEED_IMAGES) {
-    return SEED_IMAGES[mediaKey]!;
-  }
-  // Future: signed CDN URLs, R2 keys, etc.
+/**
+ * Returns a React Native `Image` source for the given media key.
+ *
+ * @param mediaKey  The post's mediaKey (e.g. "seed:hero" or "posts/<uuid>.jpg")
+ * @param mediaUrl  Optional presigned GET URL from the server; used for non-seed keys.
+ */
+export function resolveMediaKey(
+  mediaKey: string,
+  mediaUrl?: string | null,
+): ImageSourcePropType {
+  if (mediaKey in SEED_IMAGES) return SEED_IMAGES[mediaKey]!;
+  if (mediaUrl) return { uri: mediaUrl };
+  // Fallback: treat mediaKey itself as a URI (shouldn't happen in production)
   return { uri: mediaKey };
 }

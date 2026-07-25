@@ -37,6 +37,8 @@ export interface FeedPost {
   id: string;
   caption?: string | null;
   mediaKey: string;
+  /** Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client). */
+  mediaUrl: string | null;
   isNursery: boolean;
   createdAt: string;
   pet: PetSummary;
@@ -126,6 +128,58 @@ export interface CreatePetBody {
  */
 export interface MyPetsResponse {
   pets: Pet[];
+}
+
+export type PresignBodyContentType = typeof PresignBodyContentType[keyof typeof PresignBodyContentType];
+
+
+export const PresignBodyContentType = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/webp': 'image/webp',
+} as const;
+
+/**
+ * Request body for obtaining a presigned upload URL
+ */
+export interface PresignBody {
+  contentType: PresignBodyContentType;
+  /**
+     * @minimum 1
+     * @maximum 10485760
+     */
+  sizeBytes: number;
+}
+
+/**
+ * Presigned PUT URL and the media key to use when creating the post
+ */
+export interface PresignResult {
+  uploadUrl: string;
+  mediaKey: string;
+}
+
+/**
+ * Request body for creating a post
+ */
+export interface CreatePostBody {
+  petId: string;
+  mediaKey: string;
+  /** @maxLength 280 */
+  caption?: string;
+  isNursery?: boolean;
+}
+
+/**
+ * The newly created post
+ */
+export interface PostCreated {
+  id: string;
+  petId: string;
+  mediaKey: string;
+  caption?: string | null;
+  isNursery: boolean;
+  createdAt: string;
 }
 
 /**

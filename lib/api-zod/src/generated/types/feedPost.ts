@@ -14,6 +14,8 @@ export interface FeedPost {
   id: string;
   caption?: string | null;
   mediaKey: string;
+  /** Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client). */
+  mediaUrl: string | null;
   isNursery: boolean;
   createdAt: Date;
   pet: PetSummary;

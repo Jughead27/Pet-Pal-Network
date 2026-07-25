@@ -16,6 +16,8 @@ tags:
     description: Pet operations
   - name: posts
     description: Post operations
+  - name: uploads
+    description: Upload operations
 paths:
   /healthz:
     get:
@@ -165,6 +167,92 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "429":
           description: Daily treat limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /uploads/presign:
+    post:
+      operationId: presignUpload
+      tags: [uploads]
+      summary: Get a presigned upload URL
+      description: >
+        Returns a short-lived presigned PUT URL for uploading directly to R2,
+        plus the mediaKey to use when creating the post.
+        contentType must be image/jpeg, image/png, or image/webp.
+        sizeBytes must be ≤ 10 MB (10485760).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresignBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignResult"
+        "400":
+          description: Invalid content type or size
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /posts:
+    post:
+      operationId: createPost
+      tags: [posts]
+      summary: Create a post
+      description: >
+        Creates a post for a pet owned by the caller.
+        Returns 403 if the pet is not owned by the caller.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePostBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PostCreated"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Pet not owned by caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Pet not found
           content:
             application/json:
               schema:
@@ -355,6 +443,10 @@ components:
           nullable: true
         mediaKey:
           type: string
+        mediaUrl:
+          type: string
+          nullable: true
+          description: Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client).
         isNursery:
           type: boolean
         createdAt:
@@ -375,6 +467,7 @@ components:
       required:
         - id
         - mediaKey
+        - mediaUrl
         - isNursery
         - createdAt
         - pet
@@ -514,6 +607,75 @@ components:
             $ref: "#/components/schemas/Pet"
       required:
         - pets
+
+    PresignBody:
+      type: object
+      description: Request body for obtaining a presigned upload URL
+      properties:
+        contentType:
+          type: string
+          enum: [image/jpeg, image/png, image/webp]
+        sizeBytes:
+          type: integer
+          minimum: 1
+          maximum: 10485760
+      required:
+        - contentType
+        - sizeBytes
+
+    PresignResult:
+      type: object
+      description: Presigned PUT URL and the media key to use when creating the post
+      properties:
+        uploadUrl:
+          type: string
+        mediaKey:
+          type: string
+      required:
+        - uploadUrl
+        - mediaKey
+
+    CreatePostBody:
+      type: object
+      description: Request body for creating a post
+      properties:
+        petId:
+          type: string
+        mediaKey:
+          type: string
+        caption:
+          type: string
+          maxLength: 280
+        isNursery:
+          type: boolean
+      required:
+        - petId
+        - mediaKey
+
+    PostCreated:
+      type: object
+      description: The newly created post
+      properties:
+        id:
+          type: string
+        petId:
+          type: string
+        mediaKey:
+          type: string
+        caption:
+          type: string
+          nullable: true
+        isNursery:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - petId
+        - mediaKey
+        - isNursery
+        - createdAt
 
     BoopResult:
       type: object

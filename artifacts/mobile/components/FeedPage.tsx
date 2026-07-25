@@ -240,7 +240,7 @@ export default function FeedPage({
   );
 
   // ── Derived display values ────────────────────────────────────────────────
-  const heroImage = resolveMediaKey(post.mediaKey);
+  const heroImage = resolveMediaKey(post.mediaKey, post.mediaUrl);
   const petName   = post.pet.name;
   const petBreed  = post.pet.breed ?? '';
   const petId     = post.pet.id;
