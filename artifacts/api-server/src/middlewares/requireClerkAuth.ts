@@ -37,7 +37,9 @@ export const requireClerkAuth: RequestHandler = async (req, res, next) => {
       secretKey: process.env.CLERK_SECRET_KEY,
     });
     userId = payload.sub;
-  } catch {
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.warn({ verifyTokenError: message }, "Token verification failed");
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
