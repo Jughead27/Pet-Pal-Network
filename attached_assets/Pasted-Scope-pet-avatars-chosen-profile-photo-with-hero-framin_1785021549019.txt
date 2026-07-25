@@ -1,0 +1,12 @@
+Scope: pet avatars — chosen profile photo with hero framing. OpenAPI-first. Touch the pets schema/routes, the pet-profile hero, an owner-only avatar flow, and thumbnail preference. No feed, reactions, or post-management changes.
+
+Preservation clause: all pet-profile capabilities preserved exactly — stats, Pack members sheet, interest chips, post grid, Archived section, post modal with edit/archive/delete. Enumerate before modifying.
+
+Schema: pets.avatar_key (text, nullable) + avatar_focus_x/avatar_focus_y (real, nullable). Push.
+API: avatar upload reuses the existing presign pipeline (keys under avatars/<uuid>.<ext>). PATCH /pets/{id}/avatar (owner-only) accepts { avatarKey, focusX, focusY } or null to clear. Choosing from an existing post server-side copies the R2 object to a new avatars/ key (S3 CopyObject) — so deleting the original post can never orphan the avatar. Pet responses gain avatarUrl (stable media URL) + the focus values.
+Hero rendering precedence: (1) avatar, cover-fit at the hero's aspect honoring its own focus values; (2) no avatar → latest non-archived post center-cropped, ignoring the post's feed focal point (this replaces today's misframed behavior); (3) no posts → the existing default art.
+Owner flow: on your own pet's profile, a subtle "Edit photo" affordance on the hero (owner-only) opens: Choose from posts (3-column picker of the pet's posts, archived included) / Take a photo / Choose from library. Any source then flows into CropFramer at the hero's aspect ratio — same drag-to-frame WYSIWYG, wide frame instead of tall — then saves. Include a "Remove photo" option when an avatar exists (reverts to fallback tiers).
+Thumbnails prefer the avatar: /me/pets and /me/follows thumbnailUrl returns the avatar when set, else the current latest-post logic.
+Apply identically to web, iOS, and Android. No react-native-reanimated imports.
+
+Acceptance test (physical iPhone + web): Setting Ripley's avatar from her "Girls" post with faces framed → hero shows exactly that framing; deleting a test post used as an avatar source leaves the avatar intact; a pet with no avatar shows its latest post center-cropped (Ripley's feet problem gone even before choosing); postless pets show default art; non-owners see no Edit photo affordance; Profile thumbnails show avatars where set. Golden path unbroken: sign in → feed loads → boop persists → post flow works → sign out. pnpm run typecheck clean.
