@@ -90,9 +90,12 @@ export default function NurseryScreen() {
   // ── Grid scroll preservation ───────────────────────────────────────────────
   // onScroll writes the current offset into a ref (no re-render).
   // When returning from the pager we scroll back to that offset.
-  const gridScrollY   = useRef(0);
-  const gridListRef   = useRef<FlatList<FeedPost>>(null);
-  const pagerListRef  = useRef<FlatList<FeedPost>>(null);
+  const gridScrollY      = useRef(0);
+  const gridListRef      = useRef<FlatList<FeedPost>>(null);
+  const pagerListRef     = useRef<FlatList<FeedPost>>(null);
+  // Guards the one-shot initial scroll so subsequent onLayout/re-render
+  // calls don't re-trigger it after the pager is already positioned.
+  const pagerScrolledRef = useRef(false);
 
   // ── Pager lifted sheet state ───────────────────────────────────────────────
   const [commentConfig, setCommentConfig] = useState<CommentSheetConfig | null>(null);
@@ -105,6 +108,7 @@ export default function NurseryScreen() {
 
   // ── Open pager at index ────────────────────────────────────────────────────
   const openPost = useCallback((index: number) => {
+    pagerScrolledRef.current = false; // reset so the new pager scrolls to the right index
     setPagerStartIndex(index);
     setViewMode('pager');
   }, []);
@@ -127,6 +131,35 @@ export default function NurseryScreen() {
       }
     });
   }, []);
+
+  // ── Initial pager scroll (replaces initialScrollIndex) ────────────────────
+  //
+  // Root cause of the crash: initialScrollIndex calls into the native scroll
+  // layer before the freshly-mounted FlatList's scroll view has finished its
+  // own layout pass, producing an invalid scroll offset (scroll container
+  // height is 0 on frame 1 even though pageHeight state is non-zero).
+  //
+  // Fix: omit initialScrollIndex entirely. After the component commits to the
+  // DOM/native layer, requestAnimationFrame defers the scroll command until
+  // the layout pass is complete — runs before the next paint, so no visible
+  // flash at any index.
+  useEffect(() => {
+    if (viewMode !== 'pager') return;
+    if (pagerScrolledRef.current) return;
+    pagerScrolledRef.current = true;
+
+    if (pagerStartIndex === 0 || effectivePageHeight <= 0) return; // already at top
+
+    requestAnimationFrame(() => {
+      pagerListRef.current?.scrollToOffset({
+        offset:   pagerStartIndex * effectivePageHeight,
+        animated: false,
+      });
+    });
+    // Intentionally excludes effectivePageHeight from deps — we want this to
+    // fire exactly once per pager open, not re-fire if height updates later.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode, pagerStartIndex]);
 
   // ── Android hardware back ──────────────────────────────────────────────────
   useEffect(() => {
@@ -224,8 +257,7 @@ export default function NurseryScreen() {
             renderItem={renderPagerItem}
             keyExtractor={(item) => item.id}
             getItemLayout={getPagerItemLayout}
-            // Open at the tapped post's index without animation
-            initialScrollIndex={pagerStartIndex}
+            // initialScrollIndex removed — see the useEffect above.
             // Paging
             pagingEnabled
             snapToInterval={effectivePageHeight}
