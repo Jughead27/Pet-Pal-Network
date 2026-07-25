@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, index, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { usersTable } from "./users";
@@ -22,6 +22,12 @@ export const petsTable = pgTable(
     breedId:   uuid("breed_id").references(() => breedsTable.id),
     bio: text("bio"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
+    // Avatar — owner-chosen profile photo with WYSIWYG focal-point framing.
+    // Key is always stored under the avatars/ R2 prefix (server copies from
+    // posts/ on selection so deleting a source post never orphans the avatar).
+    avatarKey:    text("avatar_key"),
+    avatarFocusX: real("avatar_focus_x"),
+    avatarFocusY: real("avatar_focus_y"),
   },
   (table) => [
     index("pets_owner_id_idx").on(table.ownerId),

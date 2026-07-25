@@ -19,6 +19,12 @@ export interface Pet {
   breedId: string | null;
   bio?: string | null;
   createdAt: Date;
-  /** Stable media URL for the pet's most recent non-archived post. Null when the pet has no posts or when the most recent post uses a seed key (resolved client-side from bundled assets). */
+  /** Stable media URL for the pet's avatar (preferred) or most recent non-archived post. Null when neither exists or when the source key is a seed key (resolved client-side from bundled assets). */
   thumbnailUrl: string | null;
+  /** Stable media URL for the pet's avatar. Null when no avatar is set. */
+  avatarUrl: string | null;
+  /** Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar. */
+  avatarFocusX: number | null;
+  /** Vertical focal point (0–1) for avatar cover-crop. Null when no avatar. */
+  avatarFocusY: number | null;
 }

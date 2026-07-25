@@ -22,7 +22,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import MediaImage from "@/components/MediaImage";
+import FocalImage from "@/components/FocalImage";
+import CropFramer from "@/components/CropFramer";
 import { useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -41,11 +44,16 @@ import {
   usePatchPost,
   useArchivePost,
   useUnarchivePost,
+  usePatchPetAvatar,
+  usePresignAvatarUpload,
   getGetFeedQueryKey,
   getGetPetQueryKey,
+  getGetMyPetsQueryKey,
+  getGetMyFollowsQueryKey,
 } from "@workspace/api-client-react";
 import type { FeedPost, PackResult } from "@workspace/api-client-react";
 import { resolveMediaKey } from "@/utils/mediaKey";
+import { compressImage } from "@/utils/compressImage";
 import AddToPackLink from "@/components/AddToPackLink";
 import InterestChip from "@/components/InterestChip";
 import { useFollowsContext } from "@/context/FollowsContext";
@@ -88,6 +96,16 @@ export default function PetProfileScreen() {
   const [draftCaption,     setDraftCaption]     = useState("");
   const [draftIsNursery,   setDraftIsNursery]   = useState(false);
 
+  // ── Avatar edit flow ───────────────────────────────────────────────────────
+  // Multi-step: sheet → (postPicker | compressing) → framing → saving
+  type AvatarStep = "idle" | "sheet" | "postPicker" | "compressing" | "framing" | "saving";
+  const [avatarStep,    setAvatarStep]    = useState<AvatarStep>("idle");
+  const [avatarUri,     setAvatarUri]     = useState<string | null>(null);
+  // mediaKey of the source post when "choose from posts" was selected.
+  const [avatarSrcKey,  setAvatarSrcKey]  = useState<string | null>(null);
+  const avatarNatural = useRef({ width: 0, height: 0 });
+  const [avatarError,   setAvatarError]   = useState<string | null>(null);
+
   const queryClient = useQueryClient();
 
   // Delete mutation — invalidates pet grid, Home feed, and Nursery feed on success
@@ -129,6 +147,26 @@ export default function PetProfileScreen() {
     },
   });
 
+  // ── Avatar mutations ──────────────────────────────────────────────────────
+  const { mutateAsync: presignAvatarUpload } = usePresignAvatarUpload();
+  const { mutateAsync: patchAvatar, isPending: isSavingAvatar } = usePatchPetAvatar({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
+        queryClient.invalidateQueries({ queryKey: getGetMyPetsQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetMyFollowsQueryKey() });
+        setAvatarStep("idle");
+        setAvatarUri(null);
+        setAvatarSrcKey(null);
+        setAvatarError(null);
+      },
+      onError: () => {
+        setAvatarError("Could not save avatar. Please try again.");
+        setAvatarStep("sheet");
+      },
+    },
+  });
+
   // Archive / unarchive — both dismiss the modal and re-sync all affected queries
   const { mutate: doArchive, isPending: isArchiving } = useArchivePost({
     mutation: {
@@ -161,6 +199,142 @@ export default function PetProfileScreen() {
     setArchiveConfirm(false);
     setIsEditMode(false);
   }, []);
+
+  // ── Avatar helpers ─────────────────────────────────────────────────────────
+
+  /** Compress a picked URI + dimensions, then advance to the framing step. */
+  const processAvatarAsset = useCallback(async (
+    uri: string,
+    width: number,
+    height: number,
+    srcKey?: string,           // mediaKey of the source post (for "choose from posts")
+  ) => {
+    setAvatarStep("compressing");
+    setAvatarError(null);
+    try {
+      const compressed = await compressImage(uri, width, height);
+      avatarNatural.current = {
+        width:  (compressed as { width?: number }).width  ?? width,
+        height: (compressed as { height?: number }).height ?? height,
+      };
+      setAvatarUri(compressed.uri);
+      setAvatarSrcKey(srcKey ?? null);
+      setAvatarStep("framing");
+    } catch {
+      setAvatarError("Failed to process image. Please try again.");
+      setAvatarStep("sheet");
+    }
+  }, []);
+
+  /** "Choose from posts" — user tapped a post thumbnail in the post picker. */
+  const handlePickFromPost = useCallback(async (post: FeedPost) => {
+    setAvatarStep("idle"); // close post picker briefly while compressing
+    // We need a local URI to feed into CropFramer. Fetch the signed URL and
+    // treat it as a URI; also keep the mediaKey for the server-side copy.
+    const source = resolveMediaKey(post.mediaKey, post.mediaUrl);
+    const uri = typeof source === "object" && "uri" in source
+      ? (source as { uri: string }).uri
+      : post.mediaUrl ?? post.mediaKey;
+    await processAvatarAsset(uri, SCREEN_WIDTH, SCREEN_WIDTH, post.mediaKey);
+  }, [processAvatarAsset]);
+
+  /** Camera source. */
+  const handleAvatarCamera = useCallback(async () => {
+    setAvatarError(null);
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      setAvatarError("Camera access is required. Please enable it in Settings.");
+      return;
+    }
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 1,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    await processAvatarAsset(asset.uri, asset.width, asset.height);
+  }, [processAvatarAsset]);
+
+  /** Library source. */
+  const handleAvatarLibrary = useCallback(async () => {
+    setAvatarError(null);
+    if (Platform.OS !== "web") {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== "granted") {
+        setAvatarError("Photo library access is required. Please enable it in Settings.");
+        return;
+      }
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 1,
+    });
+    if (result.canceled || !result.assets?.[0]) return;
+    const asset = result.assets[0];
+    await processAvatarAsset(asset.uri, asset.width, asset.height);
+  }, [processAvatarAsset]);
+
+  /** Called when CropFramer confirms the framing. Upload if needed, then PATCH. */
+  const handleAvatarFrameConfirm = useCallback(async (focusX: number, focusY: number) => {
+    if (!petId || !avatarUri) return;
+    setAvatarStep("saving");
+    setAvatarError(null);
+
+    try {
+      let mediaKey: string;
+
+      if (avatarSrcKey) {
+        // Source was an existing post — server will copy it.
+        mediaKey = avatarSrcKey;
+      } else {
+        // New image from camera or library — upload to avatars/ first.
+        const imageResp = await fetch(avatarUri);
+        const blob      = await imageResp.blob();
+        if (blob.size > 10 * 1024 * 1024) {
+          setAvatarError("Image is too large (max 10 MB). Please choose a smaller one.");
+          setAvatarStep("sheet");
+          return;
+        }
+        const { uploadUrl, mediaKey: key } = await presignAvatarUpload({
+          data: { contentType: "image/jpeg", sizeBytes: blob.size },
+        });
+        const putRes = await fetch(uploadUrl, {
+          method:  "PUT",
+          headers: { "Content-Type": "image/jpeg" },
+          body:    blob,
+        });
+        if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
+        mediaKey = key;
+      }
+
+      await patchAvatar({
+        id:   petId,
+        data: { avatarKey: mediaKey, focusX, focusY },
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Something went wrong. Please try again.";
+      setAvatarError(msg);
+      setAvatarStep("sheet");
+    }
+  }, [petId, avatarUri, avatarSrcKey, presignAvatarUpload, patchAvatar]);
+
+  /** Remove avatar — PATCH with null. */
+  const handleRemoveAvatar = useCallback(async () => {
+    if (!petId) return;
+    setAvatarStep("saving");
+    setAvatarError(null);
+    try {
+      await patchAvatar({
+        id:   petId,
+        data: { avatarKey: null, focusX: null, focusY: null },
+      });
+    } catch {
+      setAvatarError("Could not remove avatar. Please try again.");
+      setAvatarStep("sheet");
+    }
+  }, [petId, patchAvatar]);
 
   // Pack members — fetched when component mounts; React Query caches the result
   const { data: membersData, isLoading: membersLoading } = useGetPetPackMembers(petId ?? "");
@@ -266,10 +440,21 @@ export default function PetProfileScreen() {
   const totalTreats = pet.posts.reduce((s, p) => s + p.treatCount, 0);
   const packCount   = localPackCount ?? pet.packCount;
 
-  // Hero image: first post's media key (most recent)
-  const heroSource = pet.posts.length > 0
+  // Hero rendering — three tiers:
+  // (1) avatar set → FocalImage honouring its own focus values
+  // (2) no avatar, posts exist → latest post center-cropped (ignoring post focal point)
+  // (3) no posts → seed:hero default art
+  const hasAvatar = !!pet.avatarUrl;
+  // avatarUrl is already an absolute media URL (/api/media/…) — pass via mediaUrl param.
+  const heroAvatarSource = hasAvatar
+    ? resolveMediaKey("_avatar_", pet.avatarUrl)
+    : null;
+  const heroPostSource = (!hasAvatar && pet.posts.length > 0)
     ? resolveMediaKey(pet.posts[0].mediaKey, pet.posts[0].mediaUrl)
-    : resolveMediaKey("seed:hero");
+    : null;
+  const heroSeedSource = (!hasAvatar && pet.posts.length === 0)
+    ? resolveMediaKey("seed:hero")
+    : null;
 
   const selectedPost: FeedPost | undefined =
     pet.posts.find((p) => p.id === selectedPostId) ??
@@ -304,11 +489,32 @@ export default function PetProfileScreen() {
       >
         {/* ── Hero ── */}
         <View style={styles.heroWrapper}>
-          <MediaImage
-            source={heroSource}
-            style={[styles.heroImage, { height: HERO_HEIGHT }]}
-            resizeMode="cover"
-          />
+          {/* Tier 1: avatar with focal point */}
+          {hasAvatar && heroAvatarSource && (
+            <FocalImage
+              source={heroAvatarSource}
+              style={{ width: "100%", height: HERO_HEIGHT } as any}
+              focusX={pet.avatarFocusX ?? 0.5}
+              focusY={pet.avatarFocusY ?? 0.5}
+            />
+          )}
+          {/* Tier 2: latest post, center-cropped */}
+          {!hasAvatar && heroPostSource && (
+            <MediaImage
+              source={heroPostSource}
+              style={[styles.heroImage, { height: HERO_HEIGHT }]}
+              resizeMode="cover"
+            />
+          )}
+          {/* Tier 3: seed art */}
+          {!hasAvatar && !heroPostSource && heroSeedSource && (
+            <MediaImage
+              source={heroSeedSource}
+              style={[styles.heroImage, { height: HERO_HEIGHT }]}
+              resizeMode="cover"
+            />
+          )}
+
           <LinearGradient
             colors={["transparent", colors.background]}
             locations={[0.55, 1]}
@@ -325,6 +531,20 @@ export default function PetProfileScreen() {
           >
             <Ionicons name="chevron-back" size={22} color="#F0F4F8" />
           </TouchableOpacity>
+
+          {/* Edit photo badge — owner only */}
+          {pet.viewerOwnsPet && (
+            <TouchableOpacity
+              style={styles.editPhotoBadge}
+              onPress={() => setAvatarStep("sheet")}
+              accessibilityRole="button"
+              accessibilityLabel="Edit profile photo"
+              activeOpacity={0.8}
+            >
+              <Feather name="camera" size={13} color="#F0F4F8" />
+              <Text style={styles.editPhotoBadgeText}>Edit photo</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ── Profile Info ── */}
@@ -546,6 +766,192 @@ export default function PetProfileScreen() {
                   </View>
                 ))}
               </ScrollView>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Avatar CropFramer (full-screen modal, hero-aspect frame) ── */}
+      <Modal
+        visible={avatarStep === "framing" && !!avatarUri}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setAvatarStep("sheet")}
+      >
+        {avatarStep === "framing" && avatarUri && (
+          <CropFramer
+            uri={avatarUri}
+            naturalWidth={avatarNatural.current.width || SCREEN_WIDTH}
+            naturalHeight={avatarNatural.current.height || HERO_HEIGHT}
+            frameHeight={HERO_HEIGHT}
+            onConfirm={handleAvatarFrameConfirm}
+            onBack={() => setAvatarStep("sheet")}
+          />
+        )}
+      </Modal>
+
+      {/* ── Avatar post picker (full-screen grid of all posts) ── */}
+      <Modal
+        visible={avatarStep === "postPicker"}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        onRequestClose={() => setAvatarStep("sheet")}
+      >
+        <View style={[styles.pickerRoot, { backgroundColor: colors.background }]}>
+          {/* Header */}
+          <View
+            style={[
+              styles.pickerHeader,
+              { paddingTop: insets.top + 12, borderBottomColor: colors.border },
+            ]}
+          >
+            <TouchableOpacity
+              onPress={() => setAvatarStep("sheet")}
+              style={styles.pickerBack}
+              accessibilityRole="button"
+              accessibilityLabel="Back"
+            >
+              <Ionicons name="close" size={22} color={colors.foreground} />
+            </TouchableOpacity>
+            <Text style={[styles.pickerTitle, { color: colors.foreground }]}>
+              Choose a post
+            </Text>
+            <View style={styles.pickerBack} />
+          </View>
+          {/* Grid */}
+          {(() => {
+            const allPosts = [
+              ...pet.posts,
+              ...(pet.archivedPosts ?? []),
+            ];
+            if (allPosts.length === 0) {
+              return (
+                <View style={styles.pickerEmpty}>
+                  <Text style={[styles.pickerEmptyText, { color: colors.mutedForeground }]}>
+                    No posts yet. Take a photo first!
+                  </Text>
+                </View>
+              );
+            }
+            return (
+              <ScrollView contentContainerStyle={styles.pickerGrid}>
+                {allPosts.map((post) => (
+                  <TouchableOpacity
+                    key={post.id}
+                    style={styles.pickerItem}
+                    activeOpacity={0.75}
+                    onPress={() => handlePickFromPost(post as FeedPost)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Use photo from ${new Date(post.createdAt).toLocaleDateString()}`}
+                  >
+                    <MediaImage
+                      source={resolveMediaKey(post.mediaKey, post.mediaUrl)}
+                      style={styles.pickerItemImage}
+                      resizeMode="cover"
+                    />
+                    {!!post.archivedAt && (
+                      <View style={styles.pickerArchivedBadge}>
+                        <Ionicons name="archive" size={10} color="#F0F4F8" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            );
+          })()}
+        </View>
+      </Modal>
+
+      {/* ── Avatar action sheet ── */}
+      <Modal
+        visible={avatarStep === "sheet" || avatarStep === "saving" || avatarStep === "compressing"}
+        animationType="slide"
+        transparent
+        onRequestClose={() => {
+          if (avatarStep !== "saving" && avatarStep !== "compressing") {
+            setAvatarStep("idle");
+            setAvatarError(null);
+          }
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => {
+              if (avatarStep !== "saving" && avatarStep !== "compressing") {
+                setAvatarStep("idle");
+                setAvatarError(null);
+              }
+            }}
+          />
+          <View style={[styles.avatarSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 12 }]}>
+            <Text style={[styles.avatarSheetTitle, { color: colors.foreground }]}>
+              Profile photo
+            </Text>
+            {avatarError && (
+              <Text style={styles.avatarSheetError}>{avatarError}</Text>
+            )}
+            {(avatarStep === "saving" || avatarStep === "compressing") ? (
+              <View style={styles.avatarSheetLoader}>
+                <ActivityIndicator color={colors.primary} />
+                <Text style={[styles.avatarSheetLoaderText, { color: colors.mutedForeground }]}>
+                  {avatarStep === "compressing" ? "Processing…" : "Saving…"}
+                </Text>
+              </View>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={styles.avatarSheetOption}
+                  onPress={() => setAvatarStep("postPicker")}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="images-outline" size={18} color={colors.foreground} />
+                  <Text style={[styles.avatarSheetOptionText, { color: colors.foreground }]}>
+                    Choose from posts
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.avatarSheetOption}
+                  onPress={() => { setAvatarStep("idle"); handleAvatarCamera(); }}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="camera-outline" size={18} color={colors.foreground} />
+                  <Text style={[styles.avatarSheetOptionText, { color: colors.foreground }]}>
+                    Take a photo
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.avatarSheetOption}
+                  onPress={() => { setAvatarStep("idle"); handleAvatarLibrary(); }}
+                  accessibilityRole="button"
+                >
+                  <Ionicons name="image-outline" size={18} color={colors.foreground} />
+                  <Text style={[styles.avatarSheetOptionText, { color: colors.foreground }]}>
+                    Choose from library
+                  </Text>
+                </TouchableOpacity>
+                {pet.avatarUrl && (
+                  <TouchableOpacity
+                    style={styles.avatarSheetOption}
+                    onPress={handleRemoveAvatar}
+                    accessibilityRole="button"
+                  >
+                    <Ionicons name="trash-outline" size={18} color={colors.destructive} />
+                    <Text style={[styles.avatarSheetOptionText, { color: colors.destructive }]}>
+                      Remove photo
+                    </Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.avatarSheetOption, styles.avatarSheetCancel]}
+                  onPress={() => { setAvatarStep("idle"); setAvatarError(null); }}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.avatarSheetOptionText, { color: colors.mutedForeground }]}>
+                    Cancel
+                  </Text>
+                </TouchableOpacity>
+              </>
             )}
           </View>
         </View>
@@ -869,6 +1275,137 @@ const styles = StyleSheet.create({
   backBtn: {
     position: "absolute", left: 14, width: 38, height: 38, borderRadius: 19,
     alignItems: "center", justifyContent: "center",
+  },
+
+  // ── Edit photo badge ──────────────────────────────────────────────────────
+  editPhotoBadge: {
+    position: "absolute",
+    bottom: 14,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(6,11,16,0.62)",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: "rgba(255,255,255,0.18)",
+  },
+  editPhotoBadgeText: {
+    color: "#F0F4F8",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+    letterSpacing: 0.2,
+  },
+
+  // ── Avatar action sheet ───────────────────────────────────────────────────
+  avatarSheet: {
+    width: "100%",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingTop: 16,
+    overflow: "hidden",
+  },
+  avatarSheetTitle: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+    letterSpacing: -0.2,
+    textAlign: "center",
+    paddingBottom: 12,
+    paddingHorizontal: 20,
+  },
+  avatarSheetError: {
+    color: "#E55",
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    textAlign: "center",
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+  avatarSheetOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+  },
+  avatarSheetOptionText: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 15,
+  },
+  avatarSheetCancel: {
+    marginTop: 4,
+    justifyContent: "center",
+  },
+  avatarSheetLoader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+  },
+  avatarSheetLoaderText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+  },
+
+  // ── Post picker (full-screen grid) ───────────────────────────────────────
+  pickerRoot: { flex: 1 },
+  pickerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  pickerBack: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickerTitle: {
+    flex: 1,
+    textAlign: "center",
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 16,
+  },
+  pickerGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 2,
+    padding: 2,
+  },
+  pickerItem: {
+    width: GRID_ITEM_SIZE,
+    height: GRID_ITEM_SIZE,
+    position: "relative",
+  },
+  pickerItemImage: {
+    width: "100%",
+    height: "100%",
+  },
+  pickerArchivedBadge: {
+    position: "absolute",
+    bottom: 4,
+    right: 4,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    borderRadius: 8,
+    padding: 3,
+  },
+  pickerEmpty: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 40,
+  },
+  pickerEmptyText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 20,
   },
   profileSection: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, gap: 8 },
   nameRow:  { flexDirection: "row", alignItems: "center", gap: 12 },

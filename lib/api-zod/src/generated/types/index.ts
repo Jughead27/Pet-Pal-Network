@@ -7,6 +7,8 @@
  */
 
 export * from './archivePostResponse';
+export * from './avatarPatchBody';
+export * from './avatarPatchResponse';
 export * from './boopResult';
 export * from './breedItem';
 export * from './breedListResponse';

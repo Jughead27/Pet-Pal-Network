@@ -1,18 +1,21 @@
 /**
  * CropFramer — full-screen WYSIWYG framing step.
  *
- * Shows the photo at full-screen cover-fit. The user drags along whichever
- * axis has overflow to choose what part of the photo will appear in the feed.
- * The frame viewport (corner brackets) matches the feed card exactly —
- * full screen — so what the user frames here is precisely what renders there.
+ * Shows the photo at cover-fit within a configurable frame viewport.
+ * The user drags along whichever axis has overflow to choose what part of
+ * the photo will appear in the rendered surface.
+ *
+ * Props:
+ *   frameHeight — height of the crop viewport in px (default: full screen height).
+ *                 Pass SCREEN_HEIGHT * 0.42 for hero-aspect avatar framing.
  *
  * On "Done" calls onConfirm(focusX, focusY) with values in [0, 1].
  * focusX = 0.5, focusY = 0.5 means center (default cover behavior).
  *
  * No react-native-reanimated. Uses standard Animated + PanResponder.
  *
- * Presentation: rendered inside a <Modal presentationStyle="fullScreen"> in
- * add.tsx, so the tab bar is never visible or interactive here.
+ * Presentation: rendered inside a <Modal presentationStyle="fullScreen"> so
+ * the tab bar is never visible or interactive here.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -42,6 +45,12 @@ interface CropFramerProps {
   onConfirm: (focusX: number, focusY: number) => void;
   /** Called when user wants to go back without discarding the selection. */
   onBack: () => void;
+  /**
+   * Height of the crop viewport in logical px.
+   * Defaults to the full screen height (feed-post framing).
+   * Pass SCREEN_HEIGHT * 0.42 for hero-aspect avatar framing.
+   */
+  frameHeight?: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -56,25 +65,29 @@ export default function CropFramer({
   naturalHeight,
   onConfirm,
   onBack,
+  frameHeight: frameHeightProp,
 }: CropFramerProps) {
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
+  // The viewport we're framing for. Width is always the full screen width.
+  const frameH = frameHeightProp ?? screenH;
+  const isPartialFrame = frameH < screenH;
+
   // ── Cover-scale geometry ──────────────────────────────────────────────────
-  // Scale so the image fully covers the screen, then allow panning along any
-  // axis that has overflow. The feed card is full-screen, so screenW × screenH
-  // is the exact viewport the user will see in the feed.
+  // Scale so the image fully covers the frame viewport, then allow panning
+  // along any axis that has overflow.
   const { scaledW, scaledH, overflowX, overflowY } = useMemo(() => {
-    const scale   = Math.max(screenW / naturalWidth, screenH / naturalHeight);
+    const scale   = Math.max(screenW / naturalWidth, frameH / naturalHeight);
     const scaledW = naturalWidth  * scale;
     const scaledH = naturalHeight * scale;
     return {
       scaledW,
       scaledH,
       overflowX: Math.max(0, scaledW - screenW),
-      overflowY: Math.max(0, scaledH - screenH),
+      overflowY: Math.max(0, scaledH - frameH),
     };
-  }, [screenW, screenH, naturalWidth, naturalHeight]);
+  }, [screenW, frameH, naturalWidth, naturalHeight]);
 
   // Keep overflow in a ref so PanResponder closures always read the latest value.
   const overflowRef = useRef({ x: overflowX, y: overflowY });
@@ -139,6 +152,7 @@ export default function CropFramer({
   }, [onConfirm]);
 
   // ── Image position ────────────────────────────────────────────────────────
+  // Image is positioned so the center of the frame is covered.
   const imageLeft = -overflowX / 2;
   const imageTop  = -overflowY / 2;
 
@@ -148,12 +162,23 @@ export default function CropFramer({
   const BRACKET = 24;
   const THICK   = 3;
 
+  // For a partial-height frame, the bottom-corner brackets are inset from
+  // the frame bottom edge rather than the screen bottom edge.
+  // bottom = screenH - frameH + CORNER_OFFSET positions them at the frame bottom.
+  const CORNER_OFFSET = 12;
+  const bottomCornerBottom = isPartialFrame
+    ? screenH - frameH + CORNER_OFFSET
+    : CORNER_OFFSET;
+
   return (
     <View style={styles.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {/* ── Draggable image ── */}
-      <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers}>
+      {/* ── Draggable image — constrained to frame viewport ── */}
+      <View
+        style={[styles.frameInteraction, { height: frameH }]}
+        {...panResponder.panHandlers}
+      >
         <Animated.Image
           source={{ uri }}
           style={[
@@ -173,27 +198,38 @@ export default function CropFramer({
         />
       </View>
 
+      {/* ── Darkened overlay below the frame (avatar/hero framing) ── */}
+      {isPartialFrame && (
+        <View
+          style={[
+            styles.frameMask,
+            { top: frameH },
+          ]}
+          pointerEvents="none"
+        />
+      )}
+
       {/* ── Frame boundary — corner brackets ─────────────────────────────── */}
-      {/* The four corners mark the exact edge of the feed viewport so the
-          user knows precisely what will be shown in the feed.               */}
+      {/* The four corners mark the exact edge of the rendered viewport so
+          the user knows precisely what will be visible in the hero/feed.    */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         {/* Top-left */}
-        <View style={[styles.corner, styles.cornerTL]}>
+        <View style={[styles.corner, styles.cornerTL, { top: CORNER_OFFSET, left: CORNER_OFFSET }]}>
           <View style={[styles.bracketH, { width: BRACKET, height: THICK }]} />
           <View style={[styles.bracketV, { width: THICK, height: BRACKET }]} />
         </View>
         {/* Top-right */}
-        <View style={[styles.corner, styles.cornerTR]}>
+        <View style={[styles.corner, styles.cornerTR, { top: CORNER_OFFSET, right: CORNER_OFFSET }]}>
           <View style={[styles.bracketH, { width: BRACKET, height: THICK }]} />
           <View style={[styles.bracketV, { width: THICK, height: BRACKET, alignSelf: 'flex-end' }]} />
         </View>
         {/* Bottom-left */}
-        <View style={[styles.corner, styles.cornerBL]}>
+        <View style={[styles.corner, styles.cornerBL, { bottom: bottomCornerBottom, left: CORNER_OFFSET }]}>
           <View style={[styles.bracketV, { width: THICK, height: BRACKET }]} />
           <View style={[styles.bracketH, { width: BRACKET, height: THICK }]} />
         </View>
         {/* Bottom-right */}
-        <View style={[styles.corner, styles.cornerBR]}>
+        <View style={[styles.corner, styles.cornerBR, { bottom: bottomCornerBottom, right: CORNER_OFFSET }]}>
           <View style={[styles.bracketV, { width: THICK, height: BRACKET, alignSelf: 'flex-end' }]} />
           <View style={[styles.bracketH, { width: BRACKET, height: THICK }]} />
         </View>
@@ -220,7 +256,7 @@ export default function CropFramer({
       {/* ── Drag hint — fades after first drag ── */}
       {canPan && (
         <Animated.View
-          style={[styles.hintWrap, { opacity: hintOpacity }]}
+          style={[styles.hintWrap, { top: frameH / 2 - 16, opacity: hintOpacity }]}
           pointerEvents="none"
         >
           <Text style={styles.hint}>
@@ -250,15 +286,30 @@ export default function CropFramer({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
-const CORNER_OFFSET = 12; // px inset from screen edge for corner brackets
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: '#000',
   },
+
+  // ── Frame interaction area (pan responder target, clipped to frame) ────────
+  frameInteraction: {
+    width: '100%',
+    overflow: 'hidden',
+    backgroundColor: '#000',
+  },
+
   image: {
     position: 'absolute',
+  },
+
+  // ── Mask below the frame viewport ─────────────────────────────────────────
+  frameMask: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.72)',
   },
 
   // ── Corner brackets ──────────────────────────────────────────────────────
@@ -267,10 +318,10 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
   },
-  cornerTL: { top: CORNER_OFFSET, left: CORNER_OFFSET, justifyContent: 'flex-start', alignItems: 'flex-start' },
-  cornerTR: { top: CORNER_OFFSET, right: CORNER_OFFSET, justifyContent: 'flex-start', alignItems: 'flex-end' },
-  cornerBL: { bottom: CORNER_OFFSET, left: CORNER_OFFSET, justifyContent: 'flex-end', alignItems: 'flex-start' },
-  cornerBR: { bottom: CORNER_OFFSET, right: CORNER_OFFSET, justifyContent: 'flex-end', alignItems: 'flex-end' },
+  cornerTL: { justifyContent: 'flex-start', alignItems: 'flex-start' },
+  cornerTR: { justifyContent: 'flex-start', alignItems: 'flex-end' },
+  cornerBL: { justifyContent: 'flex-end',   alignItems: 'flex-start' },
+  cornerBR: { justifyContent: 'flex-end',   alignItems: 'flex-end' },
   bracketH: {
     backgroundColor: 'rgba(255,255,255,0.85)',
     borderRadius: 1.5,
@@ -313,9 +364,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: '50%',
     alignItems: 'center',
-    marginTop: -16,
   },
   hint: {
     color: 'rgba(255,255,255,0.90)',

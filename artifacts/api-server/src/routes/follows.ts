@@ -129,7 +129,8 @@ router.get("/me/follows", async (req, res) => {
         breed:          petsTable.breed,
         speciesId:      petsTable.speciesId,
         breedId:        petsTable.breedId,
-        // Correlated subquery: most recent non-archived post media key.
+        avatarKey:      petsTable.avatarKey,
+        // Correlated subquery: most recent non-archived post media key (fallback thumbnail).
         recentMediaKey: sql<string | null>`(
           SELECT ${postsTable.mediaKey}
           FROM   ${postsTable}
@@ -181,15 +182,21 @@ router.get("/me/follows", async (req, res) => {
   ]);
 
   res.json({
-    packedPets: packedPetsRows.map((p) => ({
-      id:           p.id,
-      name:         p.name,
-      species:      p.species,
-      breed:        p.breed     ?? null,
-      speciesId:    p.speciesId ?? null,
-      breedId:      p.breedId   ?? null,
-      thumbnailUrl: p.recentMediaKey ? mediaTokenUrl(p.recentMediaKey) : null,
-    })),
+    packedPets: packedPetsRows.map((p) => {
+      // Thumbnail prefers the avatar; falls back to most recent non-archived post.
+      const avatarUrl = p.avatarKey ? mediaTokenUrl(p.avatarKey) : null;
+      const thumbnailUrl = avatarUrl
+        ?? (p.recentMediaKey ? mediaTokenUrl(p.recentMediaKey) : null);
+      return {
+        id:           p.id,
+        name:         p.name,
+        species:      p.species,
+        breed:        p.breed     ?? null,
+        speciesId:    p.speciesId ?? null,
+        breedId:      p.breedId   ?? null,
+        thumbnailUrl,
+      };
+    }),
     followedSpecies: followedSpeciesRows,
     followedBreeds:  followedBreedsRows,
   });

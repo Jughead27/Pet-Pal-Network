@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { randomUUID } from "node:crypto";
 import {
   db,
   petsTable,
@@ -14,7 +15,7 @@ import {
 } from "@workspace/db";
 import { eq, desc, sql, and, isNull, isNotNull } from "drizzle-orm";
 import { CreatePetBody } from "@workspace/api-zod";
-import { mediaTokenUrl } from "../lib/r2.js";
+import { mediaTokenUrl, copyObject } from "../lib/r2.js";
 
 const router: IRouter = Router();
 
@@ -33,7 +34,20 @@ router.get("/pets/:id", async (req, res) => {
 
   // Fetch the pet row first so we can 404 cleanly
   const [pet] = await db
-    .select()
+    .select({
+      id:           petsTable.id,
+      ownerId:      petsTable.ownerId,
+      name:         petsTable.name,
+      species:      petsTable.species,
+      breed:        petsTable.breed,
+      speciesId:    petsTable.speciesId,
+      breedId:      petsTable.breedId,
+      bio:          petsTable.bio,
+      createdAt:    petsTable.createdAt,
+      avatarKey:    petsTable.avatarKey,
+      avatarFocusX: petsTable.avatarFocusX,
+      avatarFocusY: petsTable.avatarFocusY,
+    })
     .from(petsTable)
     .where(eq(petsTable.id, id));
 
@@ -204,6 +218,9 @@ router.get("/pets/:id", async (req, res) => {
     viewerFollowsSpecies,
     viewerFollowsBreed,
     viewerOwnsPet:       viewerIsOwner,
+    avatarUrl:           pet.avatarKey    ? mediaTokenUrl(pet.avatarKey)    : null,
+    avatarFocusX:        pet.avatarFocusX ?? null,
+    avatarFocusY:        pet.avatarFocusY ?? null,
     posts,
     archivedPosts,
   });
@@ -291,15 +308,19 @@ router.post("/pets", async (req, res) => {
   });
 
   res.status(201).json({
-    id:        pet.id,
-    ownerId:   pet.ownerId,
-    name:      pet.name,
-    species:   pet.species,
-    breed:     pet.breed     ?? null,
-    speciesId: pet.speciesId ?? null,
-    breedId:   pet.breedId   ?? null,
-    bio:       pet.bio       ?? null,
-    createdAt: pet.createdAt,
+    id:           pet.id,
+    ownerId:      pet.ownerId,
+    name:         pet.name,
+    species:      pet.species,
+    breed:        pet.breed     ?? null,
+    speciesId:    pet.speciesId ?? null,
+    breedId:      pet.breedId   ?? null,
+    bio:          pet.bio       ?? null,
+    createdAt:    pet.createdAt,
+    thumbnailUrl: null,
+    avatarUrl:    null,
+    avatarFocusX: null,
+    avatarFocusY: null,
   });
 });
 
@@ -357,7 +378,10 @@ router.get("/me/pets", async (req, res) => {
       speciesId:      petsTable.speciesId,
       breedId:        petsTable.breedId,
       createdAt:      petsTable.createdAt,
-      // Correlated subquery: most recent non-archived post media key.
+      avatarKey:      petsTable.avatarKey,
+      avatarFocusX:   petsTable.avatarFocusX,
+      avatarFocusY:   petsTable.avatarFocusY,
+      // Correlated subquery: most recent non-archived post media key (fallback thumbnail).
       recentMediaKey: sql<string | null>`(
         SELECT ${postsTable.mediaKey}
         FROM   ${postsTable}
@@ -372,18 +396,101 @@ router.get("/me/pets", async (req, res) => {
     .orderBy(desc(petsTable.createdAt));
 
   res.json({
-    pets: pets.map((p) => ({
-      id:           p.id,
-      ownerId:      p.ownerId,
-      name:         p.name,
-      species:      p.species,
-      breed:        p.breed     ?? null,
-      bio:          p.bio       ?? null,
-      speciesId:    p.speciesId ?? null,
-      breedId:      p.breedId   ?? null,
-      createdAt:    p.createdAt,
-      thumbnailUrl: p.recentMediaKey ? mediaTokenUrl(p.recentMediaKey) : null,
-    })),
+    pets: pets.map((p) => {
+      const avatarUrl = p.avatarKey ? mediaTokenUrl(p.avatarKey) : null;
+      // Thumbnail prefers the avatar; falls back to most recent post.
+      const thumbnailUrl = avatarUrl
+        ?? (p.recentMediaKey ? mediaTokenUrl(p.recentMediaKey) : null);
+      return {
+        id:           p.id,
+        ownerId:      p.ownerId,
+        name:         p.name,
+        species:      p.species,
+        breed:        p.breed     ?? null,
+        bio:          p.bio       ?? null,
+        speciesId:    p.speciesId ?? null,
+        breedId:      p.breedId   ?? null,
+        createdAt:    p.createdAt,
+        thumbnailUrl,
+        avatarUrl,
+        avatarFocusX: p.avatarFocusX ?? null,
+        avatarFocusY: p.avatarFocusY ?? null,
+      };
+    }),
+  });
+});
+
+/**
+ * PATCH /pets/:id/avatar
+ *
+ * Sets or clears the avatar for a pet owned by the authenticated user.
+ *
+ * Body: { avatarKey: string | null, focusX: number | null, focusY: number | null }
+ *   - avatarKey null → clear the avatar (revert to latest-post hero fallback)
+ *   - avatarKey starting with "posts/" → server copies to "avatars/" prefix for
+ *     orphan safety (deleting the source post won't break the avatar)
+ *   - avatarKey starting with "avatars/" → used as-is (already in avatars/ namespace)
+ *
+ * Returns: { avatarUrl, avatarFocusX, avatarFocusY }
+ */
+router.patch("/pets/:id/avatar", async (req, res) => {
+  const { id } = req.params;
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  // Verify pet exists and caller is the owner
+  const [pet] = await db
+    .select({ id: petsTable.id, ownerId: petsTable.ownerId })
+    .from(petsTable)
+    .where(eq(petsTable.id, id))
+    .limit(1);
+
+  if (!pet) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (pet.ownerId !== userId) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const { avatarKey, focusX, focusY } = req.body as {
+    avatarKey: string | null;
+    focusX:    number | null;
+    focusY:    number | null;
+  };
+
+  let storedKey: string | null = null;
+
+  if (avatarKey !== null && typeof avatarKey === "string") {
+    if (avatarKey.startsWith("posts/")) {
+      // Copy to avatars/ prefix for orphan safety
+      const ext   = avatarKey.split(".").pop() ?? "jpg";
+      const destKey = `avatars/${randomUUID()}.${ext}`;
+      await copyObject(avatarKey, destKey);
+      storedKey = destKey;
+    } else if (avatarKey.startsWith("avatars/")) {
+      // Already in the correct namespace (uploaded via presign-avatar)
+      storedKey = avatarKey;
+    } else {
+      res.status(400).json({ error: "Invalid avatarKey prefix" });
+      return;
+    }
+  }
+
+  await db
+    .update(petsTable)
+    .set({
+      avatarKey:    storedKey,
+      avatarFocusX: storedKey !== null ? (focusX ?? null) : null,
+      avatarFocusY: storedKey !== null ? (focusY ?? null) : null,
+    })
+    .where(eq(petsTable.id, id));
+
+  res.json({
+    avatarUrl:    storedKey ? mediaTokenUrl(storedKey) : null,
+    avatarFocusX: storedKey !== null ? (focusX ?? null) : null,
+    avatarFocusY: storedKey !== null ? (focusY ?? null) : null,
   });
 });
 

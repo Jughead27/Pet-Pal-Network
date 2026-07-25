@@ -37,4 +37,29 @@ router.post("/uploads/presign", async (req, res) => {
   res.json({ uploadUrl, mediaKey });
 });
 
+/**
+ * POST /uploads/presign-avatar
+ *
+ * Returns a short-lived (5 min) presigned PUT URL for direct R2 upload of
+ * an avatar image, plus the media key (under avatars/ prefix) to pass to
+ * PATCH /pets/:id/avatar.
+ *
+ * Same validation as /uploads/presign.
+ */
+router.post("/uploads/presign-avatar", async (req, res) => {
+  const parsed = PresignUploadBody.safeParse(req.body);
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? "Invalid request";
+    res.status(400).json({ error: message });
+    return;
+  }
+
+  const { contentType, sizeBytes } = parsed.data;
+  const ext      = EXT[contentType]!;
+  const mediaKey = `avatars/${randomUUID()}.${ext}`;
+
+  const uploadUrl = await presignPut(mediaKey, contentType, sizeBytes);
+  res.json({ uploadUrl, mediaKey });
+});
+
 export default router;

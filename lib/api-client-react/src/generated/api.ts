@@ -21,6 +21,8 @@ import type {
 
 import type {
   ArchivePostResponse,
+  AvatarPatchBody,
+  AvatarPatchResponse,
   BoopResult,
   BreedListResponse,
   CommentBody,
@@ -903,6 +905,79 @@ export const useLeavePetPack = <TError = ErrorType<ErrorResponse>,
       return useMutation(getLeavePetPackMutationOptions(options));
     }
 
+export const getPatchPetAvatarUrl = (id: string,) => {
+
+
+
+
+  return `/api/pets/${id}/avatar`
+}
+
+/**
+ * Sets or clears the avatar for a pet owned by the caller. When avatarKey starts with "posts/", the server copies the object to an "avatars/" key so the avatar is never orphaned if the source post is deleted. Pass null for all fields to clear the avatar (reverts hero to latest-post fallback). 403 unless the caller owns the pet.
+ * @summary Set or clear a pet's avatar
+ */
+export const patchPetAvatar = async (id: string,
+    avatarPatchBody: AvatarPatchBody, options?: RequestInit): Promise<AvatarPatchResponse> => {
+
+  return customFetch<AvatarPatchResponse>(getPatchPetAvatarUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(avatarPatchBody)
+  }
+);}
+
+
+
+
+
+export const getPatchPetAvatarMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchPetAvatar>>, TError,{id: string;data: BodyType<AvatarPatchBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchPetAvatar>>, TError,{id: string;data: BodyType<AvatarPatchBody>}, TContext> => {
+
+const mutationKey = ['patchPetAvatar'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchPetAvatar>>, {id: string;data: BodyType<AvatarPatchBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  patchPetAvatar(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchPetAvatarMutationResult = NonNullable<Awaited<ReturnType<typeof patchPetAvatar>>>
+    export type PatchPetAvatarMutationBody = BodyType<AvatarPatchBody>
+    export type PatchPetAvatarMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Set or clear a pet's avatar
+ */
+export const usePatchPetAvatar = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchPetAvatar>>, TError,{id: string;data: BodyType<AvatarPatchBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchPetAvatar>>,
+        TError,
+        {id: string;data: BodyType<AvatarPatchBody>},
+        TContext
+      > => {
+      return useMutation(getPatchPetAvatarMutationOptions(options));
+    }
+
 export const getGetPetUrl = (id: string,) => {
 
 
@@ -1201,6 +1276,78 @@ export const useTreatPost = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getTreatPostMutationOptions(options));
+    }
+
+export const getPresignAvatarUploadUrl = () => {
+
+
+
+
+  return `/api/uploads/presign-avatar`
+}
+
+/**
+ * Returns a short-lived presigned PUT URL for uploading directly to R2, plus the mediaKey (under the "avatars/" prefix) to pass to PATCH /pets/{id}/avatar. Same validation as /uploads/presign (contentType, sizeBytes).
+ * @summary Get a presigned upload URL for an avatar
+ */
+export const presignAvatarUpload = async (presignBody: PresignBody, options?: RequestInit): Promise<PresignResult> => {
+
+  return customFetch<PresignResult>(getPresignAvatarUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(presignBody)
+  }
+);}
+
+
+
+
+
+export const getPresignAvatarUploadMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof presignAvatarUpload>>, TError,{data: BodyType<PresignBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof presignAvatarUpload>>, TError,{data: BodyType<PresignBody>}, TContext> => {
+
+const mutationKey = ['presignAvatarUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof presignAvatarUpload>>, {data: BodyType<PresignBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  presignAvatarUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PresignAvatarUploadMutationResult = NonNullable<Awaited<ReturnType<typeof presignAvatarUpload>>>
+    export type PresignAvatarUploadMutationBody = BodyType<PresignBody>
+    export type PresignAvatarUploadMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Get a presigned upload URL for an avatar
+ */
+export const usePresignAvatarUpload = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof presignAvatarUpload>>, TError,{data: BodyType<PresignBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof presignAvatarUpload>>,
+        TError,
+        {data: BodyType<PresignBody>},
+        TContext
+      > => {
+      return useMutation(getPresignAvatarUploadMutationOptions(options));
     }
 
 export const getPresignUploadUrl = () => {

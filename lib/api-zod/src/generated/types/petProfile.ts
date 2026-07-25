@@ -33,4 +33,10 @@ export interface PetProfile {
   archivedPosts: FeedPost[];
   /** Whether the authenticated viewer owns this pet. */
   viewerOwnsPet: boolean;
+  /** Stable media URL for the pet's avatar. Null when no avatar is set. */
+  avatarUrl: string | null;
+  /** Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar. */
+  avatarFocusX: number | null;
+  /** Vertical focal point (0–1) for avatar cover-crop. Null when no avatar. */
+  avatarFocusY: number | null;
 }

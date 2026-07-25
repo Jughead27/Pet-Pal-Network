@@ -343,6 +343,57 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /pets/{id}/avatar:
+    patch:
+      operationId: patchPetAvatar
+      tags: [pets]
+      summary: Set or clear a pet's avatar
+      description: >
+        Sets or clears the avatar for a pet owned by the caller.
+        When avatarKey starts with "posts/", the server copies the object to an
+        "avatars/" key so the avatar is never orphaned if the source post is deleted.
+        Pass null for all fields to clear the avatar (reverts hero to latest-post fallback).
+        403 unless the caller owns the pet.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AvatarPatchBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AvatarPatchResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Pet not owned by caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Pet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /pets/{id}:
     get:
       operationId: getPet
@@ -489,6 +540,43 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
         "429":
           description: Daily treat limit reached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /uploads/presign-avatar:
+    post:
+      operationId: presignAvatarUpload
+      tags: [uploads]
+      summary: Get a presigned upload URL for an avatar
+      description: >
+        Returns a short-lived presigned PUT URL for uploading directly to R2,
+        plus the mediaKey (under the "avatars/" prefix) to pass to PATCH /pets/{id}/avatar.
+        Same validation as /uploads/presign (contentType, sizeBytes).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PresignBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PresignResult"
+        "400":
+          description: Invalid content type or size
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -1064,6 +1152,20 @@ components:
         viewerOwnsPet:
           type: boolean
           description: Whether the authenticated viewer owns this pet.
+        avatarUrl:
+          type: string
+          nullable: true
+          description: Stable media URL for the pet's avatar. Null when no avatar is set.
+        avatarFocusX:
+          type: number
+          format: float
+          nullable: true
+          description: Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.
+        avatarFocusY:
+          type: number
+          format: float
+          nullable: true
+          description: Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.
       required:
         - id
         - name
@@ -1075,6 +1177,9 @@ components:
         - posts
         - archivedPosts
         - viewerOwnsPet
+        - avatarUrl
+        - avatarFocusX
+        - avatarFocusY
 
     ArchivePostResponse:
       type: object
@@ -1135,6 +1240,55 @@ components:
       required:
         - text
 
+    AvatarPatchBody:
+      type: object
+      description: >
+        Request body for setting or clearing a pet's avatar.
+        Set avatarKey to null to clear the avatar.
+      properties:
+        avatarKey:
+          type: string
+          nullable: true
+          description: >
+            R2 media key for the new avatar. If it starts with "posts/", the server
+            copies it to an "avatars/" key. Pass null to clear the avatar.
+        focusX:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+        focusY:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+      required:
+        - avatarKey
+        - focusX
+        - focusY
+
+    AvatarPatchResponse:
+      type: object
+      description: Result of a pet avatar set or clear operation
+      properties:
+        avatarUrl:
+          type: string
+          nullable: true
+        avatarFocusX:
+          type: number
+          format: float
+          nullable: true
+        avatarFocusY:
+          type: number
+          format: float
+          nullable: true
+      required:
+        - avatarUrl
+        - avatarFocusX
+        - avatarFocusY
+
     Pet:
       type: object
       description: A pet owned by a user
@@ -1166,9 +1320,23 @@ components:
           type: string
           nullable: true
           description: >
-            Stable media URL for the pet's most recent non-archived post.
-            Null when the pet has no posts or when the most recent post uses
-            a seed key (resolved client-side from bundled assets).
+            Stable media URL for the pet's avatar (preferred) or most recent
+            non-archived post. Null when neither exists or when the source key
+            is a seed key (resolved client-side from bundled assets).
+        avatarUrl:
+          type: string
+          nullable: true
+          description: Stable media URL for the pet's avatar. Null when no avatar is set.
+        avatarFocusX:
+          type: number
+          format: float
+          nullable: true
+          description: Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.
+        avatarFocusY:
+          type: number
+          format: float
+          nullable: true
+          description: Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.
       required:
         - id
         - ownerId
@@ -1178,6 +1346,9 @@ components:
         - breedId
         - createdAt
         - thumbnailUrl
+        - avatarUrl
+        - avatarFocusX
+        - avatarFocusY
 
     SpeciesItem:
       type: object

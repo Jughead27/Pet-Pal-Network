@@ -93,6 +93,12 @@ export interface PetProfile {
   archivedPosts: FeedPost[];
   /** Whether the authenticated viewer owns this pet. */
   viewerOwnsPet: boolean;
+  /** Stable media URL for the pet's avatar. Null when no avatar is set. */
+  avatarUrl: string | null;
+  /** Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar. */
+  avatarFocusX: number | null;
+  /** Vertical focal point (0–1) for avatar cover-crop. Null when no avatar. */
+  avatarFocusY: number | null;
 }
 
 /**
@@ -136,6 +142,33 @@ export interface CommentBody {
 }
 
 /**
+ * Request body for setting or clearing a pet's avatar. Set avatarKey to null to clear the avatar.
+ */
+export interface AvatarPatchBody {
+  /** R2 media key for the new avatar. If it starts with "posts/", the server copies it to an "avatars/" key. Pass null to clear the avatar. */
+  avatarKey: string | null;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  focusX: number | null;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  focusY: number | null;
+}
+
+/**
+ * Result of a pet avatar set or clear operation
+ */
+export interface AvatarPatchResponse {
+  avatarUrl: string | null;
+  avatarFocusX: number | null;
+  avatarFocusY: number | null;
+}
+
+/**
  * A pet owned by a user
  */
 export interface Pet {
@@ -148,8 +181,14 @@ export interface Pet {
   breedId: string | null;
   bio?: string | null;
   createdAt: string;
-  /** Stable media URL for the pet's most recent non-archived post. Null when the pet has no posts or when the most recent post uses a seed key (resolved client-side from bundled assets). */
+  /** Stable media URL for the pet's avatar (preferred) or most recent non-archived post. Null when neither exists or when the source key is a seed key (resolved client-side from bundled assets). */
   thumbnailUrl: string | null;
+  /** Stable media URL for the pet's avatar. Null when no avatar is set. */
+  avatarUrl: string | null;
+  /** Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar. */
+  avatarFocusX: number | null;
+  /** Vertical focal point (0–1) for avatar cover-crop. Null when no avatar. */
+  avatarFocusY: number | null;
 }
 
 /**

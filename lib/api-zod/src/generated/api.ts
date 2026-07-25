@@ -195,6 +195,35 @@ export const LeavePetPackResponse = zod.object({
 
 
 /**
+ * Sets or clears the avatar for a pet owned by the caller. When avatarKey starts with "posts/", the server copies the object to an "avatars/" key so the avatar is never orphaned if the source post is deleted. Pass null for all fields to clear the avatar (reverts hero to latest-post fallback). 403 unless the caller owns the pet.
+ * @summary Set or clear a pet's avatar
+ */
+export const PatchPetAvatarParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const patchPetAvatarBodyFocusXMin = 0;
+export const patchPetAvatarBodyFocusXMax = 1;
+
+export const patchPetAvatarBodyFocusYMin = 0;
+export const patchPetAvatarBodyFocusYMax = 1;
+
+
+
+export const PatchPetAvatarBody = zod.object({
+  "avatarKey": zod.string().nullable().describe('R2 media key for the new avatar. If it starts with \"posts\/\", the server copies it to an \"avatars\/\" key. Pass null to clear the avatar.\n'),
+  "focusX": zod.number().min(patchPetAvatarBodyFocusXMin).max(patchPetAvatarBodyFocusXMax).nullable(),
+  "focusY": zod.number().min(patchPetAvatarBodyFocusYMin).max(patchPetAvatarBodyFocusYMax).nullable()
+}).describe('Request body for setting or clearing a pet\'s avatar. Set avatarKey to null to clear the avatar.\n')
+
+export const PatchPetAvatarResponse = zod.object({
+  "avatarUrl": zod.string().nullable(),
+  "avatarFocusX": zod.number().nullable(),
+  "avatarFocusY": zod.number().nullable()
+}).describe('Result of a pet avatar set or clear operation')
+
+
+/**
  * Returns a pet profile with its posts and reaction counts
  * @summary Get pet profile
  */
@@ -262,7 +291,10 @@ export const GetPetResponse = zod.object({
   "viewerHasTreated": zod.boolean(),
   "archivedAt": zod.coerce.date().nullable().describe('Set when the post is archived; null when active.')
 }).describe('A post in the feed with reaction counts and viewer state')).describe('Archived posts for this pet. Populated only when the viewer is the owner; always an empty array for non-owners.\n'),
-  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet.')
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet.'),
+  "avatarUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar. Null when no avatar is set.'),
+  "avatarFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.'),
+  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.')
 }).describe('Full pet profile including posts')
 
 
@@ -307,6 +339,25 @@ export const TreatPostResponse = zod.object({
   "treatCount": zod.number(),
   "treatsRemainingToday": zod.number()
 }).describe('Result of a treat action')
+
+
+/**
+ * Returns a short-lived presigned PUT URL for uploading directly to R2, plus the mediaKey (under the "avatars/" prefix) to pass to PATCH /pets/{id}/avatar. Same validation as /uploads/presign (contentType, sizeBytes).
+ * @summary Get a presigned upload URL for an avatar
+ */
+export const presignAvatarUploadBodySizeBytesMax = 10485760;
+
+
+
+export const PresignAvatarUploadBody = zod.object({
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/webp']),
+  "sizeBytes": zod.number().min(1).max(presignAvatarUploadBodySizeBytesMax)
+}).describe('Request body for obtaining a presigned upload URL')
+
+export const PresignAvatarUploadResponse = zod.object({
+  "uploadUrl": zod.string(),
+  "mediaKey": zod.string()
+}).describe('Presigned PUT URL and the media key to use when creating the post')
 
 
 /**
@@ -457,7 +508,10 @@ export const CreatePetResponse = zod.object({
   "breedId": zod.string().nullable(),
   "bio": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
-  "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s most recent non-archived post. Null when the pet has no posts or when the most recent post uses a seed key (resolved client-side from bundled assets).\n')
+  "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar (preferred) or most recent non-archived post. Null when neither exists or when the source key is a seed key (resolved client-side from bundled assets).\n'),
+  "avatarUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar. Null when no avatar is set.'),
+  "avatarFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.'),
+  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.')
 }).describe('A pet owned by a user')
 
 
@@ -476,7 +530,10 @@ export const GetMyPetsResponse = zod.object({
   "breedId": zod.string().nullable(),
   "bio": zod.string().nullish(),
   "createdAt": zod.coerce.date(),
-  "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s most recent non-archived post. Null when the pet has no posts or when the most recent post uses a seed key (resolved client-side from bundled assets).\n')
+  "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar (preferred) or most recent non-archived post. Null when neither exists or when the source key is a seed key (resolved client-side from bundled assets).\n'),
+  "avatarUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar. Null when no avatar is set.'),
+  "avatarFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.'),
+  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.')
 }).describe('A pet owned by a user'))
 }).describe('The caller\'s pets')
 

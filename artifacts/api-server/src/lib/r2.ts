@@ -5,7 +5,7 @@
  * Env vars: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME
  */
 
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createHmac, timingSafeEqual } from "crypto";
 
@@ -99,6 +99,21 @@ export function verifyMediaToken(key: string, exp: string, t: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * Server-side copy of an R2 object within the same bucket.
+ * Used to duplicate a posts/ media key into avatars/ so that deleting
+ * the source post can never orphan the avatar.
+ */
+export async function copyObject(sourceKey: string, destKey: string): Promise<void> {
+  await r2.send(
+    new CopyObjectCommand({
+      Bucket:     R2_BUCKET,
+      CopySource: `${R2_BUCKET}/${sourceKey}`,
+      Key:        destKey,
+    }),
+  );
 }
 
 /**
