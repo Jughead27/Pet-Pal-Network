@@ -1,14 +1,23 @@
 /**
- * Nursery Feed — vertical paged feed showing only is_nursery posts.
+ * Nursery Tab — two-layer browsing experience.
  *
- * Structurally identical to the Home feed (index.tsx) — same FlatList pager,
- * same FeedPage component, same lifted CommentSheet/ShareSheet pattern.
- * The only difference is the query: useGetFeed({ nursery: true }).
+ * LAYER 1 (default): 3-column thumbnail grid of is_nursery posts, newest first.
+ *   • Square cells, FocalImage cover-fit honouring focal points.
+ *   • Hatchling empty state when no nursery posts exist.
+ *   • Scroll position preserved across grid ↔ pager transitions.
  *
- * Scroll position is independent from Home's (separate FlatList ref + state).
- * No post-success scroll-to-top (nursery filter makes it irrelevant).
+ * LAYER 2 (on tap): full-screen vertical pager opening at the tapped index.
+ *   • Identical to the Home pager: full rail (boop/treat/comment/share),
+ *     focal framing, caption→detail, Pack paw.
+ *   • Back button (top-left) returns to the grid.
+ *   • Android hardware back also returns to the grid.
+ *   • Swipe moves through nursery posts only.
  *
- * Empty state: hatchling motif + copy explaining the nursery flag.
+ * Both layers share a single useGetFeed({ nursery: true }) call — no double
+ * fetch, no data duplication.
+ *
+ * This grid→pager wiring is the canonical pattern; the discovery tab will
+ * reuse the same approach. No speculative abstraction until it is needed.
  *
  * No react-native-reanimated imports.
  */
@@ -17,83 +26,56 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
+  BackHandler,
+  Dimensions,
   FlatList,
   Platform,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
   useWindowDimensions,
 } from 'react-native';
-import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useGetFeed } from '@workspace/api-client-react';
 import type { FeedPost } from '@workspace/api-client-react';
+import { resolveMediaKey } from '@/utils/mediaKey';
+import FocalImage from '@/components/FocalImage';
+import HatchlingIcon from '@/components/HatchlingIcon';
 import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
 import CommentSheet from '@/components/CommentSheet';
 import ShareSheet from '@/components/ShareSheet';
 
-// ─── HatchlingIcon ─────────────────────────────────────────────────────────────
-// A cracked egg with a tiny chick head peeking out — the hatchling motif.
+// ─── Layout constants ──────────────────────────────────────────────────────────
 
-function HatchlingIcon({ size = 72, color }: { size?: number; color: string }) {
-  const s = size / 72; // scale factor
-  return (
-    <Svg width={size} height={size} viewBox="0 0 72 72" fill="none">
-      {/* Egg body (lower half) */}
-      <Ellipse
-        cx={36} cy={46}
-        rx={20} ry={22}
-        fill="none"
-        stroke={color}
-        strokeWidth={2.5}
-        strokeLinejoin="round"
-      />
-      {/* Egg top (upper half, slightly narrower) */}
-      <Path
-        d={`M16 46 C16 28 56 28 56 46`}
-        fill="none"
-        stroke={color}
-        strokeWidth={2.5}
-        strokeLinejoin="round"
-      />
-      {/* Crack line — zigzag across the equator */}
-      <Path
-        d="M16 46 L24 42 L30 48 L38 41 L44 47 L50 43 L56 46"
-        fill="none"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Chick head peeking out above the crack */}
-      <Circle cx={36} cy={30} r={9} fill="none" stroke={color} strokeWidth={2.5} />
-      {/* Eyes */}
-      <Circle cx={32.5} cy={28.5} r={1.5} fill={color} />
-      <Circle cx={39.5} cy={28.5} r={1.5} fill={color} />
-      {/* Beak */}
-      <Path
-        d="M34.5 32 L36 34 L37.5 32"
-        fill="none"
-        stroke={color}
-        strokeWidth={1.8}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </Svg>
-  );
-}
+const SCREEN_WIDTH   = Dimensions.get('window').width;
+const NUM_COLS       = 3;
+const CELL_GAP       = 2;  // px between columns (and rows)
+// Each cell fills 1/3 of the screen minus the two inter-column gaps
+const THUMBNAIL_SIZE = (SCREEN_WIDTH - CELL_GAP * (NUM_COLS - 1)) / NUM_COLS;
 
-// ─── NurseryScreen ────────────────────────────────────────────────────────────
+// ─── NurseryScreen ─────────────────────────────────────────────────────────────
+
+type ViewMode = 'grid' | 'pager';
 
 export default function NurseryScreen() {
-  const colors = useColors();
+  const colors       = useColors();
+  const insets       = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
+
+  // ── Shared nursery data ────────────────────────────────────────────────────
   const { data, isLoading, isError } = useGetFeed({ nursery: true });
   const posts = data?.posts ?? [];
 
-  const { height: windowHeight } = useWindowDimensions();
-  const [pageHeight, setPageHeight] = useState(0);
+  // ── Layout measurement (shared between grid and pager) ─────────────────────
+  // On web effectivePageHeight is always windowHeight (onLayout resolves to 0).
+  // On native it is the measured container height (accounts for notch/nav bars).
+  const [pageHeight, setPageHeight]   = useState(0);
   const effectivePageHeight = Platform.OS === 'web' ? windowHeight : pageHeight;
 
+  // ── Reduced-motion preference (passed to every FeedPage) ──────────────────
   const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(setReducedMotion);
@@ -101,46 +83,76 @@ export default function NurseryScreen() {
     return () => sub.remove();
   }, []);
 
-  // Lifted sheet state — same pattern as Home
+  // ── View-mode state ────────────────────────────────────────────────────────
+  const [viewMode,        setViewMode]        = useState<ViewMode>('grid');
+  const [pagerStartIndex, setPagerStartIndex] = useState(0);
+
+  // ── Grid scroll preservation ───────────────────────────────────────────────
+  // onScroll writes the current offset into a ref (no re-render).
+  // When returning from the pager we scroll back to that offset.
+  const gridScrollY   = useRef(0);
+  const gridListRef   = useRef<FlatList<FeedPost>>(null);
+  const pagerListRef  = useRef<FlatList<FeedPost>>(null);
+
+  // ── Pager lifted sheet state ───────────────────────────────────────────────
   const [commentConfig, setCommentConfig] = useState<CommentSheetConfig | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [shareOpen,     setShareOpen]     = useState(false);
 
   const openCommentSheet  = useCallback((cfg: CommentSheetConfig) => setCommentConfig(cfg), []);
   const closeCommentSheet = useCallback(() => setCommentConfig(null), []);
   const openShareSheet    = useCallback(() => setShareOpen(true),  []);
   const closeShareSheet   = useCallback(() => setShareOpen(false), []);
 
-  const flatListRef = useRef<FlatList<FeedPost>>(null);
+  // ── Open pager at index ────────────────────────────────────────────────────
+  const openPost = useCallback((index: number) => {
+    setPagerStartIndex(index);
+    setViewMode('pager');
+  }, []);
 
-  const getItemLayout = useCallback(
-    (_: unknown, index: number) => ({
-      length: effectivePageHeight,
-      offset: effectivePageHeight * index,
-      index,
-    }),
-    [effectivePageHeight],
-  );
+  // ── Return to grid ─────────────────────────────────────────────────────────
+  const closePost = useCallback(() => {
+    // Close any open sheets before returning to grid
+    setCommentConfig(null);
+    setShareOpen(false);
+    setViewMode('grid');
 
-  const renderItem = useCallback(
-    ({ item }: { item: FeedPost }) => (
-      <FeedPage
-        post={item}
-        height={effectivePageHeight}
-        reducedMotion={reducedMotion}
-        onOpenCommentSheet={openCommentSheet}
-        onOpenShareSheet={openShareSheet}
-      />
-    ),
-    [effectivePageHeight, reducedMotion, openCommentSheet, openShareSheet],
-  );
+    // Restore scroll position after React flushes the grid render.
+    // requestAnimationFrame gives the FlatList one frame to mount.
+    requestAnimationFrame(() => {
+      if (gridScrollY.current > 0) {
+        gridListRef.current?.scrollToOffset({
+          offset:   gridScrollY.current,
+          animated: false,
+        });
+      }
+    });
+  }, []);
 
-  const keyExtractor = useCallback((item: FeedPost) => item.id, []);
+  // ── Android hardware back ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (viewMode !== 'pager') return;
+    const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+      closePost();
+      return true; // consumed — don't bubble to navigator
+    });
+    return () => handler.remove();
+  }, [viewMode, closePost]);
 
+  // ── Shared container style ─────────────────────────────────────────────────
   const containerStyle = Platform.OS === 'web'
     ? [styles.fill, { height: windowHeight, backgroundColor: colors.background }]
     : [styles.fill, { backgroundColor: colors.background }];
 
-  // ── Loading ────────────────────────────────────────────────────────────────
+  // ── Shared layout handler ──────────────────────────────────────────────────
+  const handleContainerLayout = useCallback(
+    (e: { nativeEvent: { layout: { height: number } } }) => {
+      const h = e.nativeEvent.layout.height;
+      if (h > 0) setPageHeight(h);
+    },
+    [],
+  );
+
+  // ── Loading / error (shared across both layers) ────────────────────────────
   if (isLoading) {
     return (
       <View style={[containerStyle, styles.centered]}>
@@ -149,12 +161,11 @@ export default function NurseryScreen() {
     );
   }
 
-  // ── Error ──────────────────────────────────────────────────────────────────
   if (isError) {
     return (
       <View style={[containerStyle, styles.centered]}>
         <Text style={[styles.errorText, { color: colors.mutedForeground }]}>
-          Unable to load nursery feed.
+          Unable to load nursery posts.
         </Text>
       </View>
     );
@@ -177,59 +188,148 @@ export default function NurseryScreen() {
     );
   }
 
-  // ── Feed ───────────────────────────────────────────────────────────────────
-  return (
-    <View
-      style={containerStyle}
-      onLayout={(e) => {
-        const h = e.nativeEvent.layout.height;
-        if (h > 0) setPageHeight(h);
-      }}
-    >
-      {effectivePageHeight > 0 && (
-        <FlatList
-          ref={flatListRef}
-          data={posts}
-          renderItem={renderItem}
-          keyExtractor={keyExtractor}
-          getItemLayout={getItemLayout}
-          pagingEnabled
-          snapToInterval={effectivePageHeight}
-          snapToAlignment="start"
-          decelerationRate="fast"
-          scrollEnabled={commentConfig === null && !shareOpen}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          overScrollMode="never"
-          windowSize={3}
-          maxToRenderPerBatch={2}
-          initialNumToRender={1}
-          removeClippedSubviews
-        />
-      )}
+  // ══════════════════════════════════════════════════════════════════════════════
+  // LAYER 2: Full-screen pager
+  // Rendered when a thumbnail has been tapped.
+  // ══════════════════════════════════════════════════════════════════════════════
 
-      <CommentSheet
-        visible={commentConfig !== null}
-        onClose={closeCommentSheet}
-        postId={commentConfig?.postId ?? null}
-        onCommentPosted={commentConfig?.onCommentPosted}
+  if (viewMode === 'pager') {
+    const backBtnTop = Platform.OS === 'web' ? 67 + 8 : insets.top + 8;
+
+    const getPagerItemLayout = (_: unknown, index: number) => ({
+      length: effectivePageHeight,
+      offset: effectivePageHeight * index,
+      index,
+    });
+
+    const renderPagerItem = ({ item }: { item: FeedPost }) => (
+      <FeedPage
+        post={item}
+        height={effectivePageHeight}
+        reducedMotion={reducedMotion}
+        onOpenCommentSheet={openCommentSheet}
+        onOpenShareSheet={openShareSheet}
       />
-      <ShareSheet
-        visible={shareOpen}
-        onClose={closeShareSheet}
+    );
+
+    return (
+      <View
+        style={containerStyle}
+        onLayout={handleContainerLayout}
+      >
+        {effectivePageHeight > 0 && (
+          <FlatList
+            ref={pagerListRef}
+            data={posts}
+            renderItem={renderPagerItem}
+            keyExtractor={(item) => item.id}
+            getItemLayout={getPagerItemLayout}
+            // Open at the tapped post's index without animation
+            initialScrollIndex={pagerStartIndex}
+            // Paging
+            pagingEnabled
+            snapToInterval={effectivePageHeight}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            // Disable scrolling while a sheet is open
+            scrollEnabled={commentConfig === null && !shareOpen}
+            showsVerticalScrollIndicator={false}
+            bounces={false}
+            overScrollMode="never"
+            windowSize={3}
+            maxToRenderPerBatch={2}
+            initialNumToRender={1}
+            removeClippedSubviews
+          />
+        )}
+
+        {/* Back button — rendered after FlatList so it paints above it */}
+        <TouchableOpacity
+          onPress={closePost}
+          style={[styles.backBtn, { top: backBtnTop }]}
+          activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Back to grid"
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="chevron-back" size={20} color="#F0F4F8" />
+        </TouchableOpacity>
+
+        {/* Sheets sit above everything */}
+        <CommentSheet
+          visible={commentConfig !== null}
+          onClose={closeCommentSheet}
+          postId={commentConfig?.postId ?? null}
+          onCommentPosted={commentConfig?.onCommentPosted}
+        />
+        <ShareSheet
+          visible={shareOpen}
+          onClose={closeShareSheet}
+        />
+      </View>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════════
+  // LAYER 1: Thumbnail grid
+  // Default view — 3 columns, square cells, FocalImage cover-fit.
+  // ══════════════════════════════════════════════════════════════════════════════
+
+  const renderGridItem = ({ item, index }: { item: FeedPost; index: number }) => (
+    <TouchableOpacity
+      onPress={() => openPost(index)}
+      activeOpacity={0.85}
+      style={styles.cell}
+      accessibilityRole="button"
+      accessibilityLabel={item.caption ?? `Nursery post ${index + 1}`}
+    >
+      <FocalImage
+        source={resolveMediaKey(item.mediaKey, item.mediaUrl)}
+        style={styles.cellImage}
+        focusX={item.cropFocusX}
+        focusY={item.cropFocusY}
+      />
+    </TouchableOpacity>
+  );
+
+  return (
+    <View style={containerStyle} onLayout={handleContainerLayout}>
+      <FlatList
+        ref={gridListRef}
+        data={posts}
+        renderItem={renderGridItem}
+        keyExtractor={(item) => item.id}
+        numColumns={NUM_COLS}
+        // 2 px gap between columns; rows are separated by marginBottom on each cell
+        columnWrapperStyle={styles.columnWrapper}
+        showsVerticalScrollIndicator={false}
+        // Track scroll offset for restoration when returning from pager
+        onScroll={(e) => {
+          gridScrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={16}
+        // Start content below the tab bar on web; native handles this via insets
+        contentContainerStyle={
+          Platform.OS === 'web'
+            ? { paddingTop: 0, paddingBottom: 84 }
+            : { paddingBottom: insets.bottom + 80 }
+        }
       />
     </View>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
   fill:    { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center' },
-  errorText: { fontSize: 14, textAlign: 'center' },
+  errorText: { fontSize: 14, textAlign: 'center', fontFamily: 'Inter_400Regular' },
 
+  // ── Empty state ────────────────────────────────────────────────────────────
   emptyContent: {
-    alignItems: 'center',
-    gap: 16,
+    alignItems:      'center',
+    gap:             16,
     paddingHorizontal: 40,
   },
   emptyTitle: {
@@ -239,9 +339,36 @@ const styles = StyleSheet.create({
     textAlign:     'center',
   },
   emptyBody: {
-    fontFamily:  'Inter_400Regular',
-    fontSize:    14,
-    lineHeight:  21,
-    textAlign:   'center',
+    fontFamily: 'Inter_400Regular',
+    fontSize:   14,
+    lineHeight: 21,
+    textAlign:  'center',
+  },
+
+  // ── Grid ───────────────────────────────────────────────────────────────────
+  columnWrapper: {
+    gap: CELL_GAP,
+  },
+  cell: {
+    width:        THUMBNAIL_SIZE,
+    height:       THUMBNAIL_SIZE,
+    marginBottom: CELL_GAP,
+    overflow:     'hidden',
+  },
+  cellImage: {
+    width:  THUMBNAIL_SIZE,
+    height: THUMBNAIL_SIZE,
+  },
+
+  // ── Pager back button ──────────────────────────────────────────────────────
+  backBtn: {
+    position:         'absolute',
+    left:             14,
+    width:            36,
+    height:           36,
+    borderRadius:     18,
+    backgroundColor:  'rgba(6,11,16,0.55)',
+    alignItems:       'center',
+    justifyContent:   'center',
   },
 });
