@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useGetFeed } from '@workspace/api-client-react';
+import { getPostSuccessSignalTime, clearPostSuccessSignal } from '@/utils/feedScrollSignal';
 import type { FeedPost } from '@workspace/api-client-react';
 import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
 import CommentSheet from '@/components/CommentSheet';
@@ -34,7 +35,7 @@ import ShareSheet from '@/components/ShareSheet';
 
 export default function HomeScreen() {
   const colors = useColors();
-  const { data, isLoading, isError } = useGetFeed();
+  const { data, dataUpdatedAt, isLoading, isError } = useGetFeed();
   const posts = data?.posts ?? [];
 
   // ── Window dimensions — used as the web fallback for page height ──────────
@@ -76,6 +77,22 @@ export default function HomeScreen() {
 
   // ── FlatList refs ─────────────────────────────────────────────────────────
   const flatListRef = useRef<FlatList<FeedPost>>(null);
+
+  // ── Post-success scroll-to-top ────────────────────────────────────────────
+  // When the Add flow posts successfully it stamps a signal timestamp.
+  // We watch dataUpdatedAt: once it exceeds the stamp the refetch has landed
+  // (the new post is at index 0), and only then do we scroll and clear the
+  // signal — avoiding any flash of the old top post before new data arrives.
+  // Normal tab switches and app reopens never set the signal, so they are
+  // completely unaffected.
+  useEffect(() => {
+    const signalTime = getPostSuccessSignalTime();
+    if (signalTime === 0) return;           // no pending signal
+    if (dataUpdatedAt <= signalTime) return; // refetch hasn't landed yet
+    // Fresh feed data is here — scroll the pager to the new post at index 0.
+    clearPostSuccessSignal();
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+  }, [dataUpdatedAt]);
 
   // ── Render helpers ────────────────────────────────────────────────────────
 

@@ -43,6 +43,7 @@ import {
 import type { Pet } from '@workspace/api-client-react';
 import { compressImage } from '@/utils/compressImage';
 import CropFramer from '@/components/CropFramer';
+import { signalPostSuccess } from '@/utils/feedScrollSignal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -186,7 +187,9 @@ export default function AddScreen() {
         },
       });
 
-      // 5. Refresh feed and navigate home.
+      // 5. Refresh feed and navigate home, scrolling the pager to the new post.
+      // Signal BEFORE invalidation so the timestamp always precedes the refetch.
+      signalPostSuccess();
       queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
 
       // Reset form.
