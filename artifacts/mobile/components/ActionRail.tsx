@@ -1,9 +1,12 @@
 /**
  * ActionRail — vertical right-side interaction rail.
  *
- * Contains exactly four actions in this order:
- *   1. Boop   — instant & optimistic; background POST fires after local update
- *   2. Treat  — server-confirmed; gold state and count update only on success;
+ * Counts and viewer-state are passed as props (not read from AppContext) so
+ * each FeedPage page can be fully isolated.
+ *
+ * Four actions in order:
+ *   1. Boop   — instant & optimistic; POST fires in background
+ *   2. Treat  — server-confirmed; gold state/count only update on success;
  *               transient countdown on success, bone-shake on 429, nudge on 403
  *   3. Comment
  *   4. Share
@@ -23,10 +26,9 @@ import {
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
-import { useApp } from '@/context/AppContext';
 import { useBoopPost, useTreatPost } from '@workspace/api-client-react';
 
-// ─── Swappable Icon Components ───────────────────────────────────────────────
+// ─── Icon helpers ─────────────────────────────────────────────────────────────
 
 function BoopIcon({ color, size }: { color: string; size: number }) {
   return <MaterialCommunityIcons name="gesture-tap" size={size} color={color} />;
@@ -118,33 +120,40 @@ function ActionItem({
 // ─── ActionRail ───────────────────────────────────────────────────────────────
 
 interface ActionRailProps {
-  /** Post ID for boop/treat mutations. */
   postId: string;
+  // Per-page counts and viewer state (controlled by FeedPage)
+  boopCount: number;
+  treatCount: number;
+  commentCount: number;
+  viewerHasBooped: boolean;
+  viewerHasTreated: boolean;
+  // State-update callbacks — FeedPage applies these to its own useState
+  onBoopOptimistic: () => void;
+  onTreatSuccess: (newTreatCount: number, treatsRemaining: number) => void;
+  // UI callbacks
   onCommentPress: () => void;
   onSharePress: () => void;
-  /** Called after boop state updates (optimistic) — use to spawn a pop. */
+  /** Called after boop optimistic update — use to spawn a pop. */
   onBoopFired?: () => void;
-  /** Called after a treat is server-confirmed — use to spawn a pop. */
+  /** Called after treat server-confirmed success — use to spawn a pop. */
   onTreatFired?: () => void;
 }
 
 export default function ActionRail({
   postId,
+  boopCount,
+  treatCount,
+  commentCount,
+  viewerHasBooped,
+  viewerHasTreated,
+  onBoopOptimistic,
+  onTreatSuccess,
   onCommentPress,
   onSharePress,
   onBoopFired,
   onTreatFired,
 }: ActionRailProps) {
   const colors = useColors();
-  const {
-    boop,
-    onTreatSuccess,
-    boopCount,
-    treatCount,
-    serverCommentCount,
-    viewerHasBooped,
-    viewerHasTreated,
-  } = useApp();
 
   // ── Boop mutation (fire-and-forget after optimistic update) ────────────────
   const { mutate: doBoopPost } = useBoopPost();
@@ -156,7 +165,7 @@ export default function ActionRail({
   // Bone-shake animation for 429
   const treatShakeX = useRef(new Animated.Value(0)).current;
 
-  // Transient message (countdown, limit, self-treat)
+  // Transient message (countdown, limit warning, self-treat nudge)
   const transientOpacity = useRef(new Animated.Value(0)).current;
   const [transientMsg, setTransientMsg] = useState('');
 
@@ -190,8 +199,7 @@ export default function ActionRail({
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       navigator.vibrate(10);
     }
-    // Optimistic update then background request
-    boop();
+    onBoopOptimistic();
     onBoopFired?.();
     doBoopPost({ id: postId });
   };
@@ -199,7 +207,6 @@ export default function ActionRail({
   const handleTreatPress = () => {
     if (isTreatPending.current) return;
 
-    // Haptics fire immediately for tactile feedback regardless of outcome
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       navigator.vibrate([10, 40, 10]);
     }
@@ -214,7 +221,6 @@ export default function ActionRail({
       {
         onSuccess: (data) => {
           isTreatPending.current = false;
-          // Gold state + count update only on confirmed success
           onTreatSuccess(data.treatCount, data.treatsRemainingToday);
           onTreatFired?.();
           const remaining = data.treatsRemainingToday;
@@ -250,7 +256,7 @@ export default function ActionRail({
 
       {/* 2. Treat — wrapped for bone-shake and transient message */}
       <View style={styles.treatSection}>
-        {/* Transient message: countdown, limit warning, or self-treat nudge */}
+        {/* Transient label floats to the left — positioned well clear of the rail column */}
         <Animated.Text
           style={[
             styles.transientLabel,
@@ -258,7 +264,7 @@ export default function ActionRail({
           ]}
           numberOfLines={2}
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          pointerEvents={"none" as any}
+          pointerEvents={'none' as any}
         >
           {transientMsg}
         </Animated.Text>
@@ -282,7 +288,7 @@ export default function ActionRail({
         renderIcon={(color) => (
           <Ionicons name="chatbubble-outline" size={20} color={color} />
         )}
-        count={serverCommentCount}
+        count={commentCount}
         onPress={onCommentPress}
         testID="comment-button"
       />
@@ -315,12 +321,12 @@ const styles = StyleSheet.create({
     gap: 22,
     paddingVertical: 4,
   },
-  // Treat section: relative container so the transient label can be absolute
   treatSection: {
     alignItems: 'center',
     position: 'relative',
   },
-  // Transient message: floats to the left of the treat icon, never shifts layout
+  // Transient label: right: 50 puts its right edge 50px from the treat icon's
+  // right edge; width: 120 extends it leftward — safely left of the rail column.
   transientLabel: {
     position: 'absolute',
     right: 50,

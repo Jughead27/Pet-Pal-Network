@@ -9,13 +9,11 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
-import { useApp } from '@/context/AppContext';
 
 interface Props {
   visible: boolean;
@@ -32,7 +30,7 @@ export default function ShareSheet({ visible, onClose }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
-  const handleOption = (id: string) => {
+  const handleOption = (_id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onClose();
   };

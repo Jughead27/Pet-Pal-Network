@@ -1,6 +1,6 @@
 ---
 name: Write Reactions Architecture
-description: Boop/treat/comment POST endpoints, viewer flags seeded from server, daily treat limit pattern, orval codegen duplicate-export gotcha.
+description: Boop/treat/comment POST endpoints, per-page state isolation in paged feed, pop anchoring, daily treat limit, orval codegen duplicate-export gotcha.
 ---
 
 ## Viewer flags in SQL
@@ -13,34 +13,29 @@ Works correctly with LEFT JOINs: NULL rows produce false via coalesce.
 
 ## Daily treat limit
 Config table key: `daily_treat_limit` (text). Server defaults to 5 if row is absent.
-Limit check + insert done in a single `db.transaction`. Self-treat (403) checked BEFORE the transaction (it's a permanent condition).
+Limit check + insert done in a single `db.transaction`. Self-treat (403) checked BEFORE the transaction.
 Error shapes: `{ error: "self_treat" }` 403, `{ error: "treat_limit_reached" }` 429.
 
-## Feed response shape changed
-GET /feed now returns `{ posts: FeedPost[], viewer: { treatsRemainingToday: number } }` (was `FeedPost[]`).
-index.tsx seeds AppContext via `data.posts[0]` and `data.viewer.treatsRemainingToday`.
+## Feed response shape
+GET /feed returns `{ posts: FeedPost[], viewer: { treatsRemainingToday: number } }`.
 
-## AppContext changes
-Removed: `comments[]`, `addComment`, `hasBoopedOnce`, `hasTreatedOnce`, `treat()`.
-Added: `viewerHasBooped`, `viewerHasTreated`, `treatsRemainingToday`, `onTreatSuccess(count, remaining)`, `onCommentPosted()`.
-`initFromServer` now takes 6 args: boops, treats, commentCount, viewerHasBooped, viewerHasTreated, treatsRemainingToday.
+## AppContext — stripped to isInPack/togglePack only
+Per-post reaction state (boopCount, treatCount, commentCount, viewerHasBooped, viewerHasTreated) lives in each FeedPage component, not in AppContext. AppContext now only holds `isInPack` / `togglePack`.
 
-## ActionRail treat flow
-Treat is server-confirmed. Mutation `useTreatPost({ id: postId })`. Gold state/count only update via `onTreatSuccess` in onSuccess.
-Bone shake uses `Animated.timing` sequence on `treatShakeX`. Transient message uses `Animated.Value` opacity sequence.
-`isTreatPending` ref guards against duplicate rapid taps.
-`onTreatFired` (spawns Yum! pop) called ONLY from mutation onSuccess.
+## Paged feed architecture (FeedPage + index.tsx)
+- `index.tsx`: FlatList with `pagingEnabled`, `snapToInterval={pageHeight}`, `decelerationRate="fast"`, `windowSize={3}`. Page height measured via `onLayout` on the wrapper View.
+- `FeedPage.tsx`: one full-screen page per post. Manages its own boop/treat/comment counts, viewerHasBooped/viewerHasTreated, chrome toggle, double-tap, and pop animations. Initialized from `post.boopCount` etc. — not re-initialized on prop changes.
+- CommentSheet and ShareSheet are lifted to index.tsx (outside FlatList) with `scrollEnabled={commentConfig === null && !shareOpen}` on the FlatList for web compat.
+- CommentSheet receives `onCommentPosted?: () => void` prop (instead of AppContext call); each FeedPage provides its own closure.
 
-## Comment flow
-`useCreateComment({ id, data: { text } })`. On success: `queryClient.setQueryData(getGetPostCommentsQueryKey(postId), ...)` appends returned `PostComment`. Then `onCommentPosted()` bumps `serverCommentCount` in AppContext.
+## ActionRail — props-based counts
+Counts and viewer flags received as props from FeedPage (not from AppContext). Callbacks: `onBoopOptimistic()` and `onTreatSuccess(newCount, remaining)`. Double-tap boop in FeedPage and button boop in ActionRail are independent mutation instances (both call `useBoopPost`) — fine since boops are unlimited.
+
+## Pop text anchoring
+Pops spawn at `right: 175` — left of the rail column (right: 14–54) AND left of the treat countdown transient label (right: 50–170). Bottom offsets: BOOP at `bottomOffset + 210`, TREAT at `bottomOffset + 143` (align with icon heights).
 
 ## TypeScript cast for req.auth
-Express `Request` type doesn't overlap `{ auth: ... }`. Must double-cast:
-```ts
-const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
-```
+Must double-cast: `(req as unknown as { auth: { userId: string } }).auth.userId`
 
 ## Orval codegen / index.ts gotcha
-Running `pnpm --filter @workspace/api-spec run codegen` APPENDS export lines to `lib/api-client-react/src/index.ts` if they don't exist yet — resulting in duplicates if the file already had them. Metro fails with "Unable to resolve" when duplicates are present. Fix: manually restore index.ts to the single set of exports after codegen if duplicates appear.
-
-**Why:** Orval's `input.override.mutator` uses an `indexFiles` option that checks for the exports and appends if missing — but with single vs double quotes it doesn't detect them as duplicates.
+Running codegen APPENDS export lines to `lib/api-client-react/src/index.ts` if not detected (single vs double quotes bypass its dupe check) → duplicates → Metro "Unable to resolve". Fix: manually restore index.ts to a single set of exports after codegen.

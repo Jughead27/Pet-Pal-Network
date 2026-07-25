@@ -4,7 +4,7 @@
  * Comments are fetched via useGetPostComments(postId).
  * New comments POST through useCreateComment; on success the returned
  * PostComment is appended to the query cache for instant display, and
- * AppContext.onCommentPosted() bumps the ActionRail count.
+ * onCommentPosted() is called so the parent page can bump its local count.
  */
 
 import React, { useState, useRef } from 'react';
@@ -24,7 +24,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
-import { useApp } from '@/context/AppContext';
 import {
   useGetPostComments,
   useCreateComment,
@@ -36,6 +35,8 @@ interface Props {
   visible: boolean;
   onClose: () => void;
   postId: string | null;
+  /** Called after a comment is successfully posted — parent updates its count. */
+  onCommentPosted?: () => void;
 }
 
 // ─── Row component ────────────────────────────────────────────────────────────
@@ -87,10 +88,9 @@ function CommentRow({
 
 // ─── CommentSheet ─────────────────────────────────────────────────────────────
 
-export default function CommentSheet({ visible, onClose, postId }: Props) {
+export default function CommentSheet({ visible, onClose, postId, onCommentPosted }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { onCommentPosted } = useApp();
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
   const inputRef = useRef<TextInput>(null);
@@ -119,8 +119,8 @@ export default function CommentSheet({ visible, onClose, postId }: Props) {
             getGetPostCommentsQueryKey(postId),
             (old) => [...(old ?? []), newComment],
           );
-          // Bump the comment count shown in ActionRail
-          onCommentPosted();
+          // Notify parent page to bump its comment count
+          onCommentPosted?.();
         },
       },
     );
@@ -159,6 +159,8 @@ export default function CommentSheet({ visible, onClose, postId }: Props) {
             )}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            // Prevent this inner scroll from ever bubbling to the pager
+            nestedScrollEnabled
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <Feather name="message-circle" size={32} color={colors.mutedForeground} />
