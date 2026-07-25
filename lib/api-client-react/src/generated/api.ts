@@ -21,6 +21,7 @@ import type {
 
 import type {
   BoopResult,
+  BreedListResponse,
   CommentBody,
   CreatePetBody,
   CreatePostBody,
@@ -34,6 +35,7 @@ import type {
   PostCreated,
   PresignBody,
   PresignResult,
+  SpeciesListResponse,
   TreatResult
 } from './api.schemas';
 
@@ -208,6 +210,162 @@ export function useGetFeed<TData = Awaited<ReturnType<typeof getFeed>>, TError =
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetFeedQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSpeciesUrl = () => {
+
+
+
+
+  return `/api/species`
+}
+
+/**
+ * Returns all species ordered by sort_order, each with a breed count.
+ * @summary List all species
+ */
+export const getSpecies = async ( options?: RequestInit): Promise<SpeciesListResponse> => {
+
+  return customFetch<SpeciesListResponse>(getGetSpeciesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSpeciesQueryKey = () => {
+    return [
+    `/api/species`
+    ] as const;
+    }
+
+
+export const getGetSpeciesQueryOptions = <TData = Awaited<ReturnType<typeof getSpecies>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSpecies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSpeciesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSpecies>>> = ({ signal }) => getSpecies({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSpecies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSpeciesQueryResult = NonNullable<Awaited<ReturnType<typeof getSpecies>>>
+export type GetSpeciesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List all species
+ */
+
+export function useGetSpecies<TData = Awaited<ReturnType<typeof getSpecies>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSpecies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSpeciesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSpeciesByIdBreedsUrl = (id: string,) => {
+
+
+
+
+  return `/api/species/${id}/breeds`
+}
+
+/**
+ * Returns all breeds for the given species, ordered alphabetically.
+ * @summary List breeds for a species
+ */
+export const getSpeciesByIdBreeds = async (id: string, options?: RequestInit): Promise<BreedListResponse> => {
+
+  return customFetch<BreedListResponse>(getGetSpeciesByIdBreedsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSpeciesByIdBreedsQueryKey = (id: string,) => {
+    return [
+    `/api/species/${id}/breeds`
+    ] as const;
+    }
+
+
+export const getGetSpeciesByIdBreedsQueryOptions = <TData = Awaited<ReturnType<typeof getSpeciesByIdBreeds>>, TError = ErrorType<ErrorResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSpeciesByIdBreeds>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSpeciesByIdBreedsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSpeciesByIdBreeds>>> = ({ signal }) => getSpeciesByIdBreeds(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSpeciesByIdBreeds>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSpeciesByIdBreedsQueryResult = NonNullable<Awaited<ReturnType<typeof getSpeciesByIdBreeds>>>
+export type GetSpeciesByIdBreedsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary List breeds for a species
+ */
+
+export function useGetSpeciesByIdBreeds<TData = Awaited<ReturnType<typeof getSpeciesByIdBreeds>>, TError = ErrorType<ErrorResponse>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSpeciesByIdBreeds>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSpeciesByIdBreedsQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

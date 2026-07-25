@@ -6,6 +6,8 @@ import {
   boopsTable,
   treatsTable,
   commentsTable,
+  speciesTable,
+  breedsTable,
 } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
 import { CreatePetBody } from "@workspace/api-zod";
@@ -112,11 +114,56 @@ router.post("/pets", async (req, res) => {
     return;
   }
 
-  const { name, species, breed, bio } = parsed.data;
+  const { name, species: speciesText, breed: breedText, bio, speciesId, breedId } = parsed.data;
+
+  // At least one of speciesId or free-text species must be present.
+  if (!speciesId && !speciesText) {
+    res.status(400).json({ error: "species or speciesId is required" });
+    return;
+  }
+
+  // Resolve authoritative text values from FKs (server is the source of truth
+  // for names when FKs are provided, preventing client-side name drift).
+  let resolvedSpecies = speciesText ?? "";
+  let resolvedBreed: string | null = breedText ?? null;
+
+  if (speciesId) {
+    const [speciesRow] = await db
+      .select()
+      .from(speciesTable)
+      .where(eq(speciesTable.id, speciesId))
+      .limit(1);
+    if (!speciesRow) {
+      res.status(400).json({ error: "Invalid speciesId" });
+      return;
+    }
+    resolvedSpecies = speciesRow.name;
+  }
+
+  if (breedId) {
+    const [breedRow] = await db
+      .select()
+      .from(breedsTable)
+      .where(eq(breedsTable.id, breedId))
+      .limit(1);
+    if (!breedRow) {
+      res.status(400).json({ error: "Invalid breedId" });
+      return;
+    }
+    resolvedBreed = breedRow.name;
+  }
 
   const [pet] = await db
     .insert(petsTable)
-    .values({ ownerId: userId, name, species, breed: breed ?? null, bio: bio ?? null })
+    .values({
+      ownerId:   userId,
+      name,
+      species:   resolvedSpecies,
+      breed:     resolvedBreed,
+      speciesId: speciesId ?? null,
+      breedId:   breedId   ?? null,
+      bio:       bio       ?? null,
+    })
     .returning();
 
   res.status(201).json({
@@ -124,8 +171,10 @@ router.post("/pets", async (req, res) => {
     ownerId:   pet.ownerId,
     name:      pet.name,
     species:   pet.species,
-    breed:     pet.breed ?? null,
-    bio:       pet.bio ?? null,
+    breed:     pet.breed     ?? null,
+    speciesId: pet.speciesId ?? null,
+    breedId:   pet.breedId   ?? null,
+    bio:       pet.bio       ?? null,
     createdAt: pet.createdAt,
   });
 });

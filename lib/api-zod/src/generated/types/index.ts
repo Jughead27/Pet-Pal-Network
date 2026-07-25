@@ -7,6 +7,8 @@
  */
 
 export * from './boopResult';
+export * from './breedItem';
+export * from './breedListResponse';
 export * from './commentBody';
 export * from './createPetBody';
 export * from './createPostBody';
@@ -23,5 +25,7 @@ export * from './postCreated';
 export * from './presignBody';
 export * from './presignBodyContentType';
 export * from './presignResult';
+export * from './speciesItem';
+export * from './speciesListResponse';
 export * from './treatResult';
 export * from './viewerInfo';

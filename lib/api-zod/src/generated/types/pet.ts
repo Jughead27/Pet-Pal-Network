@@ -15,6 +15,8 @@ export interface Pet {
   name: string;
   species: string;
   breed?: string | null;
+  speciesId: string | null;
+  breedId: string | null;
   bio?: string | null;
   createdAt: Date;
 }

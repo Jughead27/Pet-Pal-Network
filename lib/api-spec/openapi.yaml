@@ -18,6 +18,8 @@ tags:
     description: Post operations
   - name: uploads
     description: Upload operations
+  - name: species
+    description: Species and breed catalogue
 paths:
   /healthz:
     get:
@@ -50,6 +52,62 @@ paths:
                 $ref: "#/components/schemas/FeedResponse"
         "401":
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /species:
+    get:
+      operationId: getSpecies
+      tags: [species]
+      summary: List all species
+      description: Returns all species ordered by sort_order, each with a breed count.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpeciesListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /species/{id}/breeds:
+    get:
+      operationId: getSpeciesByIdBreeds
+      tags: [species]
+      summary: List breeds for a species
+      description: Returns all breeds for the given species, ordered alphabetically.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BreedListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Species not found
           content:
             application/json:
               schema:
@@ -574,6 +632,12 @@ components:
         breed:
           type: string
           nullable: true
+        speciesId:
+          type: string
+          nullable: true
+        breedId:
+          type: string
+          nullable: true
         bio:
           type: string
           nullable: true
@@ -585,7 +649,62 @@ components:
         - ownerId
         - name
         - species
+        - speciesId
+        - breedId
         - createdAt
+
+    SpeciesItem:
+      type: object
+      description: A species entry with breed count
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        sortOrder:
+          type: integer
+        breedCount:
+          type: integer
+      required:
+        - id
+        - name
+        - sortOrder
+        - breedCount
+
+    SpeciesListResponse:
+      type: object
+      properties:
+        species:
+          type: array
+          items:
+            $ref: "#/components/schemas/SpeciesItem"
+      required:
+        - species
+
+    BreedItem:
+      type: object
+      description: A breed entry
+      properties:
+        id:
+          type: string
+        speciesId:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - speciesId
+        - name
+
+    BreedListResponse:
+      type: object
+      properties:
+        breeds:
+          type: array
+          items:
+            $ref: "#/components/schemas/BreedItem"
+      required:
+        - breeds
 
     CreatePetBody:
       type: object
@@ -599,15 +718,29 @@ components:
           type: string
           minLength: 1
           maxLength: 50
+          description: >
+            Free-text species name. Required when speciesId is not provided.
+            When speciesId is provided the server derives this from the FK and
+            the client-supplied value is ignored.
+        speciesId:
+          type: string
+          nullable: true
+          description: FK to the species catalogue. When set the server mirrors the species name into the legacy text column.
         breed:
           type: string
           maxLength: 100
+          description: >
+            Free-text breed/kind. Used for the "Not listed" path.
+            When breedId is provided the server derives this from the FK.
+        breedId:
+          type: string
+          nullable: true
+          description: FK to the breeds catalogue. When set the server mirrors the breed name into the legacy text column.
         bio:
           type: string
           maxLength: 280
       required:
         - name
-        - species
 
     MyPetsResponse:
       type: object

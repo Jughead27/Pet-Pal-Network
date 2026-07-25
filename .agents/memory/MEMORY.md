@@ -3,3 +3,4 @@
 - [Write Reactions Architecture](write-reactions-architecture.md) — boop/treat/comment POST endpoints, viewer flags in feed, daily treat limit pattern.
 - [Orval index.ts append + Expo version pinning](orval-index-append.md) — orval appends duplicate exports after every codegen; fix both index files. Expo packages must be pinned to SDK 54 expected version, not latest.
 - [Crop Focus / Focal Point Architecture](crop-focus-architecture.md) — cropFocusX/Y on posts; FocalImage component; CropFramer WYSIWYG step; post detail route at app/post/[id].tsx.
+- [Species + Breeds Integration](species-breeds-integration.md) — dist rebuild rule, api-zod index constraint, enabled query pattern, seed script, "Not listed" path.

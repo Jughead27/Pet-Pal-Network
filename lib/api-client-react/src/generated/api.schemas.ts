@@ -103,8 +103,37 @@ export interface Pet {
   name: string;
   species: string;
   breed?: string | null;
+  speciesId: string | null;
+  breedId: string | null;
   bio?: string | null;
   createdAt: string;
+}
+
+/**
+ * A species entry with breed count
+ */
+export interface SpeciesItem {
+  id: string;
+  name: string;
+  sortOrder: number;
+  breedCount: number;
+}
+
+export interface SpeciesListResponse {
+  species: SpeciesItem[];
+}
+
+/**
+ * A breed entry
+ */
+export interface BreedItem {
+  id: string;
+  speciesId: string;
+  name: string;
+}
+
+export interface BreedListResponse {
+  breeds: BreedItem[];
 }
 
 /**
@@ -117,12 +146,20 @@ export interface CreatePetBody {
      */
   name: string;
   /**
+     * Free-text species name. Required when speciesId is not provided. When speciesId is provided the server derives this from the FK and the client-supplied value is ignored.
      * @minLength 1
      * @maxLength 50
      */
-  species: string;
-  /** @maxLength 100 */
+  species?: string;
+  /** FK to the species catalogue. When set the server mirrors the species name into the legacy text column. */
+  speciesId?: string | null;
+  /**
+     * Free-text breed/kind. Used for the "Not listed" path. When breedId is provided the server derives this from the FK.
+     * @maxLength 100
+     */
   breed?: string;
+  /** FK to the breeds catalogue. When set the server mirrors the breed name into the legacy text column. */
+  breedId?: string | null;
   /** @maxLength 280 */
   bio?: string;
 }

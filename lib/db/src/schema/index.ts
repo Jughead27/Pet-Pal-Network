@@ -1,4 +1,5 @@
 export * from "./users";
+export * from "./species";
 export * from "./pets";
 export * from "./posts";
 export * from "./comments";

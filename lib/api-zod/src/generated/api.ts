@@ -50,6 +50,37 @@ export const GetFeedResponse = zod.object({
 
 
 /**
+ * Returns all species ordered by sort_order, each with a breed count.
+ * @summary List all species
+ */
+export const GetSpeciesResponse = zod.object({
+  "species": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "sortOrder": zod.number(),
+  "breedCount": zod.number()
+}).describe('A species entry with breed count'))
+})
+
+
+/**
+ * Returns all breeds for the given species, ordered alphabetically.
+ * @summary List breeds for a species
+ */
+export const GetSpeciesByIdBreedsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetSpeciesByIdBreedsResponse = zod.object({
+  "breeds": zod.array(zod.object({
+  "id": zod.string(),
+  "speciesId": zod.string(),
+  "name": zod.string()
+}).describe('A breed entry'))
+})
+
+
+/**
  * Returns a pet profile with its posts and reaction counts
  * @summary Get pet profile
  */
@@ -182,8 +213,10 @@ export const createPetBodyBioMax = 280;
 
 export const CreatePetBody = zod.object({
   "name": zod.string().min(1).max(createPetBodyNameMax),
-  "species": zod.string().min(1).max(createPetBodySpeciesMax),
-  "breed": zod.string().max(createPetBodyBreedMax).optional(),
+  "species": zod.string().min(1).max(createPetBodySpeciesMax).optional().describe('Free-text species name. Required when speciesId is not provided. When speciesId is provided the server derives this from the FK and the client-supplied value is ignored.\n'),
+  "speciesId": zod.string().nullish().describe('FK to the species catalogue. When set the server mirrors the species name into the legacy text column.'),
+  "breed": zod.string().max(createPetBodyBreedMax).optional().describe('Free-text breed\/kind. Used for the \"Not listed\" path. When breedId is provided the server derives this from the FK.\n'),
+  "breedId": zod.string().nullish().describe('FK to the breeds catalogue. When set the server mirrors the breed name into the legacy text column.'),
   "bio": zod.string().max(createPetBodyBioMax).optional()
 }).describe('Request body for creating a pet')
 
@@ -193,6 +226,8 @@ export const CreatePetResponse = zod.object({
   "name": zod.string(),
   "species": zod.string(),
   "breed": zod.string().nullish(),
+  "speciesId": zod.string().nullable(),
+  "breedId": zod.string().nullable(),
   "bio": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }).describe('A pet owned by a user')
@@ -209,6 +244,8 @@ export const GetMyPetsResponse = zod.object({
   "name": zod.string(),
   "species": zod.string(),
   "breed": zod.string().nullish(),
+  "speciesId": zod.string().nullable(),
+  "breedId": zod.string().nullable(),
   "bio": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 }).describe('A pet owned by a user'))
