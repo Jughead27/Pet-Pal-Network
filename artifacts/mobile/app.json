@@ -28,7 +28,15 @@
         }
       ],
       "expo-font",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Fish Book needs camera access to take photos of your pet.",
+          "microphonePermission": false,
+          "photosPermission": "Fish Book needs access to your photo library to pick photos of your pet."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

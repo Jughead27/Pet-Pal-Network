@@ -82,7 +82,32 @@ export default function AddScreen() {
   const { mutateAsync: presignUpload } = usePresignUpload();
   const { mutateAsync: createPost    } = useCreatePost();
 
-  // ── Image picking ─────────────────────────────────────────────────────────
+  // ── Image pipeline (shared by both sources) ───────────────────────────────
+  // Compress → store natural size → advance to framing step.
+  // Called with the raw asset from either launchImageLibraryAsync or
+  // launchCameraAsync — the rest of the flow is identical.
+  const processPickedAsset = useCallback(async (asset: ImagePicker.ImagePickerAsset) => {
+    setCompressedUri(null);
+    setStep('compressing');
+    try {
+      const compressed = await compressImage(asset.uri, asset.width, asset.height);
+      setCompressedUri(compressed.uri);
+      // Store compressed pixel dimensions (or original when not returned).
+      naturalSize.current = {
+        width:  (compressed as { width?: number }).width  ?? asset.width,
+        height: (compressed as { height?: number }).height ?? asset.height,
+      };
+      // Reset focal point to center for each new image.
+      setCropFocusX(0.5);
+      setCropFocusY(0.5);
+      setStep('framing');
+    } catch {
+      setError('Failed to process image. Please try another photo.');
+      setStep('idle');
+    }
+  }, []);
+
+  // ── Image picking — library ────────────────────────────────────────────────
   const pickImage = useCallback(async () => {
     setError(null);
 
@@ -104,33 +129,49 @@ export default function AddScreen() {
     if (result.canceled || !result.assets?.[0]) return;
 
     const asset = result.assets[0];
-
-    // Guard: only JPEG, PNG, WebP
-    const mime = asset.mimeType ?? '';
+    const mime  = asset.mimeType ?? '';
     if (mime && !['image/jpeg', 'image/png', 'image/webp'].includes(mime)) {
       setError('Only JPEG, PNG, and WebP images are supported.');
       return;
     }
 
-    setCompressedUri(null);
-    setStep('compressing');
-    try {
-      const compressed = await compressImage(asset.uri, asset.width, asset.height);
-      setCompressedUri(compressed.uri);
-      // Store the compressed pixel dimensions (or original if not returned).
-      naturalSize.current = {
-        width:  (compressed as { width?: number }).width  ?? asset.width,
-        height: (compressed as { height?: number }).height ?? asset.height,
-      };
-      // Reset focal point to center for each new image.
-      setCropFocusX(0.5);
-      setCropFocusY(0.5);
-      setStep('framing');
-    } catch {
-      setError('Failed to process image. Please try another photo.');
-      setStep('idle');
+    await processPickedAsset(asset);
+  }, [processPickedAsset]);
+
+  // ── Image capture — camera (native only) ──────────────────────────────────
+  // Web camera capture is unreliable across browsers. On web we only offer the
+  // library picker (the file input may surface the camera natively for free).
+  const captureImage = useCallback(async () => {
+    setError(null);
+
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      setError(
+        'Camera access is turned off for Fish Book. To take a photo, go to ' +
+        'Settings → Fish Book → Camera and enable it. You can still choose a ' +
+        'photo from your library below.',
+      );
+      return;
     }
-  }, []);
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false,
+      quality: 1,
+    });
+
+    if (result.canceled || !result.assets?.[0]) return;
+
+    // Camera produces JPEG on iOS; guard anyway for safety.
+    const asset = result.assets[0];
+    const mime  = asset.mimeType ?? '';
+    if (mime && !['image/jpeg', 'image/png', 'image/webp'].includes(mime)) {
+      setError('Only JPEG, PNG, and WebP images are supported.');
+      return;
+    }
+
+    await processPickedAsset(asset);
+  }, [processPickedAsset]);
 
   // ── Framing callbacks ─────────────────────────────────────────────────────
   const handleFrameConfirm = useCallback((fx: number, fy: number) => {
@@ -304,7 +345,13 @@ export default function AddScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.previewBtn, { backgroundColor: 'rgba(6,11,16,0.6)' }]}
-                onPress={pickImage}
+                onPress={() => {
+                  // Return to source selection — lets the user pick from
+                  // library or re-shoot rather than hardcoding library.
+                  setCompressedUri(null);
+                  setError(null);
+                  setStep('idle');
+                }}
                 accessibilityRole="button"
                 accessibilityLabel="Change photo"
               >
@@ -314,24 +361,39 @@ export default function AddScreen() {
             </View>
           </View>
         ) : (
-          <Pressable
-            style={({ pressed }) => [
-              s.imagePlaceholder,
-              { backgroundColor: colors.card, borderColor: colors.border },
-              pressed && s.pressed,
-            ]}
-            onPress={pickImage}
-            accessibilityRole="button"
-            accessibilityLabel="Pick a photo"
-          >
-            <Feather name="image" size={32} color={colors.mutedForeground} />
-            <Text style={[s.pickPhotoText, { color: colors.mutedForeground }]}>
-              Tap to pick a photo
-            </Text>
-            <Text style={[s.pickPhotoHint, { color: colors.mutedForeground }]}>
-              JPEG · PNG · WebP · max 10 MB
-            </Text>
-          </Pressable>
+          // ── Source selection ────────────────────────────────────────────
+          // Native: camera capture + library. Web: library only (browser's
+          // file input may surface the camera natively for free; no custom
+          // camera UI needed or built here).
+          <View style={[s.sourceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            {Platform.OS !== 'web' && (
+              <>
+                <TouchableOpacity
+                  style={s.sourceRow}
+                  onPress={captureImage}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="Take a photo"
+                >
+                  <Feather name="camera" size={22} color={colors.foreground} />
+                  <Text style={[s.sourceRowText, { color: colors.foreground }]}>Take a photo</Text>
+                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                </TouchableOpacity>
+                <View style={[s.sourceDivider, { backgroundColor: colors.border }]} />
+              </>
+            )}
+            <TouchableOpacity
+              style={s.sourceRow}
+              onPress={pickImage}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Choose from library"
+            >
+              <Feather name="image" size={22} color={colors.foreground} />
+              <Text style={[s.sourceRowText, { color: colors.foreground }]}>Choose from library</Text>
+              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* ── Form ── */}
@@ -508,6 +570,28 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       textAlign: 'center',
       marginBottom: 24,
       paddingHorizontal: 32,
+    },
+
+    // Source selection card (camera vs library)
+    sourceCard: {
+      borderRadius: 14,
+      borderWidth: StyleSheet.hairlineWidth,
+      paddingHorizontal: 18,
+      marginBottom: 16,
+    },
+    sourceRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 14,
+      paddingVertical: 18,
+    },
+    sourceRowText: {
+      flex: 1,
+      fontFamily: 'Inter_500Medium',
+      fontSize: 16,
+    },
+    sourceDivider: {
+      height: StyleSheet.hairlineWidth,
     },
 
     // Image area
