@@ -17,9 +17,11 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   FlatList,
+  Platform,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useGetFeed } from '@workspace/api-client-react';
@@ -35,8 +37,22 @@ export default function HomeScreen() {
   const { data, isLoading, isError } = useGetFeed();
   const posts = data?.posts ?? [];
 
+  // ── Window dimensions — used as the web fallback for page height ──────────
+  // On web, the flex:1 chain inside Expo Router's Tabs shell never resolves to
+  // a real pixel height, so onLayout fires with 0. useWindowDimensions() always
+  // returns the viewport height immediately, which is the correct full-screen
+  // page height on web (the tab bar is position:absolute, so it floats above
+  // content rather than shrinking the scroll area).
+  const { height: windowHeight } = useWindowDimensions();
+
   // ── Container height — measured via onLayout so snap interval is exact ────
+  // On native this measurement accounts for status-bar / navigation-bar insets
+  // that useWindowDimensions does not. On web we fall back to windowHeight.
   const [pageHeight, setPageHeight] = useState(0);
+
+  // Effective height: on web use window height immediately (never wait for
+  // onLayout which resolves to 0); on native use the onLayout measurement.
+  const effectivePageHeight = Platform.OS === 'web' ? windowHeight : pageHeight;
 
   // ── Reduced motion — read once, passed to every FeedPage ─────────────────
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -65,33 +81,42 @@ export default function HomeScreen() {
 
   const getItemLayout = useCallback(
     (_: unknown, index: number) => ({
-      length: pageHeight,
-      offset: pageHeight * index,
+      length: effectivePageHeight,
+      offset: effectivePageHeight * index,
       index,
     }),
-    [pageHeight],
+    [effectivePageHeight],
   );
 
   const renderItem = useCallback(
     ({ item }: { item: FeedPost }) => (
       <FeedPage
         post={item}
-        height={pageHeight}
+        height={effectivePageHeight}
         reducedMotion={reducedMotion}
         onOpenCommentSheet={openCommentSheet}
         onOpenShareSheet={openShareSheet}
       />
     ),
-    [pageHeight, reducedMotion, openCommentSheet, openShareSheet],
+    [effectivePageHeight, reducedMotion, openCommentSheet, openShareSheet],
   );
 
   const keyExtractor = useCallback((item: FeedPost) => item.id, []);
 
   // ── Loading / error states ────────────────────────────────────────────────
 
+  // ── Web-aware container style ─────────────────────────────────────────────
+  // On web the Expo Router Tabs shell does not propagate a pixel height down
+  // through flex:1, so the root View measures as 0 px and onLayout fires with
+  // height:0. We pin the container to windowHeight on web so the background
+  // renders and the FlatList has a real height to work with.
+  const containerStyle = Platform.OS === 'web'
+    ? [styles.fill, { height: windowHeight, backgroundColor: colors.background }]
+    : [styles.fill, { backgroundColor: colors.background }];
+
   if (isLoading) {
     return (
-      <View style={[styles.fill, styles.centered]}>
+      <View style={[containerStyle, styles.centered]}>
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
     );
@@ -99,7 +124,7 @@ export default function HomeScreen() {
 
   if (isError || posts.length === 0) {
     return (
-      <View style={[styles.fill, styles.centered]}>
+      <View style={[containerStyle, styles.centered]}>
         <Text style={[styles.errorText, { color: colors.mutedForeground }]}>
           {isError ? 'Unable to load feed.' : 'Nothing here yet.'}
         </Text>
@@ -109,7 +134,7 @@ export default function HomeScreen() {
 
   return (
     <View
-      style={styles.fill}
+      style={containerStyle}
       onLayout={(e) => {
         const h = e.nativeEvent.layout.height;
         if (h > 0) setPageHeight(h);
@@ -122,8 +147,11 @@ export default function HomeScreen() {
         decelerationRate="fast" — crisp momentum feel
         scrollEnabled  — disabled while a modal sheet is open so wheel/trackpad
                          events on web don't scroll the feed behind the sheet
+
+        Guard: effectivePageHeight is windowHeight on web (always > 0) and the
+        onLayout measurement on native (wait until nonzero before rendering).
       */}
-      {pageHeight > 0 && (
+      {effectivePageHeight > 0 && (
         <FlatList
           ref={flatListRef}
           data={posts}
@@ -132,7 +160,7 @@ export default function HomeScreen() {
           getItemLayout={getItemLayout}
           // Paging
           pagingEnabled
-          snapToInterval={pageHeight}
+          snapToInterval={effectivePageHeight}
           snapToAlignment="start"
           decelerationRate="fast"
           // Prevent feed scroll when a modal is open
