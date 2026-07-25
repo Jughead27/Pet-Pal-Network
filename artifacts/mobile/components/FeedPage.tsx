@@ -53,19 +53,25 @@ const RAIL_RIGHT_INSET   = 14;
 const RAIL_MARGIN        = 24;
 const RAIL_EXCLUSION_X   = SCREEN_WIDTH - RAIL_TOUCH_WIDTH - RAIL_RIGHT_INSET - RAIL_MARGIN;
 
-// Pop anchor constants.
+// Pop anchor constants — proportional to the measured page width.
 //
-// Geometry (402 px wide screen, rail at right:14):
-//   Rail column right edge          →  right: 54  from screen right
-//   Transient label right edge      →  right: 64  (rail right:14 + label right:50)
-//   Transient label left  edge      →  right: 184 (right:64 + width:120)
+// Reference geometry (402 px wide, rail at right:14):
+//   Rail column right edge          →  right: 54   from right
+//   Transient label right edge      →  right: 64
+//   Transient label left  edge      →  right: 184  (width ≈ 120 px)
+//   POP_RIGHT_BASE was 200 px      →  200 / 402 ≈ 0.498 of page width
+//   POP_RIGHT_TRANSIENT_EXTRA 30   →   30 / 402 ≈ 0.075 of page width
 //
-// POP_RIGHT_BASE (200) puts the pop's right edge at right:200, i.e. 16 px clear
-// of the transient label's left edge (right:184) at the largest pop size (1.15×).
-// POP_RIGHT_TRANSIENT_EXTRA adds another 30 px when a transient label is visible
-// so rapid boops during a countdown never drift into its zone.
-const POP_RIGHT_BASE             = 200;
-const POP_RIGHT_TRANSIENT_EXTRA  = 30;
+// Using fractions instead of fixed pixels keeps pops clear of the rail on any
+// viewport width (narrow web frame, iPhone, tablet). A clamp then guarantees:
+//   • right edge stays left of the transient zone (fraction handles this)
+//   • left  edge stays ≥ POP_MIN_LEFT_MARGIN from the left edge at all widths
+//   • right edge stays ≥ POP_MIN_RAIL_CLEARANCE from the right edge at all widths
+const POP_RIGHT_FRACTION        = 200 / 402; // ≈ 0.498 — base offset from right
+const POP_TRANSIENT_FRACTION    =  30 / 402; // ≈ 0.075 — extra when transient visible
+const POP_MAX_EST_WIDTH         = 160;       // generous max for any word at peak scale (1.15×1.15)
+const POP_MIN_LEFT_MARGIN       =  12;       // px — minimum gap from the left screen edge
+const POP_MIN_RAIL_CLEARANCE    = RAIL_RIGHT_INSET + RAIL_TOUCH_WIDTH + 16; // px from right
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TEXT_SHADOW: any = { textShadow: '0px 1px 3px rgba(0,0,0,0.4)' };
@@ -133,6 +139,10 @@ export default function FeedPage({
 
   // ── Pop animations ────────────────────────────────────────────────────────
   const [pops, setPops] = useState<Pop[]>([]);
+  // Measured page width — updated on every layout change so the pop anchor
+  // is always proportional to the actual rendered width, not a stale module-
+  // level Dimensions.get() snapshot that doesn't track web resize.
+  const pageWidthRef = useRef(SCREEN_WIDTH);
   const bottomOffset = insets.bottom + 110;
   // Pops spawn to the left of the rail column and transient label.
   // Boop icon is item 1 in the rail (higher up); treat is item 2.
@@ -149,10 +159,14 @@ export default function FeedPage({
 
   const spawnPop = useCallback(
     (word: string, bottom: number) => {
-      // Bias further left when a transient label is on-screen so pops never
-      // overlap the countdown / out-of-treats / sneaky message.
-      const right =
-        POP_RIGHT_BASE + (isTransientVisibleRef.current ? POP_RIGHT_TRANSIENT_EXTRA : 0);
+      const pw       = pageWidthRef.current;
+      // Proportional base offset + transient bias, both scaling with page width.
+      const base     = pw * POP_RIGHT_FRACTION;
+      const extra    = isTransientVisibleRef.current ? pw * POP_TRANSIENT_FRACTION : 0;
+      // Clamp: keep the pop's left edge ≥ POP_MIN_LEFT_MARGIN from the left
+      // edge (maxRight), and its right edge clear of the rail (minRight).
+      const maxRight = pw - POP_MAX_EST_WIDTH - POP_MIN_LEFT_MARGIN;
+      const right    = Math.max(POP_MIN_RAIL_CLEARANCE, Math.min(maxRight, base + extra));
       const pop: Pop = {
         id: ++popCounter,
         word,
@@ -248,7 +262,10 @@ export default function FeedPage({
   const caption   = post.caption ?? '';
 
   return (
-    <View style={[styles.page, { height }]}>
+    <View
+      style={[styles.page, { height }]}
+      onLayout={(e) => { pageWidthRef.current = e.nativeEvent.layout.width; }}
+    >
       {/* Full-bleed hero image — respects poster's focal point */}
       <FocalImage
         source={heroImage}
