@@ -14,7 +14,7 @@
  * All animations use React Native's built-in Animated API — no Reanimated.
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
   Platform,
@@ -23,10 +23,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useBoopPost, useTreatPost } from '@workspace/api-client-react';
+
+// AsyncStorage keys for one-time teaching labels (persist across reloads).
+const TEACHING_KEY_BOOP  = 'fishbook:teaching:boop';
+const TEACHING_KEY_TREAT = 'fishbook:teaching:treat';
 
 // ─── Icon helpers ─────────────────────────────────────────────────────────────
 
@@ -44,7 +49,8 @@ interface ActionItemProps {
   renderIcon: (color: string, size: number) => React.ReactNode;
   count?: number;
   onPress: () => void;
-  teachingLabel?: string;
+  /** Plain accessibility label — no animation. Teaching pops now use the pop system. */
+  accessibilityLabel?: string;
   activeColor?: string;
   isActive?: boolean;
   testID?: string;
@@ -54,15 +60,13 @@ function ActionItem({
   renderIcon,
   count,
   onPress,
-  teachingLabel,
+  accessibilityLabel,
   activeColor,
   isActive,
   testID,
 }: ActionItemProps) {
   const colors = useColors();
-  const hasShownLabel = useRef(false);
   const scale = useRef(new Animated.Value(1)).current;
-  const labelOpacity = useRef(new Animated.Value(0)).current;
 
   const handlePress = () => {
     Animated.sequence([
@@ -73,15 +77,6 @@ function ActionItem({
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    if (teachingLabel && !hasShownLabel.current) {
-      hasShownLabel.current = true;
-      Animated.sequence([
-        Animated.timing(labelOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-        Animated.timing(labelOpacity, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(labelOpacity, { toValue: 0, duration: 350, useNativeDriver: true }),
-      ]).start();
-    }
-
     onPress();
   };
 
@@ -90,20 +85,12 @@ function ActionItem({
 
   return (
     <View style={styles.itemWrapper}>
-      {teachingLabel ? (
-        <Animated.Text
-          style={[styles.teachingLabel, { color: colors.foreground, opacity: labelOpacity }]}
-        >
-          {teachingLabel}
-        </Animated.Text>
-      ) : null}
-
       <TouchableOpacity
         onPress={handlePress}
         activeOpacity={0.7}
         style={styles.itemTouchable}
         testID={testID}
-        accessibilityLabel={teachingLabel ?? undefined}
+        accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
       >
         <Animated.View style={{ transform: [{ scale }] }}>
@@ -133,10 +120,10 @@ interface ActionRailProps {
   // UI callbacks
   onCommentPress: () => void;
   onSharePress: () => void;
-  /** Called after boop optimistic update — use to spawn a pop. */
+  /** Called after boop optimistic update — use to spawn a "Boop!" pop. */
   onBoopFired?: () => void;
   /**
-   * Called after treat server-confirmed SUCCESS only — use to spawn a pop.
+   * Called after treat server-confirmed SUCCESS only — use to spawn a "Yum!" pop.
    * Intentionally never called on 429 / 403 so rejected treats produce no pop.
    */
   onTreatFired?: () => void;
@@ -145,6 +132,17 @@ interface ActionRailProps {
    * out. Lets FeedPage shift pop spawn points away from the label area.
    */
   onTransientChange?: (visible: boolean) => void;
+  /**
+   * Called on the very first boop (per device, persisted in AsyncStorage) so
+   * FeedPage can spawn a large "Boop" teaching pop via the unified pop system.
+   * Boops are optimistic, so this fires immediately on press like onBoopFired.
+   */
+  onBoopTeaching?: () => void;
+  /**
+   * Called on the very first SUCCESSFUL treat (per device, persisted in
+   * AsyncStorage). Only fires in onSuccess — never on 429 / 403.
+   */
+  onTreatTeaching?: () => void;
 }
 
 export default function ActionRail({
@@ -161,6 +159,8 @@ export default function ActionRail({
   onBoopFired,
   onTreatFired,
   onTransientChange,
+  onBoopTeaching,
+  onTreatTeaching,
 }: ActionRailProps) {
   const colors = useColors();
 
@@ -171,12 +171,27 @@ export default function ActionRail({
   const { mutate: doTreatPost } = useTreatPost();
   const isTreatPending = useRef(false);
 
-  // Bone-shake animation for 429
+  // Bone-shake animation for 429 / 403
   const treatShakeX = useRef(new Animated.Value(0)).current;
 
   // Transient message (countdown, limit warning, self-treat nudge)
   const transientOpacity = useRef(new Animated.Value(0)).current;
   const [transientMsg, setTransientMsg] = useState('');
+
+  // ── Teaching-label has-seen flags (persisted per device via AsyncStorage) ──
+  // Refs mean we never re-render on flag change and the callback closures stay
+  // stable. AsyncStorage is read once on mount; writes are fire-and-forget.
+  const hasBoopTeachingRef  = useRef(false);
+  const hasTreatTeachingRef = useRef(false);
+
+  useEffect(() => {
+    AsyncStorage.multiGet([TEACHING_KEY_BOOP, TEACHING_KEY_TREAT])
+      .then(([[, boop], [, treat]]) => {
+        if (boop  === 'true') hasBoopTeachingRef.current  = true;
+        if (treat === 'true') hasTreatTeachingRef.current = true;
+      })
+      .catch(() => { /* ignore storage errors — teaching labels are best-effort */ });
+  }, []);
 
   const showTransient = useCallback(
     (msg: string, holdMs = 1500) => {
@@ -214,6 +229,13 @@ export default function ActionRail({
     }
     onBoopOptimistic();
     onBoopFired?.();
+    // Teaching pop — first boop ever on this device. Boops are optimistic so
+    // this fires immediately alongside onBoopFired.
+    if (!hasBoopTeachingRef.current) {
+      hasBoopTeachingRef.current = true;
+      AsyncStorage.setItem(TEACHING_KEY_BOOP, 'true').catch(() => {});
+      onBoopTeaching?.();
+    }
     doBoopPost({ id: postId });
   };
 
@@ -235,9 +257,18 @@ export default function ActionRail({
         onSuccess: (data) => {
           isTreatPending.current = false;
           onTreatSuccess(data.treatCount, data.treatsRemainingToday);
-          onTreatFired?.();
           const remaining = data.treatsRemainingToday;
+          // showTransient FIRST so isTransientVisibleRef is true before any pop
+          // callbacks run — both Yum! and teaching pops will use the extra offset.
           showTransient(remaining === 0 ? 'Last one!' : `${remaining} left`, 1500);
+          onTreatFired?.();
+          // Teaching pop — first successful treat ever on this device.
+          // onError never reaches here, so this is success-gated by construction.
+          if (!hasTreatTeachingRef.current) {
+            hasTreatTeachingRef.current = true;
+            AsyncStorage.setItem(TEACHING_KEY_TREAT, 'true').catch(() => {});
+            onTreatTeaching?.();
+          }
         },
         onError: (error) => {
           isTreatPending.current = false;
@@ -250,9 +281,9 @@ export default function ActionRail({
             shakeAnimation();
             showTransient('Your own pet? Sneaky.', 2000);
           }
-          // onTreatFired is intentionally NOT called here.
-          // Rejected treats (429 / 403) must produce no pop — only the shake
-          // and transient message above.
+          // onTreatFired and onTreatTeaching are intentionally NOT called here.
+          // Rejected treats (429 / 403) must produce no pop of any kind — only
+          // the shake and transient message above.
         },
       },
     );
@@ -266,7 +297,7 @@ export default function ActionRail({
         renderIcon={(color, size) => <BoopIcon color={color} size={size} />}
         count={boopCount}
         onPress={handleBoopPress}
-        teachingLabel="Boop"
+        accessibilityLabel="Boop"
         activeColor={colors.accent}
         isActive={viewerHasBooped}
         testID="boop-button"
@@ -293,7 +324,7 @@ export default function ActionRail({
             renderIcon={(color, size) => <TreatIcon color={color} size={size} />}
             count={treatCount}
             onPress={handleTreatPress}
-            teachingLabel="Treat"
+            accessibilityLabel="Treat"
             activeColor="#F4C542"
             isActive={viewerHasTreated}
             testID="treat-button"
@@ -375,13 +406,5 @@ const styles = StyleSheet.create({
     color: 'rgba(240,244,248,0.85)',
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ...({ textShadow: '0px 1px 3px rgba(0,0,0,0.4)' } as any),
-  },
-  teachingLabel: {
-    position: 'absolute',
-    right: 44,
-    top: 4,
-    fontSize: 11,
-    fontWeight: '600' as const,
-    pointerEvents: 'none',
   },
 });

@@ -171,6 +171,12 @@ export default function FeedPage({
   const spawnBoopPop  = useCallback(() => spawnPop('Boop!', BOOP_BOTTOM),  [spawnPop, BOOP_BOTTOM]);
   const spawnTreatPop = useCallback(() => spawnPop('Yum!',  TREAT_BOTTOM), [spawnPop, TREAT_BOTTOM]);
 
+  // Teaching pops — shown once per device (AsyncStorage flag in ActionRail).
+  // Use the same spawnPop so they get the transient-aware right offset, the
+  // same size variance, and the same overshoot animation as reaction pops.
+  const spawnBoopTeachingPop  = useCallback(() => spawnPop('Boop',  BOOP_BOTTOM),  [spawnPop, BOOP_BOTTOM]);
+  const spawnTreatTeachingPop = useCallback(() => spawnPop('Treat', TREAT_BOTTOM), [spawnPop, TREAT_BOTTOM]);
+
   // ── Reaction callbacks (passed to ActionRail) ─────────────────────────────
 
   const handleBoopOptimistic = useCallback(() => {
@@ -295,6 +301,8 @@ export default function FeedPage({
           onBoopFired={spawnBoopPop}
           onTreatFired={spawnTreatPop}
           onTransientChange={handleTransientChange}
+          onBoopTeaching={spawnBoopTeachingPop}
+          onTreatTeaching={spawnTreatTeachingPop}
         />
       </Animated.View>
 
