@@ -27,6 +27,7 @@ import type {
   CreatePostBody,
   ErrorResponse,
   FeedResponse,
+  GetFeedParams,
   HealthStatus,
   InterestFollowResult,
   MyFollowsResponse,
@@ -147,21 +148,28 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
-export const getGetFeedUrl = () => {
+export const getGetFeedUrl = (params?: GetFeedParams,) => {
+  const normalizedParams = new URLSearchParams();
 
+  Object.entries(params || {}).forEach(([key, value]) => {
 
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
 
+  const stringifiedParams = normalizedParams.toString();
 
-  return `/api/feed`
+  return stringifiedParams.length > 0 ? `/api/feed?${stringifiedParams}` : `/api/feed`
 }
 
 /**
  * Returns recency-ordered posts with pet info, reaction counts, and viewer state
  * @summary Get feed
  */
-export const getFeed = async ( options?: RequestInit): Promise<FeedResponse> => {
+export const getFeed = async (params?: GetFeedParams, options?: RequestInit): Promise<FeedResponse> => {
 
-  return customFetch<FeedResponse>(getGetFeedUrl(),
+  return customFetch<FeedResponse>(getGetFeedUrl(params),
   {
     ...options,
     method: 'GET'
@@ -174,23 +182,23 @@ export const getFeed = async ( options?: RequestInit): Promise<FeedResponse> => 
 
 
 
-export const getGetFeedQueryKey = () => {
+export const getGetFeedQueryKey = (params?: GetFeedParams,) => {
     return [
-    `/api/feed`
+    `/api/feed`, ...(params ? [params] : [])
     ] as const;
     }
 
 
-export const getGetFeedQueryOptions = <TData = Awaited<ReturnType<typeof getFeed>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetFeedQueryOptions = <TData = Awaited<ReturnType<typeof getFeed>>, TError = ErrorType<ErrorResponse>>(params?: GetFeedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetFeedQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getGetFeedQueryKey(params);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeed>>> = ({ signal }) => getFeed({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeed>>> = ({ signal }) => getFeed(params, { signal, ...requestOptions });
 
 
 
@@ -208,11 +216,11 @@ export type GetFeedQueryError = ErrorType<ErrorResponse>
  */
 
 export function useGetFeed<TData = Awaited<ReturnType<typeof getFeed>>, TError = ErrorType<ErrorResponse>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: GetFeedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetFeedQueryOptions(options)
+  const queryOptions = getGetFeedQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -21,6 +21,10 @@ export const HealthCheckResponse = zod.object({
  * Returns recency-ordered posts with pet info, reaction counts, and viewer state
  * @summary Get feed
  */
+export const GetFeedQueryParams = zod.object({
+  "nursery": zod.coerce.boolean().optional().describe('When true, returns only nursery (is_nursery=true) posts. Omit or false for the full feed.')
+})
+
 export const GetFeedResponse = zod.object({
   "posts": zod.array(zod.object({
   "id": zod.string(),

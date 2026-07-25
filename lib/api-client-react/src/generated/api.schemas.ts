@@ -321,3 +321,10 @@ export interface TreatResult {
   treatsRemainingToday: number;
 }
 
+export type GetFeedParams = {
+/**
+ * When true, returns only nursery (is_nursery=true) posts. Omit or false for the full feed.
+ */
+nursery?: boolean;
+};
+

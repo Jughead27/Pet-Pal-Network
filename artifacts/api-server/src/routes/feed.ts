@@ -26,6 +26,9 @@ const router: IRouter = Router();
 router.get("/feed", async (req, res) => {
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
+  // Optional nursery filter — when ?nursery=true only is_nursery posts are returned
+  const nurseryOnly = req.query.nursery === "true";
+
   const rows = await db
     .select({
       id:          postsTable.id,
@@ -57,6 +60,7 @@ router.get("/feed", async (req, res) => {
     .leftJoin(boopsTable,    eq(boopsTable.postId,    postsTable.id))
     .leftJoin(treatsTable,   eq(treatsTable.postId,   postsTable.id))
     .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
+    .where(nurseryOnly ? eq(postsTable.isNursery, true) : undefined)
     .groupBy(postsTable.id, petsTable.id)
     .orderBy(desc(postsTable.createdAt));
 

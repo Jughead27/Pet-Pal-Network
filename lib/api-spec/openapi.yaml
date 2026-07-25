@@ -43,6 +43,13 @@ paths:
       description: Returns recency-ordered posts with pet info, reaction counts, and viewer state
       security:
         - bearerAuth: []
+      parameters:
+        - name: nursery
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: When true, returns only nursery (is_nursery=true) posts. Omit or false for the full feed.
       responses:
         "200":
           description: OK
