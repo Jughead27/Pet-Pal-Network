@@ -52,9 +52,19 @@ const RAIL_RIGHT_INSET   = 14;
 const RAIL_MARGIN        = 24;
 const RAIL_EXCLUSION_X   = SCREEN_WIDTH - RAIL_TOUCH_WIDTH - RAIL_RIGHT_INSET - RAIL_MARGIN;
 
-// Pop anchor — right: 175 clears both the rail column (right: 54) and the
-// treat-countdown transient label (right: 50–170).
-const POP_RIGHT = 175;
+// Pop anchor constants.
+//
+// Geometry (402 px wide screen, rail at right:14):
+//   Rail column right edge          →  right: 54  from screen right
+//   Transient label right edge      →  right: 64  (rail right:14 + label right:50)
+//   Transient label left  edge      →  right: 184 (right:64 + width:120)
+//
+// POP_RIGHT_BASE (200) puts the pop's right edge at right:200, i.e. 16 px clear
+// of the transient label's left edge (right:184) at the largest pop size (1.15×).
+// POP_RIGHT_TRANSIENT_EXTRA adds another 30 px when a transient label is visible
+// so rapid boops during a countdown never drift into its zone.
+const POP_RIGHT_BASE             = 200;
+const POP_RIGHT_TRANSIENT_EXTRA  = 30;
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TEXT_SHADOW: any = { textShadow: '0px 1px 3px rgba(0,0,0,0.4)' };
@@ -123,18 +133,30 @@ export default function FeedPage({
   // ── Pop animations ────────────────────────────────────────────────────────
   const [pops, setPops] = useState<Pop[]>([]);
   const bottomOffset = insets.bottom + 110;
-  // Pops spawn at icon height, to the left of the rail at POP_RIGHT (175 px).
+  // Pops spawn to the left of the rail column and transient label.
   // Boop icon is item 1 in the rail (higher up); treat is item 2.
   const BOOP_BOTTOM  = bottomOffset + 210;
   const TREAT_BOTTOM = bottomOffset + 143;
 
+  // Tracks whether ActionRail has a transient label visible right now.
+  // Stored in a ref (not state) so spawnPop's useCallback never needs to
+  // re-create, yet always reads the current value at call time.
+  const isTransientVisibleRef = useRef(false);
+  const handleTransientChange = useCallback((visible: boolean) => {
+    isTransientVisibleRef.current = visible;
+  }, []);
+
   const spawnPop = useCallback(
     (word: string, bottom: number) => {
+      // Bias further left when a transient label is on-screen so pops never
+      // overlap the countdown / out-of-treats / sneaky message.
+      const right =
+        POP_RIGHT_BASE + (isTransientVisibleRef.current ? POP_RIGHT_TRANSIENT_EXTRA : 0);
       const pop: Pop = {
         id: ++popCounter,
         word,
         rotation: randRotation(),
-        right: POP_RIGHT,
+        right,
         bottom,
       };
       setPops((prev) => [...prev, pop]);
@@ -272,6 +294,7 @@ export default function FeedPage({
           onSharePress={onOpenShareSheet}
           onBoopFired={spawnBoopPop}
           onTreatFired={spawnTreatPop}
+          onTransientChange={handleTransientChange}
         />
       </Animated.View>
 

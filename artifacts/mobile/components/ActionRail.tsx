@@ -135,8 +135,16 @@ interface ActionRailProps {
   onSharePress: () => void;
   /** Called after boop optimistic update — use to spawn a pop. */
   onBoopFired?: () => void;
-  /** Called after treat server-confirmed success — use to spawn a pop. */
+  /**
+   * Called after treat server-confirmed SUCCESS only — use to spawn a pop.
+   * Intentionally never called on 429 / 403 so rejected treats produce no pop.
+   */
   onTreatFired?: () => void;
+  /**
+   * Fired with true when a transient label becomes visible, false when it fades
+   * out. Lets FeedPage shift pop spawn points away from the label area.
+   */
+  onTransientChange?: (visible: boolean) => void;
 }
 
 export default function ActionRail({
@@ -152,6 +160,7 @@ export default function ActionRail({
   onSharePress,
   onBoopFired,
   onTreatFired,
+  onTransientChange,
 }: ActionRailProps) {
   const colors = useColors();
 
@@ -173,13 +182,17 @@ export default function ActionRail({
     (msg: string, holdMs = 1500) => {
       setTransientMsg(msg);
       transientOpacity.setValue(0);
+      // Notify parent so it can shift pop spawn points away from this label.
+      onTransientChange?.(true);
       Animated.sequence([
         Animated.timing(transientOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
         Animated.timing(transientOpacity, { toValue: 1, duration: holdMs, useNativeDriver: true }),
         Animated.timing(transientOpacity, { toValue: 0, duration: 400, useNativeDriver: true }),
-      ]).start();
+      ]).start(({ finished }) => {
+        if (finished) onTransientChange?.(false);
+      });
     },
-    [transientOpacity],
+    [transientOpacity, onTransientChange],
   );
 
   const shakeAnimation = useCallback(() => {
@@ -233,8 +246,13 @@ export default function ActionRail({
             shakeAnimation();
             showTransient('Out of treats until tomorrow', 2500);
           } else if (status === 403) {
+            // Shake on self-treat too — same shake+message pattern, no pop.
+            shakeAnimation();
             showTransient('Your own pet? Sneaky.', 2000);
           }
+          // onTreatFired is intentionally NOT called here.
+          // Rejected treats (429 / 403) must produce no pop — only the shake
+          // and transient message above.
         },
       },
     );
