@@ -28,6 +28,8 @@ import type {
   ErrorResponse,
   FeedResponse,
   HealthStatus,
+  InterestFollowResult,
+  MyFollowsResponse,
   MyPetsResponse,
   PackResult,
   Pet,
@@ -367,6 +369,372 @@ export function useGetSpeciesByIdBreeds<TData = Awaited<ReturnType<typeof getSpe
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSpeciesByIdBreedsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getFollowSpeciesUrl = (id: string,) => {
+
+
+
+
+  return `/api/follows/species/${id}`
+}
+
+/**
+ * Records the authenticated user's interest in this species. Idempotent — following when already followed is a no-op.
+ * @summary Follow a species
+ */
+export const followSpecies = async (id: string, options?: RequestInit): Promise<InterestFollowResult> => {
+
+  return customFetch<InterestFollowResult>(getFollowSpeciesUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getFollowSpeciesMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof followSpecies>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof followSpecies>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['followSpecies'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof followSpecies>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  followSpecies(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FollowSpeciesMutationResult = NonNullable<Awaited<ReturnType<typeof followSpecies>>>
+
+    export type FollowSpeciesMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Follow a species
+ */
+export const useFollowSpecies = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof followSpecies>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof followSpecies>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getFollowSpeciesMutationOptions(options));
+    }
+
+export const getUnfollowSpeciesUrl = (id: string,) => {
+
+
+
+
+  return `/api/follows/species/${id}`
+}
+
+/**
+ * Removes the authenticated user's interest in this species. Idempotent — unfollowing when not following is a no-op.
+ * @summary Unfollow a species
+ */
+export const unfollowSpecies = async (id: string, options?: RequestInit): Promise<InterestFollowResult> => {
+
+  return customFetch<InterestFollowResult>(getUnfollowSpeciesUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnfollowSpeciesMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unfollowSpecies>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unfollowSpecies>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['unfollowSpecies'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unfollowSpecies>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unfollowSpecies(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnfollowSpeciesMutationResult = NonNullable<Awaited<ReturnType<typeof unfollowSpecies>>>
+
+    export type UnfollowSpeciesMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Unfollow a species
+ */
+export const useUnfollowSpecies = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unfollowSpecies>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unfollowSpecies>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getUnfollowSpeciesMutationOptions(options));
+    }
+
+export const getFollowBreedUrl = (id: string,) => {
+
+
+
+
+  return `/api/follows/breeds/${id}`
+}
+
+/**
+ * Records the authenticated user's interest in this breed. Idempotent — following when already followed is a no-op.
+ * @summary Follow a breed
+ */
+export const followBreed = async (id: string, options?: RequestInit): Promise<InterestFollowResult> => {
+
+  return customFetch<InterestFollowResult>(getFollowBreedUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getFollowBreedMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof followBreed>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof followBreed>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['followBreed'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof followBreed>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  followBreed(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type FollowBreedMutationResult = NonNullable<Awaited<ReturnType<typeof followBreed>>>
+
+    export type FollowBreedMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Follow a breed
+ */
+export const useFollowBreed = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof followBreed>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof followBreed>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getFollowBreedMutationOptions(options));
+    }
+
+export const getUnfollowBreedUrl = (id: string,) => {
+
+
+
+
+  return `/api/follows/breeds/${id}`
+}
+
+/**
+ * Removes the authenticated user's interest in this breed. Idempotent — unfollowing when not following is a no-op.
+ * @summary Unfollow a breed
+ */
+export const unfollowBreed = async (id: string, options?: RequestInit): Promise<InterestFollowResult> => {
+
+  return customFetch<InterestFollowResult>(getUnfollowBreedUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getUnfollowBreedMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unfollowBreed>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unfollowBreed>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['unfollowBreed'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unfollowBreed>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unfollowBreed(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnfollowBreedMutationResult = NonNullable<Awaited<ReturnType<typeof unfollowBreed>>>
+
+    export type UnfollowBreedMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Unfollow a breed
+ */
+export const useUnfollowBreed = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unfollowBreed>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unfollowBreed>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getUnfollowBreedMutationOptions(options));
+    }
+
+export const getGetMyFollowsUrl = () => {
+
+
+
+
+  return `/api/me/follows`
+}
+
+/**
+ * Returns the authenticated user's full follow graph: packed pets (from pack_follows) and followed species/breeds (from interest_follows), for the Profile → Following management list.
+ * @summary Get caller's follow graph
+ */
+export const getMyFollows = async ( options?: RequestInit): Promise<MyFollowsResponse> => {
+
+  return customFetch<MyFollowsResponse>(getGetMyFollowsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyFollowsQueryKey = () => {
+    return [
+    `/api/me/follows`
+    ] as const;
+    }
+
+
+export const getGetMyFollowsQueryOptions = <TData = Awaited<ReturnType<typeof getMyFollows>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyFollows>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyFollowsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyFollows>>> = ({ signal }) => getMyFollows({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyFollows>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyFollowsQueryResult = NonNullable<Awaited<ReturnType<typeof getMyFollows>>>
+export type GetMyFollowsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get caller's follow graph
+ */
+
+export function useGetMyFollows<TData = Awaited<ReturnType<typeof getMyFollows>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyFollows>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyFollowsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

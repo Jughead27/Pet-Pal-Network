@@ -9,6 +9,7 @@ import {
   speciesTable,
   breedsTable,
   packFollowsTable,
+  interestFollowsTable,
 } from "@workspace/db";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { CreatePetBody } from "@workspace/api-zod";
@@ -40,17 +41,54 @@ router.get("/pets/:id", async (req, res) => {
     return;
   }
 
-  // Pack count and viewer membership — single aggregation query
-  const [packRow] = await db
-    .select({
-      packCount:    sql<number>`count(*)::int`,
-      viewerInPack: sql<boolean>`coalesce(bool_or(${packFollowsTable.userId} = ${userId}), false)`,
-    })
-    .from(packFollowsTable)
-    .where(eq(packFollowsTable.petId, id));
+  // Pack count + viewer membership + interest-follow state — run in parallel
+  const followChecks = await Promise.all([
+    // Pack aggregation
+    db
+      .select({
+        packCount:    sql<number>`count(*)::int`,
+        viewerInPack: sql<boolean>`coalesce(bool_or(${packFollowsTable.userId} = ${userId}), false)`,
+      })
+      .from(packFollowsTable)
+      .where(eq(packFollowsTable.petId, id)),
 
-  const packCount    = packRow?.packCount    ?? 0;
-  const viewerInPack = packRow?.viewerInPack ?? false;
+    // Species interest follow (only if pet has a catalogued species)
+    pet.speciesId
+      ? db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(interestFollowsTable)
+          .where(
+            and(
+              eq(interestFollowsTable.userId,    userId),
+              eq(interestFollowsTable.speciesId, pet.speciesId),
+            ),
+          )
+      : Promise.resolve(null),
+
+    // Breed interest follow (only if pet has a catalogued breed)
+    pet.breedId
+      ? db
+          .select({ n: sql<number>`count(*)::int` })
+          .from(interestFollowsTable)
+          .where(
+            and(
+              eq(interestFollowsTable.userId,  userId),
+              eq(interestFollowsTable.breedId, pet.breedId),
+            ),
+          )
+      : Promise.resolve(null),
+  ]);
+
+  const [packRow, speciesFollowRows, breedFollowRows] = followChecks;
+
+  const packCount           = packRow[0]?.packCount    ?? 0;
+  const viewerInPack        = packRow[0]?.viewerInPack ?? false;
+  const viewerFollowsSpecies = pet.speciesId
+    ? ((speciesFollowRows as { n: number }[])[0]?.n ?? 0) > 0
+    : null;
+  const viewerFollowsBreed   = pet.breedId
+    ? ((breedFollowRows as { n: number }[])[0]?.n ?? 0) > 0
+    : null;
 
   const petSummary = {
     id:           pet.id,
@@ -104,13 +142,17 @@ router.get("/pets/:id", async (req, res) => {
   );
 
   res.json({
-    id:           pet.id,
-    name:         pet.name,
-    species:      pet.species,
-    breed:        pet.breed ?? null,
-    bio:          pet.bio  ?? null,
+    id:                  pet.id,
+    name:                pet.name,
+    species:             pet.species,
+    breed:               pet.breed     ?? null,
+    bio:                 pet.bio       ?? null,
+    speciesId:           pet.speciesId ?? null,
+    breedId:             pet.breedId   ?? null,
     packCount,
     viewerInPack,
+    viewerFollowsSpecies,
+    viewerFollowsBreed,
     posts,
   });
 });

@@ -82,6 +82,84 @@ export const GetSpeciesByIdBreedsResponse = zod.object({
 
 
 /**
+ * Records the authenticated user's interest in this species. Idempotent — following when already followed is a no-op.
+ * @summary Follow a species
+ */
+export const FollowSpeciesParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const FollowSpeciesResponse = zod.object({
+  "viewerFollows": zod.boolean().describe('Whether the viewer now follows this species or breed')
+}).describe('Result of a species or breed follow\/unfollow action')
+
+
+/**
+ * Removes the authenticated user's interest in this species. Idempotent — unfollowing when not following is a no-op.
+ * @summary Unfollow a species
+ */
+export const UnfollowSpeciesParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UnfollowSpeciesResponse = zod.object({
+  "viewerFollows": zod.boolean().describe('Whether the viewer now follows this species or breed')
+}).describe('Result of a species or breed follow\/unfollow action')
+
+
+/**
+ * Records the authenticated user's interest in this breed. Idempotent — following when already followed is a no-op.
+ * @summary Follow a breed
+ */
+export const FollowBreedParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const FollowBreedResponse = zod.object({
+  "viewerFollows": zod.boolean().describe('Whether the viewer now follows this species or breed')
+}).describe('Result of a species or breed follow\/unfollow action')
+
+
+/**
+ * Removes the authenticated user's interest in this breed. Idempotent — unfollowing when not following is a no-op.
+ * @summary Unfollow a breed
+ */
+export const UnfollowBreedParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UnfollowBreedResponse = zod.object({
+  "viewerFollows": zod.boolean().describe('Whether the viewer now follows this species or breed')
+}).describe('Result of a species or breed follow\/unfollow action')
+
+
+/**
+ * Returns the authenticated user's full follow graph: packed pets (from pack_follows) and followed species/breeds (from interest_follows), for the Profile → Following management list.
+ * @summary Get caller's follow graph
+ */
+export const GetMyFollowsResponse = zod.object({
+  "packedPets": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "species": zod.string(),
+  "breed": zod.string().nullish(),
+  "speciesId": zod.string().nullish(),
+  "breedId": zod.string().nullish()
+}).describe('A pet in the caller\'s Pack (from pack_follows), used in the follows management list')),
+  "followedSpecies": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).describe('A species the caller follows')),
+  "followedBreeds": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "speciesId": zod.string(),
+  "speciesName": zod.string()
+}).describe('A breed the caller follows, with its parent species name'))
+}).describe('The caller\'s full follow graph — packed pets, followed species, followed breeds')
+
+
+/**
  * Adds the authenticated user to this pet's Pack. Idempotent — joining when already in the Pack is a no-op and returns current state.
  * @summary Join a pet's Pack
  */
@@ -123,8 +201,12 @@ export const GetPetResponse = zod.object({
   "species": zod.string(),
   "breed": zod.string().nullish(),
   "bio": zod.string().nullish(),
+  "speciesId": zod.string().nullish().describe('FK to species catalogue; null if pet was created without catalogue selection'),
+  "breedId": zod.string().nullish().describe('FK to breeds catalogue; null if pet was created without catalogue selection'),
   "packCount": zod.number().describe('Number of users who have this pet in their Pack'),
   "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
+  "viewerFollowsSpecies": zod.boolean().nullable().describe('Whether the viewer follows this pet\'s species. Null when speciesId is null.'),
+  "viewerFollowsBreed": zod.boolean().nullable().describe('Whether the viewer follows this pet\'s breed. Null when breedId is null.'),
   "posts": zod.array(zod.object({
   "id": zod.string(),
   "caption": zod.string().nullish(),

@@ -72,10 +72,18 @@ export interface PetProfile {
   species: string;
   breed?: string | null;
   bio?: string | null;
+  /** FK to species catalogue; null if pet was created without catalogue selection */
+  speciesId?: string | null;
+  /** FK to breeds catalogue; null if pet was created without catalogue selection */
+  breedId?: string | null;
   /** Number of users who have this pet in their Pack */
   packCount: number;
   /** Whether the authenticated viewer is in this pet's Pack */
   viewerInPack: boolean;
+  /** Whether the viewer follows this pet's species. Null when speciesId is null. */
+  viewerFollowsSpecies: boolean | null;
+  /** Whether the viewer follows this pet's breed. Null when breedId is null. */
+  viewerFollowsBreed: boolean | null;
   posts: FeedPost[];
 }
 
@@ -249,6 +257,53 @@ export interface PostCreated {
   caption?: string | null;
   isNursery: boolean;
   createdAt: string;
+}
+
+/**
+ * Result of a species or breed follow/unfollow action
+ */
+export interface InterestFollowResult {
+  /** Whether the viewer now follows this species or breed */
+  viewerFollows: boolean;
+}
+
+/**
+ * A pet in the caller's Pack (from pack_follows), used in the follows management list
+ */
+export interface PackedPetItem {
+  id: string;
+  name: string;
+  species: string;
+  breed?: string | null;
+  speciesId?: string | null;
+  breedId?: string | null;
+}
+
+/**
+ * A species the caller follows
+ */
+export interface FollowedSpeciesItem {
+  id: string;
+  name: string;
+}
+
+/**
+ * A breed the caller follows, with its parent species name
+ */
+export interface FollowedBreedItem {
+  id: string;
+  name: string;
+  speciesId: string;
+  speciesName: string;
+}
+
+/**
+ * The caller's full follow graph — packed pets, followed species, followed breeds
+ */
+export interface MyFollowsResponse {
+  packedPets: PackedPetItem[];
+  followedSpecies: FollowedSpeciesItem[];
+  followedBreeds: FollowedBreedItem[];
 }
 
 /**

@@ -3,10 +3,11 @@
  *
  * Data comes from GET /pets/:id via useGetPet(id).
  * Displays packCount + viewerInPack (server-backed via AddToPackLink).
+ * Species/breed chips are tappable follows (server-backed via InterestChip).
  * Boop/treat aggregate totals are summed across all posts from the server.
  */
 
-import React, { useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -26,10 +27,18 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons, Feather } from "@expo/vector-icons";
 import Svg, { Path } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
-import { useGetPet } from "@workspace/api-client-react";
+import {
+  useGetPet,
+  useFollowSpecies,
+  useUnfollowSpecies,
+  useFollowBreed,
+  useUnfollowBreed,
+} from "@workspace/api-client-react";
 import type { FeedPost, PackResult } from "@workspace/api-client-react";
 import { resolveMediaKey } from "@/utils/mediaKey";
 import AddToPackLink from "@/components/AddToPackLink";
+import InterestChip from "@/components/InterestChip";
+import { useFollowsContext } from "@/context/FollowsContext";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const HERO_HEIGHT = SCREEN_HEIGHT * 0.42;
@@ -63,7 +72,79 @@ export default function PetProfileScreen() {
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
-  // ── Loading / error states ─────────────────────────────────────────────
+  // ── Interest follows ───────────────────────────────────────────────────────
+  const { speciesMap, breedMap, setSpeciesFollow, setBreedFollow } = useFollowsContext();
+
+  // Mutation pending guards — disable chips while in-flight to prevent double-tap
+  const speciesPendingRef = useRef(false);
+  const breedPendingRef   = useRef(false);
+  const [speciesPending, setSpeciesPending] = useState(false);
+  const [breedPending,   setBreedPending]   = useState(false);
+
+  const { mutate: followSpecies }   = useFollowSpecies();
+  const { mutate: unfollowSpecies } = useUnfollowSpecies();
+  const { mutate: followBreed }     = useFollowBreed();
+  const { mutate: unfollowBreed }   = useUnfollowBreed();
+
+  const handleFollowSpecies = useCallback(() => {
+    if (!pet?.speciesId || speciesPendingRef.current) return;
+    speciesPendingRef.current = true;
+    setSpeciesPending(true);
+
+    const id        = pet.speciesId;
+    const wasFollow = speciesMap[id] ?? pet.viewerFollowsSpecies ?? false;
+    const nextFollow = !wasFollow;
+
+    setSpeciesFollow(id, nextFollow);
+
+    const mutate = nextFollow ? followSpecies : unfollowSpecies;
+    mutate(
+      { id },
+      {
+        onSuccess: (result) => {
+          setSpeciesFollow(id, result.viewerFollows);
+          speciesPendingRef.current = false;
+          setSpeciesPending(false);
+        },
+        onError: () => {
+          setSpeciesFollow(id, wasFollow);
+          speciesPendingRef.current = false;
+          setSpeciesPending(false);
+        },
+      },
+    );
+  }, [pet, speciesMap, setSpeciesFollow, followSpecies, unfollowSpecies]);
+
+  const handleFollowBreed = useCallback(() => {
+    if (!pet?.breedId || breedPendingRef.current) return;
+    breedPendingRef.current = true;
+    setBreedPending(true);
+
+    const id        = pet.breedId;
+    const wasFollow = breedMap[id] ?? pet.viewerFollowsBreed ?? false;
+    const nextFollow = !wasFollow;
+
+    setBreedFollow(id, nextFollow);
+
+    const mutate = nextFollow ? followBreed : unfollowBreed;
+    mutate(
+      { id },
+      {
+        onSuccess: (result) => {
+          setBreedFollow(id, result.viewerFollows);
+          breedPendingRef.current = false;
+          setBreedPending(false);
+        },
+        onError: () => {
+          setBreedFollow(id, wasFollow);
+          breedPendingRef.current = false;
+          setBreedPending(false);
+        },
+      },
+    );
+  }, [pet, breedMap, setBreedFollow, followBreed, unfollowBreed]);
+
+  // ── Loading / error states ─────────────────────────────────────────────────
   if (isLoading || (!pet && !isError)) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
@@ -100,6 +181,17 @@ export default function PetProfileScreen() {
   const handlePackSuccess = (result: PackResult) => {
     setLocalPackCount(result.packCount);
   };
+
+  // Derive current follow state (context wins over server initial value)
+  const speciesFollowed = pet.speciesId
+    ? (speciesMap[pet.speciesId] ?? pet.viewerFollowsSpecies ?? false)
+    : null;
+  const breedFollowed = pet.breedId
+    ? (breedMap[pet.breedId] ?? pet.viewerFollowsBreed ?? false)
+    : null;
+
+  // Show legacy plain text if pet has no catalogue FKs
+  const hasChips = pet.speciesId != null || pet.breedId != null;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -148,9 +240,31 @@ export default function PetProfileScreen() {
             />
           </View>
 
-          <Text style={[styles.breed, { color: colors.mutedForeground }]}>
-            {pet.breed ?? pet.species}
-          </Text>
+          {/* Species / breed — chips if catalogued, plain text for legacy pets */}
+          {hasChips ? (
+            <View style={styles.chipsRow}>
+              {pet.speciesId != null && speciesFollowed != null && (
+                <InterestChip
+                  label={pet.species}
+                  followed={speciesFollowed}
+                  onPress={handleFollowSpecies}
+                  disabled={speciesPending}
+                />
+              )}
+              {pet.breedId != null && breedFollowed != null && pet.breed && (
+                <InterestChip
+                  label={pet.breed}
+                  followed={breedFollowed}
+                  onPress={handleFollowBreed}
+                  disabled={breedPending}
+                />
+              )}
+            </View>
+          ) : (
+            <Text style={[styles.breed, { color: colors.mutedForeground }]}>
+              {pet.breed ?? pet.species}
+            </Text>
+          )}
 
           {pet.bio ? (
             <Text style={[styles.bio, { color: colors.foreground }]}>
@@ -270,13 +384,14 @@ const styles = StyleSheet.create({
     position: "absolute", left: 14, width: 38, height: 38, borderRadius: 19,
     alignItems: "center", justifyContent: "center",
   },
-  profileSection: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, gap: 6 },
-  nameRow: { flexDirection: "row", alignItems: "center", gap: 12 },
-  petName: { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: 0.2 },
-  breed:   { fontSize: 14, fontFamily: "Inter_500Medium", letterSpacing: 0.3 },
-  bio:     { fontSize: 14, lineHeight: 20, marginTop: 4, fontFamily: "Inter_400Regular" },
+  profileSection: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, gap: 8 },
+  nameRow:  { flexDirection: "row", alignItems: "center", gap: 12 },
+  petName:  { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: 0.2 },
+  chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  breed:    { fontSize: 14, fontFamily: "Inter_500Medium", letterSpacing: 0.3 },
+  bio:      { fontSize: 14, lineHeight: 20, fontFamily: "Inter_400Regular" },
   statsRow: {
-    flexDirection: "row", alignItems: "center", marginTop: 16,
+    flexDirection: "row", alignItems: "center",
     paddingVertical: 16,
     borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth,
   },

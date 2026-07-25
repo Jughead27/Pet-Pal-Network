@@ -16,9 +16,17 @@ export interface PetProfile {
   species: string;
   breed?: string | null;
   bio?: string | null;
+  /** FK to species catalogue; null if pet was created without catalogue selection */
+  speciesId?: string | null;
+  /** FK to breeds catalogue; null if pet was created without catalogue selection */
+  breedId?: string | null;
   /** Number of users who have this pet in their Pack */
   packCount: number;
   /** Whether the authenticated viewer is in this pet's Pack */
   viewerInPack: boolean;
+  /** Whether the viewer follows this pet's species. Null when speciesId is null. */
+  viewerFollowsSpecies: boolean | null;
+  /** Whether the viewer follows this pet's breed. Null when breedId is null. */
+  viewerFollowsBreed: boolean | null;
   posts: FeedPost[];
 }

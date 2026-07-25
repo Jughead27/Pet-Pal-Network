@@ -17,6 +17,7 @@ import {
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { PackProvider } from '@/context/PackContext';
+import { FollowsProvider } from '@/context/FollowsContext';
 import { setBaseUrl, setAuthTokenGetter } from '@workspace/api-client-react';
 
 // Set the API base URL before any component renders.
@@ -132,8 +133,10 @@ export default function RootLayout() {
             <GestureHandlerRootView style={{ flex: 1 }}>
               <KeyboardProvider>
                 <PackProvider>
-                  <ClerkTokenSync />
-                  <RootLayoutNav />
+                  <FollowsProvider>
+                    <ClerkTokenSync />
+                    <RootLayoutNav />
+                  </FollowsProvider>
                 </PackProvider>
               </KeyboardProvider>
             </GestureHandlerRootView>

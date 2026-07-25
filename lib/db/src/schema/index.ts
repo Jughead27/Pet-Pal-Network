@@ -7,3 +7,4 @@ export * from "./boops";
 export * from "./treats";
 export * from "./config";
 export * from "./pack-follows";
+export * from "./interest-follows";
