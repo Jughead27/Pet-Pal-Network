@@ -17,17 +17,20 @@ import HatchlingIcon from '@/components/HatchlingIcon';
 // Expo Go to show a compass (safari SF symbol) and a dove (bird SF symbol).
 
 export default function TabLayout() {
-  // ─── Auth guard ─────────────────────────────────────────────────────────
+  // All hooks must be called unconditionally before any early return.
   const { isSignedIn, isLoaded } = useAuth();
+  const colors = useColors();
+  const colorScheme = useColorScheme();
+  const safeAreaInsets = useSafeAreaInsets();
+
+  // ─── Auth guard (after all hooks) ───────────────────────────────────────
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
   // ────────────────────────────────────────────────────────────────────────
-  const colors = useColors();
-  const colorScheme = useColorScheme();
+
   const isDark = colorScheme === 'dark';
   const isIOS = Platform.OS === 'ios';
   const isWeb = Platform.OS === 'web';
-  const safeAreaInsets = useSafeAreaInsets();
 
   return (
     <Tabs
