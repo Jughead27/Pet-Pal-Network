@@ -1,0 +1,1 @@
+- [Clerk Auth Integration](clerk-auth-integration.md) — package versions, Metro blockList fix, SSO wiring, API middleware pattern.

@@ -1,9 +1,10 @@
 import React from 'react';
 import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
+import { useAuth } from '@clerk/clerk-expo';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SniffIcon from '@/components/SniffIcon';
 import HatchlingIcon from '@/components/HatchlingIcon';
@@ -16,6 +17,11 @@ import HatchlingIcon from '@/components/HatchlingIcon';
 // Expo Go to show a compass (safari SF symbol) and a dove (bird SF symbol).
 
 export default function TabLayout() {
+  // ─── Auth guard ─────────────────────────────────────────────────────────
+  const { isSignedIn, isLoaded } = useAuth();
+  if (!isLoaded) return null;
+  if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
+  // ────────────────────────────────────────────────────────────────────────
   const colors = useColors();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
