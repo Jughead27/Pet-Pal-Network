@@ -1,0 +1,15 @@
+Scope: fix the CropFramer screen's three defects. Touch only CropFramer, its presentation from add.tsx, and the post-accept navigation. No API, schema, or feed changes.
+
+Defects observed on a physical iPhone:
+(a) The tab bar renders over the full-screen framer, hiding/blocking the Done button — taps land on the tab bar (pressing "+" hits the Add tab).
+(b) Drag is horizontal-only while the photo's top is visibly cropped — vertical overflow exists but isn't pannable.
+(c) Back loses the picked image (returns to an empty Add screen) and there is no working accept path.
+
+Fixes:
+
+Presentation: present the framer as a true full-screen modal route above the tab navigator (e.g., a stack screen with presentation: 'fullScreenModal' or equivalent) so the tab bar is not rendered/interactive during framing. Done and Back must be comfortably tappable within safe-area insets — Done as a prominent teal button at the bottom, well clear of the home indicator.
+Frame honesty: the framing viewport must exactly match the feed page's aspect and be visually explicit — dim/mask everything outside it (including under the header) so what's inside the frame is precisely what the feed shows. The "Drag to adjust" hint should fade after first drag.
+Both-axis panning: allow panning on every axis with overflow (a photo can overflow both after cover-fit); clamp to bounds; convert both axes to focal values on Done.
+Flow: Done → return to the post form (image retained, framing stored, pet selector + caption + Nursery visible, Reframe available). Back from the framer → return to the form with the picked image retained (framing unchanged), not to an empty Add screen; only an explicit "choose different photo" discards the selection.
+
+Acceptance test (physical iPhone): Pick a portrait photo → framer opens with NO tab bar visible, an explicit masked frame, and drag working in whichever directions overflow; Done is tappable and returns to the form with image + framing intact; Back also retains the image; posting shows the chosen framing in the feed. Web behaves identically. pnpm run typecheck clean.

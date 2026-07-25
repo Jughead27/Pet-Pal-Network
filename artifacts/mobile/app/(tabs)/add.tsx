@@ -18,6 +18,7 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -138,9 +139,9 @@ export default function AddScreen() {
   }, []);
 
   const handleFrameBack = useCallback(() => {
-    // Go back to idle so the user can pick a different image.
-    setCompressedUri(null);
-    setStep('idle');
+    // Return to the form with the picked image retained.
+    // Only an explicit "Change photo" button discards the selection.
+    setStep('form');
   }, []);
 
   // ── Submit ────────────────────────────────────────────────────────────────
@@ -212,19 +213,6 @@ export default function AddScreen() {
 
   // ── Render ────────────────────────────────────────────────────────────────
 
-  // ── Framing step — full-screen, outside scroll ─────────────────────────
-  if (step === 'framing' && compressedUri) {
-    return (
-      <CropFramer
-        uri={compressedUri}
-        naturalWidth={naturalSize.current.width  || 1}
-        naturalHeight={naturalSize.current.height || 1}
-        onConfirm={handleFrameConfirm}
-        onBack={handleFrameBack}
-      />
-    );
-  }
-
   if (petsLoading) {
     return (
       <View style={[s.fill, s.centered, { backgroundColor: colors.background }]}>
@@ -257,6 +245,24 @@ export default function AddScreen() {
       style={[s.fill, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* ── Framing modal — sits above the tab bar, no tab-bar interaction ── */}
+      <Modal
+        visible={step === 'framing' && !!compressedUri}
+        animationType="slide"
+        presentationStyle="fullScreen"
+        statusBarTranslucent
+        onRequestClose={handleFrameBack}
+      >
+        {compressedUri ? (
+          <CropFramer
+            uri={compressedUri}
+            naturalWidth={naturalSize.current.width  || 1}
+            naturalHeight={naturalSize.current.height || 1}
+            onConfirm={handleFrameConfirm}
+            onBack={handleFrameBack}
+          />
+        ) : null}
+      </Modal>
       <ScrollView
         style={s.fill}
         contentContainerStyle={[

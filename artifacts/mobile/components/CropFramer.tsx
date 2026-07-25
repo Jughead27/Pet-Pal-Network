@@ -3,12 +3,16 @@
  *
  * Shows the photo at full-screen cover-fit. The user drags along whichever
  * axis has overflow to choose what part of the photo will appear in the feed.
- * The "frame" they see IS the feed frame — same width × height, same cover scale.
+ * The frame viewport (corner brackets) matches the feed card exactly —
+ * full screen — so what the user frames here is precisely what renders there.
  *
- * On "Done" it calls onConfirm(focusX, focusY) with values in [0, 1].
+ * On "Done" calls onConfirm(focusX, focusY) with values in [0, 1].
  * focusX = 0.5, focusY = 0.5 means center (default cover behavior).
  *
  * No react-native-reanimated. Uses standard Animated + PanResponder.
+ *
+ * Presentation: rendered inside a <Modal presentationStyle="fullScreen"> in
+ * add.tsx, so the tab bar is never visible or interactive here.
  */
 
 import React, { useCallback, useEffect, useMemo, useRef } from 'react';
@@ -36,7 +40,7 @@ interface CropFramerProps {
   naturalHeight: number;
   /** Called when user confirms the framing. */
   onConfirm: (focusX: number, focusY: number) => void;
-  /** Called when user wants to go back / change photo. */
+  /** Called when user wants to go back without discarding the selection. */
   onBack: () => void;
 }
 
@@ -57,6 +61,9 @@ export default function CropFramer({
   const insets = useSafeAreaInsets();
 
   // ── Cover-scale geometry ──────────────────────────────────────────────────
+  // Scale so the image fully covers the screen, then allow panning along any
+  // axis that has overflow. The feed card is full-screen, so screenW × screenH
+  // is the exact viewport the user will see in the feed.
   const { scaledW, scaledH, overflowX, overflowY } = useMemo(() => {
     const scale   = Math.max(screenW / naturalWidth, screenH / naturalHeight);
     const scaledW = naturalWidth  * scale;
@@ -76,14 +83,29 @@ export default function CropFramer({
   }, [overflowX, overflowY]);
 
   // ── Pan state ─────────────────────────────────────────────────────────────
-  // panX/panY are the image's translation FROM its centered position.
-  // Range: [-overflow/2, +overflow/2]  (symmetric around center)
+  // panX / panY: image translation from its centered position.
+  // Range: [-overflow/2, +overflow/2] symmetric around center.
   const panX = useRef(new Animated.Value(0)).current;
   const panY = useRef(new Animated.Value(0)).current;
 
   // Committed offset between gestures (gesture state resets on each touch).
   const baseOffset = useRef({ x: 0, y: 0 });
 
+  // ── Hint opacity — fades to 0 on first drag ───────────────────────────────
+  const hintOpacity  = useRef(new Animated.Value(1)).current;
+  const hintFaded    = useRef(false);
+
+  const fadeHint = useCallback(() => {
+    if (hintFaded.current) return;
+    hintFaded.current = true;
+    Animated.timing(hintOpacity, {
+      toValue:        0,
+      duration:       500,
+      useNativeDriver: true,
+    }).start();
+  }, [hintOpacity]);
+
+  // ── Pan responder ─────────────────────────────────────────────────────────
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () =>
@@ -91,6 +113,7 @@ export default function CropFramer({
       onMoveShouldSetPanResponder: () =>
         overflowRef.current.x > 0 || overflowRef.current.y > 0,
       onPanResponderMove: (_, gs) => {
+        fadeHint();
         const { x: ox, y: oy } = overflowRef.current;
         if (ox > 0) panX.setValue(clamp(baseOffset.current.x + gs.dx, -ox / 2, ox / 2));
         if (oy > 0) panY.setValue(clamp(baseOffset.current.y + gs.dy, -oy / 2, oy / 2));
@@ -109,7 +132,6 @@ export default function CropFramer({
   // ── Confirm handler ───────────────────────────────────────────────────────
   const handleConfirm = useCallback(() => {
     const { x: ox, y: oy } = overflowRef.current;
-    // Convert pan offset back to focal point.
     // panX = (0.5 - focusX) * ox  →  focusX = 0.5 - panX / ox
     const fx = ox > 0 ? clamp(0.5 - baseOffset.current.x / ox, 0, 1) : 0.5;
     const fy = oy > 0 ? clamp(0.5 - baseOffset.current.y / oy, 0, 1) : 0.5;
@@ -117,16 +139,18 @@ export default function CropFramer({
   }, [onConfirm]);
 
   // ── Image position ────────────────────────────────────────────────────────
-  // Base: image top-left at (-overflowX/2, -overflowY/2) so it's centered.
-  // Translation: panX shifts away from center.
   const imageLeft = -overflowX / 2;
   const imageTop  = -overflowY / 2;
 
   const canPan = overflowX > 0 || overflowY > 0;
 
+  // Corner bracket size (px).
+  const BRACKET = 24;
+  const THICK   = 3;
+
   return (
     <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* ── Draggable image ── */}
       <View style={StyleSheet.absoluteFill} {...panResponder.panHandlers}>
@@ -149,6 +173,32 @@ export default function CropFramer({
         />
       </View>
 
+      {/* ── Frame boundary — corner brackets ─────────────────────────────── */}
+      {/* The four corners mark the exact edge of the feed viewport so the
+          user knows precisely what will be shown in the feed.               */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {/* Top-left */}
+        <View style={[styles.corner, styles.cornerTL]}>
+          <View style={[styles.bracketH, { width: BRACKET, height: THICK }]} />
+          <View style={[styles.bracketV, { width: THICK, height: BRACKET }]} />
+        </View>
+        {/* Top-right */}
+        <View style={[styles.corner, styles.cornerTR]}>
+          <View style={[styles.bracketH, { width: BRACKET, height: THICK }]} />
+          <View style={[styles.bracketV, { width: THICK, height: BRACKET, alignSelf: 'flex-end' }]} />
+        </View>
+        {/* Bottom-left */}
+        <View style={[styles.corner, styles.cornerBL]}>
+          <View style={[styles.bracketV, { width: THICK, height: BRACKET }]} />
+          <View style={[styles.bracketH, { width: BRACKET, height: THICK }]} />
+        </View>
+        {/* Bottom-right */}
+        <View style={[styles.corner, styles.cornerBR]}>
+          <View style={[styles.bracketV, { width: THICK, height: BRACKET, alignSelf: 'flex-end' }]} />
+          <View style={[styles.bracketH, { width: BRACKET, height: THICK }]} />
+        </View>
+      </View>
+
       {/* ── Top bar ── */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity
@@ -156,7 +206,7 @@ export default function CropFramer({
           style={styles.iconBtn}
           accessibilityRole="button"
           accessibilityLabel="Back"
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
           <Feather name="arrow-left" size={22} color="#F0F4F8" />
         </TouchableOpacity>
@@ -167,15 +217,24 @@ export default function CropFramer({
         <View style={styles.iconBtn} />
       </View>
 
-      {/* ── Hint ── */}
+      {/* ── Drag hint — fades after first drag ── */}
       {canPan && (
-        <View style={styles.hintWrap} pointerEvents="none">
-          <Text style={styles.hint}>Drag to adjust</Text>
-        </View>
+        <Animated.View
+          style={[styles.hintWrap, { opacity: hintOpacity }]}
+          pointerEvents="none"
+        >
+          <Text style={styles.hint}>
+            {overflowX > 0 && overflowY > 0
+              ? 'Drag to adjust'
+              : overflowX > 0
+              ? 'Drag left / right to adjust'
+              : 'Drag up / down to adjust'}
+          </Text>
+        </Animated.View>
       )}
 
       {/* ── Bottom bar ── */}
-      <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 8 }]}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
         <Pressable
           style={({ pressed }) => [styles.doneBtn, pressed && styles.doneBtnPressed]}
           onPress={handleConfirm}
@@ -191,6 +250,8 @@ export default function CropFramer({
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
+const CORNER_OFFSET = 12; // px inset from screen edge for corner brackets
+
 const styles = StyleSheet.create({
   root: {
     flex: 1,
@@ -199,6 +260,29 @@ const styles = StyleSheet.create({
   image: {
     position: 'absolute',
   },
+
+  // ── Corner brackets ──────────────────────────────────────────────────────
+  corner: {
+    position: 'absolute',
+    width: 36,
+    height: 36,
+  },
+  cornerTL: { top: CORNER_OFFSET, left: CORNER_OFFSET, justifyContent: 'flex-start', alignItems: 'flex-start' },
+  cornerTR: { top: CORNER_OFFSET, right: CORNER_OFFSET, justifyContent: 'flex-start', alignItems: 'flex-end' },
+  cornerBL: { bottom: CORNER_OFFSET, left: CORNER_OFFSET, justifyContent: 'flex-end', alignItems: 'flex-start' },
+  cornerBR: { bottom: CORNER_OFFSET, right: CORNER_OFFSET, justifyContent: 'flex-end', alignItems: 'flex-end' },
+  bracketH: {
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 1.5,
+    position: 'absolute',
+  },
+  bracketV: {
+    backgroundColor: 'rgba(255,255,255,0.85)',
+    borderRadius: 1.5,
+    position: 'absolute',
+  },
+
+  // ── Top bar ───────────────────────────────────────────────────────────────
   topBar: {
     position: 'absolute',
     top: 0,
@@ -209,7 +293,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingBottom: 12,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   title: {
     color: '#F0F4F8',
@@ -218,29 +302,33 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   iconBtn: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
+  // ── Hint ─────────────────────────────────────────────────────────────────
   hintWrap: {
     position: 'absolute',
     left: 0,
     right: 0,
     top: '50%',
     alignItems: 'center',
-    marginTop: -14,
+    marginTop: -16,
   },
   hint: {
-    color: 'rgba(255,255,255,0.55)',
+    color: 'rgba(255,255,255,0.90)',
     fontSize: 13,
     fontWeight: '500' as const,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-    paddingHorizontal: 14,
-    paddingVertical: 5,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
     borderRadius: 20,
     overflow: 'hidden',
   },
+
+  // ── Bottom bar ────────────────────────────────────────────────────────────
   bottomBar: {
     position: 'absolute',
     bottom: 0,
@@ -248,12 +336,12 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 24,
     paddingTop: 16,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   doneBtn: {
     backgroundColor: '#2EBFA5',
     borderRadius: 12,
-    paddingVertical: 15,
+    paddingVertical: 16,
     alignItems: 'center',
   },
   doneBtnPressed: {
