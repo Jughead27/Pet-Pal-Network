@@ -21,6 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
@@ -34,6 +35,9 @@ import {
   useUnfollowSpecies,
   useFollowBreed,
   useUnfollowBreed,
+  useDeletePost,
+  getGetFeedQueryKey,
+  getGetPetQueryKey,
 } from "@workspace/api-client-react";
 import type { FeedPost, PackResult } from "@workspace/api-client-react";
 import { resolveMediaKey } from "@/utils/mediaKey";
@@ -71,6 +75,29 @@ export default function PetProfileScreen() {
   const [packMembersOpen, setPackMembersOpen] = useState(false);
   // Local pack count — initialised from server, updated optimistically on toggle
   const [localPackCount, setLocalPackCount] = useState<number | null>(null);
+  // Delete-confirm state for the post modal
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  const queryClient = useQueryClient();
+
+  // Delete mutation — invalidates pet grid, Home feed, and Nursery feed on success
+  const { mutate: doDelete, isPending: isDeleting } = useDeletePost({
+    mutation: {
+      onSuccess: () => {
+        setSelectedPostId(null);
+        setDeleteConfirm(false);
+        queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
+        queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey({ nursery: true }) });
+      },
+    },
+  });
+
+  // Closing the modal always resets the confirm state so it's fresh next open
+  const closePostModal = useCallback(() => {
+    setSelectedPostId(null);
+    setDeleteConfirm(false);
+  }, []);
 
   // Pack members — fetched when component mounts; React Query caches the result
   const { data: membersData, isLoading: membersLoading } = useGetPetPackMembers(petId ?? "");
@@ -418,9 +445,9 @@ export default function PetProfileScreen() {
         visible={!!selectedPostId}
         animationType="fade"
         transparent
-        onRequestClose={() => setSelectedPostId(null)}
+        onRequestClose={closePostModal}
       >
-        <Pressable style={styles.modalOverlay} onPress={() => setSelectedPostId(null)}>
+        <Pressable style={styles.modalOverlay} onPress={closePostModal}>
           <View style={styles.modalContent}>
             {selectedPost && (
               <>
@@ -437,9 +464,71 @@ export default function PetProfileScreen() {
                     {selectedPost.caption ?? ""}
                   </Text>
                 </View>
+
+                {/* Delete affordance — visible only to the pet's owner */}
+                {selectedPost.pet.viewerOwnsPet && (
+                  <View
+                    style={[
+                      styles.modalDeleteSection,
+                      { backgroundColor: colors.card, borderTopColor: colors.border },
+                    ]}
+                  >
+                    {!deleteConfirm ? (
+                      <TouchableOpacity
+                        onPress={() => setDeleteConfirm(true)}
+                        style={styles.modalDeleteRow}
+                        activeOpacity={0.7}
+                        accessibilityRole="button"
+                        accessibilityLabel="Delete this post"
+                      >
+                        <Ionicons name="trash-outline" size={14} color={colors.destructive} />
+                        <Text style={[styles.modalDeleteLabel, { color: colors.destructive }]}>
+                          Delete post
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View style={styles.modalConfirmBlock}>
+                        <Text style={[styles.modalConfirmText, { color: colors.foreground }]}>
+                          Delete this post? This can't be undone.
+                        </Text>
+                        <View style={styles.modalConfirmButtons}>
+                          <TouchableOpacity
+                            onPress={() => setDeleteConfirm(false)}
+                            disabled={isDeleting}
+                            style={[styles.modalCancelBtn, { borderColor: colors.border }]}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel="Cancel"
+                          >
+                            <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>
+                              Cancel
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => selectedPostId && doDelete({ id: selectedPostId })}
+                            disabled={isDeleting}
+                            style={[styles.modalDeleteBtn, { borderColor: colors.destructive }]}
+                            activeOpacity={0.7}
+                            accessibilityRole="button"
+                            accessibilityLabel="Confirm delete"
+                          >
+                            {isDeleting ? (
+                              <ActivityIndicator size="small" color={colors.destructive} />
+                            ) : (
+                              <Text style={[styles.modalDeleteBtnText, { color: colors.destructive }]}>
+                                Delete
+                              </Text>
+                            )}
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+
                 <TouchableOpacity
                   style={[styles.modalCloseBtn, { backgroundColor: "rgba(6,11,16,0.7)" }]}
-                  onPress={() => setSelectedPostId(null)}
+                  onPress={closePostModal}
                   accessibilityRole="button"
                   accessibilityLabel="Close"
                 >
@@ -548,7 +637,62 @@ const styles = StyleSheet.create({
   },
 
   // Post detail modal
-  modalContent:     { width: SCREEN_WIDTH - 32, borderRadius: 16, overflow: "hidden" },
+  modalContent: { width: SCREEN_WIDTH - 32, borderRadius: 16, overflow: "hidden" },
+
+  // Delete affordance inside the post modal
+  modalDeleteSection: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  modalDeleteRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  modalDeleteLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  modalConfirmBlock: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 12,
+  },
+  modalConfirmText: {
+    fontSize: 13,
+    lineHeight: 18,
+    fontFamily: "Inter_400Regular",
+  },
+  modalConfirmButtons: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  modalCancelBtn: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCancelText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+  },
+  modalDeleteBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 37,
+  },
+  modalDeleteBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
   modalImage:       { width: "100%", height: SCREEN_WIDTH - 32 },
   modalCaption:     { padding: 16, gap: 4 },
   modalPetName:     { fontSize: 13, fontFamily: "Inter_600SemiBold", letterSpacing: 0.4 },

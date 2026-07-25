@@ -92,11 +92,14 @@ router.get("/pets/:id", async (req, res) => {
     : null;
 
   const petSummary = {
-    id:           pet.id,
-    name:         pet.name,
-    species:      pet.species,
-    breed:        pet.breed ?? null,
+    id:            pet.id,
+    name:          pet.name,
+    species:       pet.species,
+    breed:         pet.breed ?? null,
     viewerInPack,
+    // True when the signed-in user owns this pet — drives the delete affordance
+    // in the post modal. Computed from the already-fetched pet row; no extra query.
+    viewerOwnsPet: pet.ownerId === userId,
   };
 
   // Fetch that pet's posts with reaction counts and viewer flags
