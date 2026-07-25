@@ -408,7 +408,10 @@ export default function FeedPage({
               style={[styles.petCaption, { color: 'rgba(240,244,248,0.9)' }]}
               numberOfLines={captionExpanded ? undefined : 2}
             >
-              {caption || 'View full photo'}
+              {`${caption || 'View full photo'}\u00A0`}
+              {/* Non-breaking space keeps the glyph with the last word — prevents orphaning.
+                  Nested Text renders inline in the parent's text flow on native and web. */}
+              <Text style={styles.captionExpand}>{'↗'}</Text>
             </Text>
           </TouchableOpacity>
           {captionNeedsMore && (
@@ -516,6 +519,16 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600' as const,
     color: 'rgba(240,244,248,0.55)',
+    ...TEXT_SHADOW,
+  },
+  // Expand glyph — inline hint that the text block is tappable.
+  // fontStyle: 'normal' overrides the parent petCaption's italic so ↗ renders upright.
+  // Opacity ~60 % makes it secondary to the caption without disappearing.
+  captionExpand: {
+    fontSize: 12,
+    lineHeight: 18,
+    fontStyle: 'normal' as const,
+    color: 'rgba(240,244,248,0.60)',
     ...TEXT_SHADOW,
   },
 });
