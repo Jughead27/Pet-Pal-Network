@@ -580,6 +580,46 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /posts/{id}:
+    delete:
+      operationId: deletePost
+      tags: [posts]
+      summary: Delete a post
+      description: >
+        Deletes a post owned by the caller (via pet ownership).
+        In a transaction, removes boops, treats, comments, and the post row.
+        Best-effort deletes the R2 object (failures are logged, not propagated).
+        Seed keys (seed:*) skip the R2 step. Returns 204 on success.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Post not owned by caller
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Post not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /pets:
     post:
       operationId: createPet
@@ -743,11 +783,15 @@ components:
         viewerInPack:
           type: boolean
           description: Whether the authenticated viewer is in this pet's Pack
+        viewerOwnsPet:
+          type: boolean
+          description: Whether the authenticated viewer owns this pet
       required:
         - id
         - name
         - species
         - viewerInPack
+        - viewerOwnsPet
 
     ViewerInfo:
       type: object

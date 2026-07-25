@@ -2,6 +2,12 @@
 
 A pet-only social network: pets are the profiles, humans are accounts that act on their behalf. Photo/video-first immersive feed for web, iOS, and Android.
 
+## Product principles
+
+- Animals are the subject. Humans may appear in posts, but are never the focus. Content that is not animal-based is off-topic and reportable.
+- This app is deliberately an anxiety-free space: no politics, no user-level status metrics (followers belong to pets, never users), no negative reaction mechanics (boops and treats only — there is no dislike).
+- Playful, warm tone everywhere. Moderation (Phase 7) enforces these principles: report reasons include "not animal content" and "animal cruelty / welfare concern" (highest priority).
+
 ## Run & Operate
 
 - `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)

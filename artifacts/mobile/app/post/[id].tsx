@@ -6,10 +6,14 @@
  *
  * Data is looked up from the feed cache (always populated when navigating
  * from the feed or pet profile). Falls back to a graceful error state.
+ *
+ * Owners see a quiet "Delete post" row below the caption card. Tapping it
+ * reveals an inline confirmation before issuing the DELETE request.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Dimensions,
   Image,
   Platform,
@@ -24,21 +28,43 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { getGetFeedQueryKey } from '@workspace/api-client-react';
+import {
+  getGetFeedQueryKey,
+  getGetPetQueryKey,
+  useDeletePost,
+} from '@workspace/api-client-react';
 import type { FeedPost, FeedResponse } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function PostDetailScreen() {
-  const colors  = useColors();
-  const insets  = useSafeAreaInsets();
-  const { id }  = useLocalSearchParams<{ id: string }>();
-  const queryClient = useQueryClient();
+  const colors       = useColors();
+  const insets       = useSafeAreaInsets();
+  const { id }       = useLocalSearchParams<{ id: string }>();
+  const queryClient  = useQueryClient();
+
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
   // Look up the post from whichever cache has it.
   const feedData = queryClient.getQueryData<FeedResponse>(getGetFeedQueryKey());
   const post: FeedPost | undefined = feedData?.posts.find((p: FeedPost) => p.id === id);
+
+  // Delete mutation — defined unconditionally (Rules of Hooks).
+  // onSuccess: invalidate all affected queries then navigate away.
+  const { mutate: doDelete, isPending: isDeleting } = useDeletePost({
+    mutation: {
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
+        queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey({ nursery: true }) });
+        // Invalidate this pet's profile grid so the post disappears there too
+        if (post?.pet.id) {
+          queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(post.pet.id) });
+        }
+        router.back();
+      },
+    },
+  });
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
@@ -73,7 +99,7 @@ export default function PostDetailScreen() {
 
       <ScrollView
         style={styles.fill}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
         showsVerticalScrollIndicator={false}
       >
         {/* Full-frame contain-fit photo */}
@@ -113,6 +139,70 @@ export default function PostDetailScreen() {
             </Text>
           )}
         </View>
+
+        {/* ── Delete section — owner only ─────────────────────────────────── */}
+        {post.pet.viewerOwnsPet && (
+          <View
+            style={[
+              styles.deleteCard,
+              { backgroundColor: colors.card, borderColor: colors.border },
+            ]}
+          >
+            {!deleteConfirm ? (
+              /* Initial state: quiet destructive row */
+              <TouchableOpacity
+                onPress={() => setDeleteConfirm(true)}
+                style={styles.deleteRow}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Delete this post"
+              >
+                <Ionicons name="trash-outline" size={15} color={colors.destructive} />
+                <Text style={[styles.deleteLabel, { color: colors.destructive }]}>
+                  Delete post
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              /* Confirm state: inline prompt + Cancel / Delete */
+              <View style={styles.confirmBlock}>
+                <Text style={[styles.confirmText, { color: colors.foreground }]}>
+                  Delete this post? This can't be undone.
+                </Text>
+                <View style={styles.confirmButtons}>
+                  <TouchableOpacity
+                    onPress={() => setDeleteConfirm(false)}
+                    disabled={isDeleting}
+                    style={[styles.cancelBtn, { borderColor: colors.border }]}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Cancel"
+                  >
+                    <Text style={[styles.cancelBtnText, { color: colors.mutedForeground }]}>
+                      Cancel
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={() => doDelete({ id: id! })}
+                    disabled={isDeleting}
+                    style={[styles.deleteBtn, { borderColor: colors.destructive }]}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Confirm delete"
+                  >
+                    {isDeleting ? (
+                      <ActivityIndicator size="small" color={colors.destructive} />
+                    ) : (
+                      <Text style={[styles.deleteBtnText, { color: colors.destructive }]}>
+                        Delete
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -148,6 +238,7 @@ const styles = StyleSheet.create({
 
   card: {
     margin: 16,
+    marginBottom: 0,
     borderRadius: 16,
     borderWidth: StyleSheet.hairlineWidth,
     padding: 20,
@@ -172,5 +263,66 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontStyle: 'italic',
     marginTop: 4,
+  },
+
+  // ── Delete card ────────────────────────────────────────────────────────────
+  deleteCard: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  deleteRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  deleteLabel: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+  },
+
+  // Confirm state
+  confirmBlock: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    gap: 14,
+  },
+  confirmText: {
+    fontSize: 14,
+    lineHeight: 20,
+    fontFamily: 'Inter_400Regular',
+  },
+  confirmButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  cancelBtn: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 14,
+    fontFamily: 'Inter_500Medium',
+  },
+  deleteBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+  },
+  deleteBtnText: {
+    fontSize: 14,
+    fontFamily: 'Inter_600SemiBold',
   },
 });

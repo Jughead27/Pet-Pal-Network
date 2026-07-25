@@ -40,7 +40,8 @@ export const GetFeedResponse = zod.object({
   "name": zod.string(),
   "species": zod.string(),
   "breed": zod.string().nullish(),
-  "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack')
+  "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet')
 }).describe('Minimal pet info embedded in feed posts'),
   "boopCount": zod.number(),
   "treatCount": zod.number(),
@@ -225,7 +226,8 @@ export const GetPetResponse = zod.object({
   "name": zod.string(),
   "species": zod.string(),
   "breed": zod.string().nullish(),
-  "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack')
+  "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet')
 }).describe('Minimal pet info embedded in feed posts'),
   "boopCount": zod.number(),
   "treatCount": zod.number(),
@@ -329,6 +331,17 @@ export const CreatePostResponse = zod.object({
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date()
 }).describe('The newly created post')
+
+
+/**
+ * Deletes a post owned by the caller (via pet ownership). In a transaction, removes boops, treats, comments, and the post row. Best-effort deletes the R2 object (failures are logged, not propagated). Seed keys (seed:*) skip the R2 step. Returns 204 on success.
+ * @summary Delete a post
+ */
+export const DeletePostParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeletePostResponse = zod.void()
 
 
 /**

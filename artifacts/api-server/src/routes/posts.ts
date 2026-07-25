@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { CreatePostBody } from "@workspace/api-zod";
+import { deleteObject } from "../lib/r2.js";
 
 const router: IRouter = Router();
 
@@ -204,6 +205,54 @@ router.post("/posts/:id/treats", async (req, res) => {
     treatCount: result.treatCount,
     treatsRemainingToday: result.treatsRemainingToday,
   });
+});
+
+/**
+ * DELETE /posts/:id
+ *
+ * Deletes a post owned by the authenticated user (ownership is checked via
+ * the post's pet). In a transaction: removes boops, treats, and comments,
+ * then the post row itself. Afterwards, best-effort deletes the R2 object —
+ * seed: keys are skipped; failures are logged but do not fail the response.
+ * Returns 204 on success.
+ */
+router.delete("/posts/:id", async (req, res) => {
+  const { id } = req.params;
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  // Load post + pet owner in one join to avoid multiple round-trips
+  const [postRow] = await db
+    .select({ mediaKey: postsTable.mediaKey, petOwnerId: petsTable.ownerId })
+    .from(postsTable)
+    .innerJoin(petsTable, eq(petsTable.id, postsTable.petId))
+    .where(eq(postsTable.id, id));
+
+  if (!postRow) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (postRow.petOwnerId !== userId) {
+    res.status(403).json({ error: "You do not own this post" });
+    return;
+  }
+
+  // Delete all child rows and the post in one atomic transaction
+  await db.transaction(async (tx) => {
+    await tx.delete(boopsTable).where(eq(boopsTable.postId, id));
+    await tx.delete(treatsTable).where(eq(treatsTable.postId, id));
+    await tx.delete(commentsTable).where(eq(commentsTable.postId, id));
+    await tx.delete(postsTable).where(eq(postsTable.id, id));
+  });
+
+  // Best-effort R2 deletion — seed keys have no real object
+  try {
+    await deleteObject(postRow.mediaKey);
+  } catch (err) {
+    console.error({ err, mediaKey: postRow.mediaKey }, "R2 delete failed — DB row already removed");
+  }
+
+  res.status(204).send();
 });
 
 /**

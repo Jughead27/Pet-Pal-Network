@@ -1344,6 +1344,78 @@ export const useCreatePost = <TError = ErrorType<ErrorResponse>,
       return useMutation(getCreatePostMutationOptions(options));
     }
 
+export const getDeletePostUrl = (id: string,) => {
+
+
+
+
+  return `/api/posts/${id}`
+}
+
+/**
+ * Deletes a post owned by the caller (via pet ownership). In a transaction, removes boops, treats, comments, and the post row. Best-effort deletes the R2 object (failures are logged, not propagated). Seed keys (seed:*) skip the R2 step. Returns 204 on success.
+ * @summary Delete a post
+ */
+export const deletePost = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeletePostUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePostMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePost>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePost>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deletePost'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePost>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deletePost(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePostMutationResult = NonNullable<Awaited<ReturnType<typeof deletePost>>>
+
+    export type DeletePostMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete a post
+ */
+export const useDeletePost = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePost>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePost>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeletePostMutationOptions(options));
+    }
+
 export const getCreatePetUrl = () => {
 
 

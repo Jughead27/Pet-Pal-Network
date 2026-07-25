@@ -54,6 +54,8 @@ router.get("/feed", async (req, res) => {
         where pf.user_id = ${userId}
           and pf.pet_id = ${petsTable.id}
       )`,
+      // Ownership flag — drives the delete affordance on the post-detail screen
+      viewerOwnsPet: sql<boolean>`${petsTable.ownerId} = ${userId}`,
     })
     .from(postsTable)
     .innerJoin(petsTable,    eq(petsTable.id,    postsTable.petId))
@@ -90,11 +92,12 @@ router.get("/feed", async (req, res) => {
       isNursery:   r.isNursery,
       createdAt:   r.createdAt,
       pet: {
-        id:          r.petId,
-        name:        r.petName,
-        species:     r.petSpecies,
-        breed:       r.petBreed ?? null,
-        viewerInPack: r.viewerInPack,
+        id:            r.petId,
+        name:          r.petName,
+        species:       r.petSpecies,
+        breed:         r.petBreed ?? null,
+        viewerInPack:  r.viewerInPack,
+        viewerOwnsPet: r.viewerOwnsPet,
       },
       boopCount:        r.boopCount,
       treatCount:       r.treatCount,
