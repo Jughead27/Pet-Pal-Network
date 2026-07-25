@@ -8,6 +8,7 @@ import {
   commentsTable,
 } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
+import { CreatePetBody } from "@workspace/api-zod";
 
 const router: IRouter = Router();
 
@@ -84,6 +85,67 @@ router.get("/pets/:id", async (req, res) => {
     breed: pet.breed ?? null,
     bio: pet.bio ?? null,
     posts,
+  });
+});
+
+/**
+ * POST /pets
+ *
+ * Creates a new pet owned by the authenticated user.
+ * Validates name (required) and species (required) server-side; returns 400 on failure.
+ */
+router.post("/pets", async (req, res) => {
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  const parsed = CreatePetBody.safeParse(req.body);
+  if (!parsed.success) {
+    const message = parsed.error.issues[0]?.message ?? "Invalid request";
+    res.status(400).json({ error: message });
+    return;
+  }
+
+  const { name, species, breed, bio } = parsed.data;
+
+  const [pet] = await db
+    .insert(petsTable)
+    .values({ ownerId: userId, name, species, breed: breed ?? null, bio: bio ?? null })
+    .returning();
+
+  res.status(201).json({
+    id:        pet.id,
+    ownerId:   pet.ownerId,
+    name:      pet.name,
+    species:   pet.species,
+    breed:     pet.breed ?? null,
+    bio:       pet.bio ?? null,
+    createdAt: pet.createdAt,
+  });
+});
+
+/**
+ * GET /me/pets
+ *
+ * Returns all pets owned by the authenticated user, ordered by creation time.
+ */
+router.get("/me/pets", async (req, res) => {
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  const pets = await db
+    .select()
+    .from(petsTable)
+    .where(eq(petsTable.ownerId, userId))
+    .orderBy(desc(petsTable.createdAt));
+
+  res.json({
+    pets: pets.map((p) => ({
+      id:        p.id,
+      ownerId:   p.ownerId,
+      name:      p.name,
+      species:   p.species,
+      breed:     p.breed ?? null,
+      bio:       p.bio ?? null,
+      createdAt: p.createdAt,
+    })),
   });
 });
 

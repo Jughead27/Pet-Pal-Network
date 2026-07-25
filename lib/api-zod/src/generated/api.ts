@@ -109,6 +109,55 @@ export const TreatPostResponse = zod.object({
 
 
 /**
+ * Creates a new pet owned by the authenticated user.
+ * @summary Create a pet
+ */
+export const createPetBodyNameMax = 50;
+
+export const createPetBodySpeciesMax = 50;
+
+export const createPetBodyBreedMax = 100;
+
+export const createPetBodyBioMax = 280;
+
+
+
+export const CreatePetBody = zod.object({
+  "name": zod.string().min(1).max(createPetBodyNameMax),
+  "species": zod.string().min(1).max(createPetBodySpeciesMax),
+  "breed": zod.string().max(createPetBodyBreedMax).optional(),
+  "bio": zod.string().max(createPetBodyBioMax).optional()
+}).describe('Request body for creating a pet')
+
+export const CreatePetResponse = zod.object({
+  "id": zod.string(),
+  "ownerId": zod.string(),
+  "name": zod.string(),
+  "species": zod.string(),
+  "breed": zod.string().nullish(),
+  "bio": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}).describe('A pet owned by a user')
+
+
+/**
+ * Returns all pets owned by the authenticated user.
+ * @summary Get caller's pets
+ */
+export const GetMyPetsResponse = zod.object({
+  "pets": zod.array(zod.object({
+  "id": zod.string(),
+  "ownerId": zod.string(),
+  "name": zod.string(),
+  "species": zod.string(),
+  "breed": zod.string().nullish(),
+  "bio": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+}).describe('A pet owned by a user'))
+}).describe('The caller\'s pets')
+
+
+/**
  * Returns comments on a post ordered by creation time
  * @summary Get post comments
  */

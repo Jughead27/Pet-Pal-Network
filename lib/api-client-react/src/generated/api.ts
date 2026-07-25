@@ -22,9 +22,12 @@ import type {
 import type {
   BoopResult,
   CommentBody,
+  CreatePetBody,
   ErrorResponse,
   FeedResponse,
   HealthStatus,
+  MyPetsResponse,
+  Pet,
   PetProfile,
   PostComment,
   TreatResult
@@ -434,6 +437,156 @@ export const useTreatPost = <TError = ErrorType<ErrorResponse>,
       > => {
       return useMutation(getTreatPostMutationOptions(options));
     }
+
+export const getCreatePetUrl = () => {
+
+
+
+
+  return `/api/pets`
+}
+
+/**
+ * Creates a new pet owned by the authenticated user.
+ * @summary Create a pet
+ */
+export const createPet = async (createPetBody: CreatePetBody, options?: RequestInit): Promise<Pet> => {
+
+  return customFetch<Pet>(getCreatePetUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createPetBody)
+  }
+);}
+
+
+
+
+
+export const getCreatePetMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPet>>, TError,{data: BodyType<CreatePetBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPet>>, TError,{data: BodyType<CreatePetBody>}, TContext> => {
+
+const mutationKey = ['createPet'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPet>>, {data: BodyType<CreatePetBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createPet(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePetMutationResult = NonNullable<Awaited<ReturnType<typeof createPet>>>
+    export type CreatePetMutationBody = BodyType<CreatePetBody>
+    export type CreatePetMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Create a pet
+ */
+export const useCreatePet = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPet>>, TError,{data: BodyType<CreatePetBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPet>>,
+        TError,
+        {data: BodyType<CreatePetBody>},
+        TContext
+      > => {
+      return useMutation(getCreatePetMutationOptions(options));
+    }
+
+export const getGetMyPetsUrl = () => {
+
+
+
+
+  return `/api/me/pets`
+}
+
+/**
+ * Returns all pets owned by the authenticated user.
+ * @summary Get caller's pets
+ */
+export const getMyPets = async ( options?: RequestInit): Promise<MyPetsResponse> => {
+
+  return customFetch<MyPetsResponse>(getGetMyPetsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyPetsQueryKey = () => {
+    return [
+    `/api/me/pets`
+    ] as const;
+    }
+
+
+export const getGetMyPetsQueryOptions = <TData = Awaited<ReturnType<typeof getMyPets>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyPets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyPetsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyPets>>> = ({ signal }) => getMyPets({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyPets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyPetsQueryResult = NonNullable<Awaited<ReturnType<typeof getMyPets>>>
+export type GetMyPetsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get caller's pets
+ */
+
+export function useGetMyPets<TData = Awaited<ReturnType<typeof getMyPets>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyPets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyPetsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetPostCommentsUrl = (id: string,) => {
 

@@ -8,10 +8,13 @@
 
 export * from './boopResult';
 export * from './commentBody';
+export * from './createPetBody';
 export * from './errorResponse';
 export * from './feedPost';
 export * from './feedResponse';
 export * from './healthStatus';
+export * from './myPetsResponse';
+export * from './pet';
 export * from './petProfile';
 export * from './petSummary';
 export * from './postComment';

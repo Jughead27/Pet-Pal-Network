@@ -170,6 +170,62 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /pets:
+    post:
+      operationId: createPet
+      tags: [pets]
+      summary: Create a pet
+      description: Creates a new pet owned by the authenticated user.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePetBody"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /me/pets:
+    get:
+      operationId: getMyPets
+      tags: [pets]
+      summary: Get caller's pets
+      description: Returns all pets owned by the authenticated user.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MyPetsResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /posts/{id}/comments:
     get:
       operationId: getPostComments
@@ -397,6 +453,67 @@ components:
           maxLength: 280
       required:
         - text
+
+    Pet:
+      type: object
+      description: A pet owned by a user
+      properties:
+        id:
+          type: string
+        ownerId:
+          type: string
+        name:
+          type: string
+        species:
+          type: string
+        breed:
+          type: string
+          nullable: true
+        bio:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - ownerId
+        - name
+        - species
+        - createdAt
+
+    CreatePetBody:
+      type: object
+      description: Request body for creating a pet
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+        species:
+          type: string
+          minLength: 1
+          maxLength: 50
+        breed:
+          type: string
+          maxLength: 100
+        bio:
+          type: string
+          maxLength: 280
+      required:
+        - name
+        - species
+
+    MyPetsResponse:
+      type: object
+      description: The caller's pets
+      properties:
+        pets:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pet"
+      required:
+        - pets
 
     BoopResult:
       type: object

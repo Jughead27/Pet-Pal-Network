@@ -1,0 +1,17 @@
+Scope: minimal pet creation. OpenAPI-first. Do not modify the feed, reactions, auth, or build any upload/media code.
+
+API: POST /pets — authenticated; body: name (required), species (required), breed (optional), bio (optional); owner = the authenticated user; returns the created pet. GET /me/pets — the caller's pets.
+UI: On the Profile tab, show the user's pets (name + species/breed) with a "Create a pet" button when they have none and an "Add another pet" affordance when they do. The creation form: simple fields for name, species, breed, bio in the existing design language (Inter, monochrome, existing input styling). Species/breed are free-text for now — the canonical breed picker is a later phase. On success, return to Profile showing the new pet.
+Apply identically to web, iOS, and Android. No react-native-reanimated imports.
+
+Acceptance test: A signed-in user with no pets sees the create flow, creates a pet, and it appears on their Profile and in the pets table with the correct owner. Validation rejects an empty name server-side. pnpm run typecheck clean.
+
+2. Cloudflare chore — do it while the agent runs. cloudflare.com → free account (it will ask for a payment card for R2; expected, usage will be pennies) → R2 Object Storage → Create bucket petproject-media → Manage R2 API Tokens → Create token pet-pal-api, permission Object Read & Write, scoped to that bucket only → copy the four values into Replit Secrets: R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, R2_BUCKET_NAME = petproject-media. Screenshot me anything confusing.
+
+3. Prompt 6 — uploads. I hand it over the moment 5 verifies (you'll create your first real pet — have a name ready) and the four secrets exist. Camera roll → compression → R2 → your photo atop your own swipe feed. That's the MVP bell.
+
+Parked (no action today): web Google-SSO popup close fix · countdown-vs-Yum! clearance check once treats reset tomorrow · "Your own pet? Sneaky." test once you own a pet · mockup-sandbox typecheck exclusion · comment thread moving into the post-detail screen (later phase per the original plan).
+
+Go — paste Prompt 5, open cloudflare.com in the next tab, and report from whichever front finishes first.
+
+Fable 5 uses your usage credits and draws down usage mu

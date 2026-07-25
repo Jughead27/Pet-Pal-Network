@@ -89,6 +89,46 @@ export interface CommentBody {
 }
 
 /**
+ * A pet owned by a user
+ */
+export interface Pet {
+  id: string;
+  ownerId: string;
+  name: string;
+  species: string;
+  breed?: string | null;
+  bio?: string | null;
+  createdAt: string;
+}
+
+/**
+ * Request body for creating a pet
+ */
+export interface CreatePetBody {
+  /**
+     * @minLength 1
+     * @maxLength 50
+     */
+  name: string;
+  /**
+     * @minLength 1
+     * @maxLength 50
+     */
+  species: string;
+  /** @maxLength 100 */
+  breed?: string;
+  /** @maxLength 280 */
+  bio?: string;
+}
+
+/**
+ * The caller's pets
+ */
+export interface MyPetsResponse {
+  pets: Pet[];
+}
+
+/**
  * Result of a boop action
  */
 export interface BoopResult {
