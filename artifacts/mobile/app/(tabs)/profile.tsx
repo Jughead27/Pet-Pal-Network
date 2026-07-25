@@ -19,7 +19,7 @@
  * a server mutation runs and cache is invalidated on settle.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Platform,
@@ -32,10 +32,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+import { Feather, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import MediaImage from '@/components/MediaImage';
 import {
   useGetMyPets,
   useGetMyFollows,
@@ -43,6 +44,7 @@ import {
   useUnfollowBreed,
   useLeavePetPack,
   getGetMyFollowsQueryKey,
+  getBaseUrl,
 } from '@workspace/api-client-react';
 import type { Pet, PackedPetItem, FollowedSpeciesItem, FollowedBreedItem } from '@workspace/api-client-react';
 import { useFollowsContext } from '@/context/FollowsContext';
@@ -209,9 +211,9 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* ══════════════ FOLLOWING ══════════════ */}
+        {/* ══════════════ MY PACK ══════════════ */}
         <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
-        <Text style={[styles.heading, { color: colors.foreground }]}>Following</Text>
+        <Text style={[styles.heading, { color: colors.foreground }]}>My Pack</Text>
 
         {followsLoading ? (
           <View style={styles.followsLoading}>
@@ -228,15 +230,16 @@ export default function ProfileScreen() {
         ) : (
           <View style={styles.listGap}>
 
-            {/* ── MY PACK ── */}
+            {/* ── PETS ── */}
             {packedPets.length > 0 && (
               <>
-                <Text style={[styles.subheading, { color: colors.mutedForeground }]}>My Pack</Text>
+                <Text style={[styles.subheading, { color: colors.mutedForeground }]}>Pets</Text>
                 {packedPets.map((item) => (
                   <FollowRow
                     key={`pack-${item.id}`}
                     primaryText={item.name}
                     secondaryText={item.breed ? `${item.species} · ${item.breed}` : item.species}
+                    thumbnailUrl={item.thumbnailUrl}
                     onRowPress={() => router.push(`/pet/${item.id}`)}
                     onUnfollow={() => handleLeavePackFromFollows(item)}
                     isPending={pendingIds.has(item.id)}
@@ -334,6 +337,52 @@ export default function ProfileScreen() {
   );
 }
 
+// ── PetThumbnail ──────────────────────────────────────────────────────────────
+
+interface PetThumbnailProps {
+  thumbnailUrl: string | null | undefined;
+  size:         number;
+  colors:       ReturnType<typeof useColors>;
+}
+
+/**
+ * Circular pet avatar: shows the pet's latest-post photo when available,
+ * or a paw-outline glyph when the pet has no posts or uses a seed key.
+ * Handles the native absolute-URL requirement by prepending the base URL.
+ */
+function PetThumbnail({ thumbnailUrl, size, colors }: PetThumbnailProps) {
+  const source = useMemo(() => {
+    if (!thumbnailUrl) return null;
+    let uri = thumbnailUrl;
+    if (Platform.OS !== 'web' && uri.startsWith('/')) {
+      uri = (getBaseUrl() ?? '') + uri;
+    }
+    return { uri };
+  }, [thumbnailUrl]);
+
+  if (!source) {
+    return (
+      <View
+        style={{
+          width: size, height: size, borderRadius: size / 2,
+          backgroundColor: colors.secondary,
+          alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <Ionicons name="paw-outline" size={Math.round(size * 0.45)} color={colors.mutedForeground} />
+      </View>
+    );
+  }
+
+  return (
+    <MediaImage
+      source={source}
+      style={{ width: size, height: size, borderRadius: size / 2 }}
+      resizeMode="cover"
+    />
+  );
+}
+
 // ── PetRow ────────────────────────────────────────────────────────────────────
 
 interface PetRowProps {
@@ -352,9 +401,7 @@ function PetRow({ pet, colors, onPress }: PetRowProps) {
       accessibilityLabel={`View ${pet.name}'s profile`}
       style={[styles.petRow, { backgroundColor: colors.card, borderColor: colors.border }]}
     >
-      <View style={[styles.petAvatar, { backgroundColor: colors.secondary }]}>
-        <Feather name="heart" size={18} color={colors.mutedForeground} />
-      </View>
+      <PetThumbnail thumbnailUrl={pet.thumbnailUrl} size={44} colors={colors} />
       <View style={styles.petInfo}>
         <Text style={[styles.petName, { color: colors.foreground }]}>{pet.name}</Text>
         <Text style={[styles.petSubtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
@@ -369,6 +416,7 @@ function PetRow({ pet, colors, onPress }: PetRowProps) {
 interface FollowRowProps {
   primaryText:    string;
   secondaryText?: string;
+  thumbnailUrl?:  string | null;
   onRowPress?:    () => void;
   onUnfollow:     () => void;
   isPending:      boolean;
@@ -379,6 +427,7 @@ interface FollowRowProps {
 function FollowRow({
   primaryText,
   secondaryText,
+  thumbnailUrl,
   onRowPress,
   onUnfollow,
   isPending,
@@ -393,6 +442,9 @@ function FollowRow({
         disabled={!onRowPress}
         style={styles.followRowContent}
       >
+        {thumbnailUrl !== undefined && (
+          <PetThumbnail thumbnailUrl={thumbnailUrl} size={40} colors={colors} />
+        )}
         <View style={styles.petInfo}>
           <Text style={[styles.petName, { color: colors.foreground }]} numberOfLines={1}>
             {primaryText}
@@ -543,6 +595,7 @@ const styles = StyleSheet.create({
     flex:          1,
     flexDirection: 'row',
     alignItems:    'center',
+    gap:           12,
   },
   unfollowBtn: {
     borderWidth:       StyleSheet.hairlineWidth,

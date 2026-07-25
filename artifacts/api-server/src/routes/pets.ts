@@ -347,20 +347,42 @@ router.get("/me/pets", async (req, res) => {
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
   const pets = await db
-    .select()
+    .select({
+      id:             petsTable.id,
+      ownerId:        petsTable.ownerId,
+      name:           petsTable.name,
+      species:        petsTable.species,
+      breed:          petsTable.breed,
+      bio:            petsTable.bio,
+      speciesId:      petsTable.speciesId,
+      breedId:        petsTable.breedId,
+      createdAt:      petsTable.createdAt,
+      // Correlated subquery: most recent non-archived post media key.
+      recentMediaKey: sql<string | null>`(
+        SELECT ${postsTable.mediaKey}
+        FROM   ${postsTable}
+        WHERE  ${postsTable.petId} = ${petsTable.id}
+          AND  ${postsTable.archivedAt} IS NULL
+        ORDER  BY ${postsTable.createdAt} DESC
+        LIMIT  1
+      )`,
+    })
     .from(petsTable)
     .where(eq(petsTable.ownerId, userId))
     .orderBy(desc(petsTable.createdAt));
 
   res.json({
     pets: pets.map((p) => ({
-      id:        p.id,
-      ownerId:   p.ownerId,
-      name:      p.name,
-      species:   p.species,
-      breed:     p.breed ?? null,
-      bio:       p.bio   ?? null,
-      createdAt: p.createdAt,
+      id:           p.id,
+      ownerId:      p.ownerId,
+      name:         p.name,
+      species:      p.species,
+      breed:        p.breed     ?? null,
+      bio:          p.bio       ?? null,
+      speciesId:    p.speciesId ?? null,
+      breedId:      p.breedId   ?? null,
+      createdAt:    p.createdAt,
+      thumbnailUrl: p.recentMediaKey ? mediaTokenUrl(p.recentMediaKey) : null,
     })),
   });
 });

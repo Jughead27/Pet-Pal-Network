@@ -14,8 +14,9 @@
  */
 
 import { Router, type IRouter } from "express";
-import { db, interestFollowsTable, packFollowsTable, petsTable, speciesTable, breedsTable } from "@workspace/db";
+import { db, interestFollowsTable, packFollowsTable, petsTable, postsTable, speciesTable, breedsTable } from "@workspace/db";
 import { eq, and, sql, asc } from "drizzle-orm";
+import { mediaTokenUrl } from "../lib/r2.js";
 
 const router: IRouter = Router();
 
@@ -122,12 +123,21 @@ router.get("/me/follows", async (req, res) => {
     // Packed pets: pack_follows → pets
     db
       .select({
-        id:        petsTable.id,
-        name:      petsTable.name,
-        species:   petsTable.species,
-        breed:     petsTable.breed,
-        speciesId: petsTable.speciesId,
-        breedId:   petsTable.breedId,
+        id:             petsTable.id,
+        name:           petsTable.name,
+        species:        petsTable.species,
+        breed:          petsTable.breed,
+        speciesId:      petsTable.speciesId,
+        breedId:        petsTable.breedId,
+        // Correlated subquery: most recent non-archived post media key.
+        recentMediaKey: sql<string | null>`(
+          SELECT ${postsTable.mediaKey}
+          FROM   ${postsTable}
+          WHERE  ${postsTable.petId} = ${petsTable.id}
+            AND  ${postsTable.archivedAt} IS NULL
+          ORDER  BY ${postsTable.createdAt} DESC
+          LIMIT  1
+        )`,
       })
       .from(packFollowsTable)
       .innerJoin(petsTable, eq(petsTable.id, packFollowsTable.petId))
@@ -172,12 +182,13 @@ router.get("/me/follows", async (req, res) => {
 
   res.json({
     packedPets: packedPetsRows.map((p) => ({
-      id:        p.id,
-      name:      p.name,
-      species:   p.species,
-      breed:     p.breed     ?? null,
-      speciesId: p.speciesId ?? null,
-      breedId:   p.breedId   ?? null,
+      id:           p.id,
+      name:         p.name,
+      species:      p.species,
+      breed:        p.breed     ?? null,
+      speciesId:    p.speciesId ?? null,
+      breedId:      p.breedId   ?? null,
+      thumbnailUrl: p.recentMediaKey ? mediaTokenUrl(p.recentMediaKey) : null,
     })),
     followedSpecies: followedSpeciesRows,
     followedBreeds:  followedBreedsRows,

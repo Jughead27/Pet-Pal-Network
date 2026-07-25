@@ -19,4 +19,6 @@ export interface Pet {
   breedId: string | null;
   bio?: string | null;
   createdAt: Date;
+  /** Stable media URL for the pet's most recent non-archived post. Null when the pet has no posts or when the most recent post uses a seed key (resolved client-side from bundled assets). */
+  thumbnailUrl: string | null;
 }

@@ -150,7 +150,8 @@ export const GetMyFollowsResponse = zod.object({
   "species": zod.string(),
   "breed": zod.string().nullish(),
   "speciesId": zod.string().nullish(),
-  "breedId": zod.string().nullish()
+  "breedId": zod.string().nullish(),
+  "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s most recent non-archived post. Null when the pet has no posts or when the most recent post uses a seed key (resolved client-side from bundled assets).\n')
 }).describe('A pet in the caller\'s Pack (from pack_follows), used in the follows management list')),
   "followedSpecies": zod.array(zod.object({
   "id": zod.string(),
@@ -455,7 +456,8 @@ export const CreatePetResponse = zod.object({
   "speciesId": zod.string().nullable(),
   "breedId": zod.string().nullable(),
   "bio": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s most recent non-archived post. Null when the pet has no posts or when the most recent post uses a seed key (resolved client-side from bundled assets).\n')
 }).describe('A pet owned by a user')
 
 
@@ -473,7 +475,8 @@ export const GetMyPetsResponse = zod.object({
   "speciesId": zod.string().nullable(),
   "breedId": zod.string().nullable(),
   "bio": zod.string().nullish(),
-  "createdAt": zod.coerce.date()
+  "createdAt": zod.coerce.date(),
+  "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s most recent non-archived post. Null when the pet has no posts or when the most recent post uses a seed key (resolved client-side from bundled assets).\n')
 }).describe('A pet owned by a user'))
 }).describe('The caller\'s pets')
 
