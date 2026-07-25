@@ -2,24 +2,32 @@
  * PopText — one independent reaction pop animation.
  *
  * Spawned per press. Animates:
- *   Scale   — 0 → 1.15 (overshoot, 160ms) → 1.0 (settle, 140ms)
- *   Drift   — up 50px over 600ms (Easing.out quad)
- *   Opacity — appear 80ms, hold 170ms, fade 350ms → ~600ms total
+ *   Scale   — 0 → 1.25 (overshoot, 160ms) → 1.0 (settle, 140ms)
+ *   Drift   — up 70px over 650ms (Easing.out quad)
+ *   Opacity — appear 80ms, hold 170ms, fade 400ms → ~650ms total
  *
  * Each pop carries its own stable sizeFactor (±15%) generated on mount,
  * so rapid-fire boops produce varied sizes rather than identical stamps.
+ * The caller may supply sizeMult (>1) for rapid-fire escalation — each
+ * successive boop within a window gets slightly bigger, compounding the
+ * applause feel on a physical phone.
  *
- * With reducedMotion: simple fade only — no movement, no scale overshoot.
+ * Base font size is 44px on native (clearly legible at arm's length) and
+ * 32px on web (web viewports are typically further from the user's eyes).
+ *
+ * With reducedMotion: simple fade pops, no movement, no scale overshoot.
  *
  * Implemented with React Native's built-in Animated API (NOT Reanimated) so it
  * works in Expo Go regardless of the bundled Reanimated version.
  */
 
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, StyleSheet, Text } from 'react-native';
+import { Animated, Easing, Platform, StyleSheet, Text } from 'react-native';
 
-// Base font size. Effective range: BASE × [0.85, 1.15] = ~27–37px.
-const BASE_FONT_SIZE = 32;
+// Base font size — larger on native where the phone is held close and the
+// pop needs to read at arm's length; slightly smaller on web.
+// Effective native range with ±15% sizeFactor: 44 × [0.85, 1.15] ≈ 37–51px.
+const BASE_FONT_SIZE = Platform.OS === 'web' ? 32 : 44;
 
 interface PopTextProps {
   word: string;
@@ -27,13 +35,27 @@ interface PopTextProps {
   rotation: number;
   onDone: () => void;
   reducedMotion: boolean;
-  /** Absolute position from screen right edge (px) */
+  /** Absolute position from right edge of the page (px) */
   right: number;
-  /** Absolute position from screen bottom edge (px) */
+  /** Absolute position from bottom edge of the page (px) */
   bottom: number;
+  /**
+   * Rapid-fire escalation multiplier (default 1.0).
+   * Each successive boop within the combo window passes a larger value
+   * (e.g. 1.07, 1.14, 1.20) so enthusiasm visibly compounds.
+   */
+  sizeMult?: number;
 }
 
-export default function PopText({ word, rotation, onDone, reducedMotion, right, bottom }: PopTextProps) {
+export default function PopText({
+  word,
+  rotation,
+  onDone,
+  reducedMotion,
+  right,
+  bottom,
+  sizeMult = 1,
+}: PopTextProps) {
   const opacity    = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const scale      = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
@@ -53,13 +75,13 @@ export default function PopText({ word, rotation, onDone, reducedMotion, right, 
         if (finished) onDone();
       });
     } else {
-      // All three timelines run in parallel (~600ms total):
+      // All three timelines run in parallel (~650ms total):
       //
-      //   Opacity  — quick appear (80ms), hold (170ms), fade out (350ms)
-      //   Scale    — pop in with overshoot:
-      //                0 → 1.15 over 160ms (cubic ease-out, fast punch)
-      //                1.15 → 1.0 over 140ms (settle back)
-      //   TranslateY — drift up 50px over 600ms (ease-out quad)
+      //   Opacity    — quick appear (80ms), hold (170ms), fade out (400ms)
+      //   Scale      — pop in with overshoot:
+      //                  0 → 1.25 over 160ms (cubic ease-out, punchy)
+      //                  1.25 → 1.0 over 140ms (settle back)
+      //   TranslateY — drift up 70px over 650ms (ease-out quad)
       //
       // The scale sequence (300ms) completes well inside the opacity hold,
       // so the settled size is visible for most of the lifetime.
@@ -67,12 +89,12 @@ export default function PopText({ word, rotation, onDone, reducedMotion, right, 
         Animated.sequence([
           Animated.timing(opacity, { toValue: 1, duration: 80,  useNativeDriver: true }),
           Animated.timing(opacity, { toValue: 1, duration: 170, useNativeDriver: true }),
-          Animated.timing(opacity, { toValue: 0, duration: 350, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0, duration: 400, useNativeDriver: true }),
         ]),
         Animated.sequence([
-          // Punch up past target
+          // Punch up past target — stronger overshoot for a more physical feel
           Animated.timing(scale, {
-            toValue: 1.15,
+            toValue: 1.25,
             duration: 160,
             easing: Easing.out(Easing.cubic),
             useNativeDriver: true,
@@ -86,8 +108,8 @@ export default function PopText({ word, rotation, onDone, reducedMotion, right, 
           }),
         ]),
         Animated.timing(translateY, {
-          toValue: -50,
-          duration: 600,
+          toValue: -70,
+          duration: 650,
           easing: Easing.out(Easing.quad),
           useNativeDriver: true,
         }),
@@ -98,7 +120,8 @@ export default function PopText({ word, rotation, onDone, reducedMotion, right, 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const fontSize = BASE_FONT_SIZE * sizeFactor;
+  // Final font size = base × per-instance size variance × rapid-fire multiplier
+  const fontSize = BASE_FONT_SIZE * sizeFactor * sizeMult;
 
   return (
     <Animated.View
@@ -131,9 +154,9 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontWeight: '700',
     color: '#FFFFFF',
-    // Stronger shadow so the chunky text holds against bright media.
+    // Strong shadow so chunky text holds against bright media.
     // textShadow shorthand (RN 0.76 / React Native Web)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ...({ textShadow: '0px 2px 10px rgba(0,0,0,0.9)' } as any),
+    ...({ textShadow: '0px 2px 12px rgba(0,0,0,0.95)' } as any),
   },
 });

@@ -17,6 +17,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  Easing,
   Platform,
   StyleSheet,
   Text,
@@ -43,7 +44,162 @@ function TreatIcon({ color, size }: { color: string; size: number }) {
   return <MaterialCommunityIcons name="bone" size={size} color={color} />;
 }
 
+// ─── BoopRipple ───────────────────────────────────────────────────────────────
+// A single coral ring that expands and fades from the boop icon on each press.
+// Multiple instances stack so rapid presses produce overlapping ripples.
+
+interface BoopRippleProps {
+  color: string;
+  onDone: () => void;
+}
+
+function BoopRipple({ color, onDone }: BoopRippleProps) {
+  const scale   = useRef(new Animated.Value(0.25)).current;
+  const opacity = useRef(new Animated.Value(0.85)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(scale, {
+        toValue: 3.2,
+        duration: 480,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 480,
+        easing: Easing.in(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) onDone();
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        styles.rippleRing,
+        { borderColor: color, transform: [{ scale }], opacity },
+      ]}
+      // pointerEvents in style (RN 0.76+)
+      pointerEvents="none"
+    />
+  );
+}
+
+// ─── BoopRailItem ─────────────────────────────────────────────────────────────
+// Dedicated boop button with:
+//   • Spring squash-and-bounce: 0.85 → 1.25 → 1.0
+//   • Coral ripple ring per press (overlapping on rapid presses)
+//   • Medium impact haptic (physical weight on a real phone)
+//   • Reduced-motion: no ring, no spring, haptic unchanged
+
+interface BoopRailItemProps {
+  count: number;
+  onPress: () => void;
+  isActive: boolean;
+  activeColor: string;
+  reducedMotion: boolean;
+}
+
+function BoopRailItem({
+  count,
+  onPress,
+  isActive,
+  activeColor,
+  reducedMotion,
+}: BoopRailItemProps) {
+  const colors = useColors();
+  const scale = useRef(new Animated.Value(1)).current;
+
+  // Stack of live ripple IDs — multiple can coexist during rapid presses.
+  const [ripples, setRipples] = useState<number[]>([]);
+  const rippleIdRef = useRef(0);
+
+  const removeRipple = useCallback((id: number) => {
+    setRipples((prev) => prev.filter((r) => r !== id));
+  }, []);
+
+  const handlePress = useCallback(() => {
+    if (!reducedMotion) {
+      // Spring: quick squash → energetic overshoot → springy settle
+      Animated.sequence([
+        Animated.spring(scale, {
+          toValue: 0.85,
+          damping: 6,
+          stiffness: 500,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scale, {
+          toValue: 1.25,
+          damping: 4,
+          stiffness: 380,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scale, {
+          toValue: 1.0,
+          damping: 12,
+          stiffness: 180,
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      // Spawn a new coral ripple ring
+      const id = ++rippleIdRef.current;
+      setRipples((prev) => [...prev, id]);
+    }
+
+    // Medium impact — lands physically on a real phone
+    if (Platform.OS !== 'web') {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    } else if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+      navigator.vibrate(12);
+    }
+
+    onPress();
+  }, [reducedMotion, scale, onPress]);
+
+  const iconColor = isActive ? activeColor : colors.foreground;
+  const countText = formatCount(count);
+
+  return (
+    <View style={styles.itemWrapper}>
+      {/*
+        Icon area: a fixed-size relative container so ripple rings (absolute,
+        centered) expand outward from the icon's midpoint without clipping the
+        count label below.
+      */}
+      <TouchableOpacity
+        onPress={handlePress}
+        activeOpacity={0.7}
+        style={styles.itemTouchable}
+        testID="boop-button"
+        accessibilityLabel="Boop"
+        accessibilityRole="button"
+      >
+        <View style={styles.boopIconArea}>
+          {/* Coral ripple rings — rendered behind the icon, overflow: visible */}
+          {ripples.map((id) => (
+            <BoopRipple
+              key={id}
+              color={activeColor}
+              onDone={() => removeRipple(id)}
+            />
+          ))}
+          <Animated.View style={{ transform: [{ scale }] }}>
+            <BoopIcon color={iconColor} size={24} />
+          </Animated.View>
+        </View>
+        <Text style={styles.count}>{countText}</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 // ─── ActionItem ───────────────────────────────────────────────────────────────
+// Generic rail item used for treat, comment, and share.
 
 interface ActionItemProps {
   renderIcon: (color: string, size: number) => React.ReactNode;
@@ -70,9 +226,9 @@ function ActionItem({
 
   const handlePress = () => {
     Animated.sequence([
-      Animated.spring(scale, { toValue: 0.7, damping: 10, stiffness: 300, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1.2, damping: 10, stiffness: 300, useNativeDriver: true }),
-      Animated.spring(scale, { toValue: 1.0, damping: 12, stiffness: 200, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 0.7,  damping: 10, stiffness: 300, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1.2,  damping: 10, stiffness: 300, useNativeDriver: true }),
+      Animated.spring(scale, { toValue: 1.0,  damping: 12, stiffness: 200, useNativeDriver: true }),
     ]).start();
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -143,6 +299,11 @@ interface ActionRailProps {
    * AsyncStorage). Only fires in onSuccess — never on 429 / 403.
    */
   onTreatTeaching?: () => void;
+  /**
+   * Whether the user has reduced motion enabled. When true, BoopRailItem
+   * skips the spring and ripple ring (haptics are unchanged per spec).
+   */
+  reducedMotion?: boolean;
 }
 
 export default function ActionRail({
@@ -161,6 +322,7 @@ export default function ActionRail({
   onTransientChange,
   onBoopTeaching,
   onTreatTeaching,
+  reducedMotion = false,
 }: ActionRailProps) {
   const colors = useColors();
 
@@ -223,10 +385,9 @@ export default function ActionRail({
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
-  const handleBoopPress = () => {
-    if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-      navigator.vibrate(10);
-    }
+  // handleBoopPress is called by BoopRailItem after it fires its own
+  // animation + haptic. It handles the state/API side only.
+  const handleBoopPress = useCallback(() => {
     onBoopOptimistic();
     onBoopFired?.();
     // Teaching pop — first boop ever on this device. Boops are optimistic so
@@ -237,7 +398,7 @@ export default function ActionRail({
       onBoopTeaching?.();
     }
     doBoopPost({ id: postId });
-  };
+  }, [onBoopOptimistic, onBoopFired, onBoopTeaching, doBoopPost, postId]);
 
   const handleTreatPress = () => {
     if (isTreatPending.current) return;
@@ -292,15 +453,13 @@ export default function ActionRail({
   return (
     <View style={styles.rail}>
 
-      {/* 1. Boop */}
-      <ActionItem
-        renderIcon={(color, size) => <BoopIcon color={color} size={size} />}
+      {/* 1. Boop — dedicated item with spring, ripple, medium haptic */}
+      <BoopRailItem
         count={boopCount}
         onPress={handleBoopPress}
-        accessibilityLabel="Boop"
-        activeColor={colors.accent}
         isActive={viewerHasBooped}
-        testID="boop-button"
+        activeColor={colors.accent}
+        reducedMotion={reducedMotion}
       />
 
       {/* 2. Treat — wrapped for bone-shake and transient message */}
@@ -397,6 +556,27 @@ const styles = StyleSheet.create({
     gap: 4,
     width: 40,
     paddingVertical: 2,
+  },
+  // Boop icon container — overflow: visible so ripple rings expand beyond
+  // the 40×40 bounds without being clipped. Fixed size for consistent ripple
+  // positioning via absolute centering.
+  boopIconArea: {
+    width: 40,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  // Coral ripple ring — starts at scale 0.25 (8px diameter) and expands
+  // to scale 3.2 (~102px) while fading. Base ring is 32×32 with a 2.5px border.
+  rippleRing: {
+    position: 'absolute',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 2.5,
+    // background is transparent — it's a ring, not a filled circle
+    backgroundColor: 'transparent',
   },
   count: {
     fontSize: 11,

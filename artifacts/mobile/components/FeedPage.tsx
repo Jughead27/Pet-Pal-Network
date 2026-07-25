@@ -69,7 +69,10 @@ const RAIL_EXCLUSION_X   = SCREEN_WIDTH - RAIL_TOUCH_WIDTH - RAIL_RIGHT_INSET - 
 //   • right edge stays ≥ POP_MIN_RAIL_CLEARANCE from the right edge at all widths
 const POP_RIGHT_FRACTION        = 200 / 402; // ≈ 0.498 — base offset from right
 const POP_TRANSIENT_FRACTION    =  30 / 402; // ≈ 0.075 — extra when transient visible
-const POP_MAX_EST_WIDTH         = 160;       // generous max for any word at peak scale (1.15×1.15)
+// Max estimated pop width — recomputed for the new 44px native base size:
+//   44px base × 1.15 sizeFactor × 1.20 sizeMult cap = 60.7px font
+//   "Boop!" at 60px Inter Bold ≈ 5 chars × ~38px ≈ 190px; add margin → 220px.
+const POP_MAX_EST_WIDTH         = 220;       // generous max for any word at peak scale
 const POP_MIN_LEFT_MARGIN       =  12;       // px — minimum gap from the left screen edge
 const POP_MIN_RAIL_CLEARANCE    = RAIL_RIGHT_INSET + RAIL_TOUCH_WIDTH + 16; // px from right
 
@@ -84,6 +87,8 @@ interface Pop {
   rotation: number;
   right: number;
   bottom: number;
+  /** Rapid-fire escalation multiplier (1.0 = no escalation). */
+  sizeMult: number;
 }
 
 let popCounter = 0;
@@ -158,7 +163,7 @@ export default function FeedPage({
   }, []);
 
   const spawnPop = useCallback(
-    (word: string, bottom: number) => {
+    (word: string, bottom: number, sizeMult = 1) => {
       const pw       = pageWidthRef.current;
       // Proportional base offset + transient bias, both scaling with page width.
       const base     = pw * POP_RIGHT_FRACTION;
@@ -173,6 +178,7 @@ export default function FeedPage({
         rotation: randRotation(),
         right,
         bottom,
+        sizeMult,
       };
       setPops((prev) => [...prev, pop]);
     },
@@ -183,7 +189,26 @@ export default function FeedPage({
     setPops((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
-  const spawnBoopPop  = useCallback(() => spawnPop('Boop!', BOOP_BOTTOM),  [spawnPop, BOOP_BOTTOM]);
+  // ── Boop rapid-fire escalation tracker ───────────────────────────────────
+  // Consecutive boops within 1.5 s each add +7% pop size, capped at +20%.
+  // Resets when the gap exceeds the window. Stored in a ref so the callback
+  // stays stable and never triggers re-renders.
+  const boopComboRef = useRef({ count: 0, lastTime: 0 });
+
+  const spawnBoopPop = useCallback(() => {
+    const now     = Date.now();
+    const elapsed = now - boopComboRef.current.lastTime;
+    if (elapsed < 1500) {
+      boopComboRef.current.count += 1;
+    } else {
+      boopComboRef.current.count = 1;
+    }
+    boopComboRef.current.lastTime = now;
+    // +7% per successive rapid boop after the first, capped at +20%
+    const sizeMult = Math.min(1.2, 1.0 + (boopComboRef.current.count - 1) * 0.07);
+    spawnPop('Boop!', BOOP_BOTTOM, sizeMult);
+  }, [spawnPop, BOOP_BOTTOM]);
+
   const spawnTreatPop = useCallback(() => spawnPop('Yum!',  TREAT_BOTTOM), [spawnPop, TREAT_BOTTOM]);
 
   // Teaching pops — shown once per device (AsyncStorage flag in ActionRail).
@@ -326,6 +351,7 @@ export default function FeedPage({
           onTransientChange={handleTransientChange}
           onBoopTeaching={spawnBoopTeachingPop}
           onTreatTeaching={spawnTreatTeachingPop}
+          reducedMotion={reducedMotion}
         />
       </Animated.View>
 
@@ -403,6 +429,7 @@ export default function FeedPage({
           rotation={pop.rotation}
           right={pop.right}
           bottom={pop.bottom}
+          sizeMult={pop.sizeMult}
           reducedMotion={reducedMotion}
           onDone={() => removePop(pop.id)}
         />
