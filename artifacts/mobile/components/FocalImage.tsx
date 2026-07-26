@@ -53,12 +53,24 @@ export default function FocalImage({ source, style, focusX, focusY }: FocalImage
   // Track which URI we last launched a getSize call for to avoid duplicates.
   const getSizeUri = useRef<string | null>(null);
 
-  // ── Reset all state when the source prop changes (new post in the feed). ──
+  // ── Stable key derived from source for equality checks. ──────────────────
+  // resolveMediaKey() returns a new {uri} object on every call even when the
+  // URI hasn't changed, so comparing by object identity (source) would fire
+  // the reset on every parent re-render. Using the URI string (or the asset
+  // number cast to string) means the effect only fires when the content truly
+  // changes — i.e. a new post is shown in the same FocalImage slot.
+  const sourceKey =
+    typeof source === 'number'
+      ? String(source)
+      : ((source as { uri?: string }).uri ?? '');
+
+  // ── Reset all state when the source genuinely changes (new post). ─────────
   useEffect(() => {
     setRetries(0);
     setNatural({ w: 0, h: 0 });
     getSizeUri.current = null;
-  }, [source]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sourceKey]);
 
   // ── Retry source — appends ?r=N to bust cached error responses. ───────────
   const effectiveSource = useMemo<ImageSourcePropType>(() => {

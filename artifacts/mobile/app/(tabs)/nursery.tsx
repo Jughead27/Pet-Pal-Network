@@ -161,6 +161,34 @@ export default function NurseryScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode, pagerStartIndex]);
 
+  // ── Pager item renderer (hoisted + memoised) ──────────────────────────────
+  // Must be a stable reference: if renderItem changes on every NurseryScreen
+  // re-render, FlatList re-renders all visible FeedPage instances, which
+  // re-computes heroImage in each one, which (via the old object-identity
+  // check in FocalImage) triggered a source-reset on every render cycle —
+  // cascading into "Too many re-renders" caught by the ErrorBoundary.
+  const renderPagerItem = useCallback(
+    ({ item }: { item: FeedPost }) => (
+      <FeedPage
+        post={item}
+        height={effectivePageHeight}
+        reducedMotion={reducedMotion}
+        onOpenCommentSheet={openCommentSheet}
+        onOpenShareSheet={openShareSheet}
+      />
+    ),
+    [effectivePageHeight, reducedMotion, openCommentSheet, openShareSheet],
+  );
+
+  const getPagerItemLayout = useCallback(
+    (_: unknown, index: number) => ({
+      length: effectivePageHeight,
+      offset: effectivePageHeight * index,
+      index,
+    }),
+    [effectivePageHeight],
+  );
+
   // ── Android hardware back ──────────────────────────────────────────────────
   useEffect(() => {
     if (viewMode !== 'pager') return;
@@ -228,22 +256,6 @@ export default function NurseryScreen() {
 
   if (viewMode === 'pager') {
     const backBtnTop = Platform.OS === 'web' ? 67 + 8 : insets.top + 8;
-
-    const getPagerItemLayout = (_: unknown, index: number) => ({
-      length: effectivePageHeight,
-      offset: effectivePageHeight * index,
-      index,
-    });
-
-    const renderPagerItem = ({ item }: { item: FeedPost }) => (
-      <FeedPage
-        post={item}
-        height={effectivePageHeight}
-        reducedMotion={reducedMotion}
-        onOpenCommentSheet={openCommentSheet}
-        onOpenShareSheet={openShareSheet}
-      />
-    );
 
     return (
       <View

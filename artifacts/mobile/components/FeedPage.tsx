@@ -20,7 +20,7 @@
  * All animations use React Native's built-in Animated API — no Reanimated.
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Dimensions,
@@ -280,7 +280,12 @@ export default function FeedPage({
   );
 
   // ── Derived display values ────────────────────────────────────────────────
-  const heroImage = resolveMediaKey(post.mediaKey, post.mediaUrl);
+  // useMemo keeps the {uri} object reference stable across re-renders so that
+  // FocalImage's source-reset effect doesn't fire when nothing has changed.
+  const heroImage = useMemo(
+    () => resolveMediaKey(post.mediaKey, post.mediaUrl),
+    [post.mediaKey, post.mediaUrl],
+  );
   const petName   = post.pet.name;
   const petBreed  = post.pet.breed ?? '';
   const petId     = post.pet.id;
