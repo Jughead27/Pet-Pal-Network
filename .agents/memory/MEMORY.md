@@ -10,3 +10,5 @@
 - [Archive Posts Architecture](archive-posts-architecture.md) — soft-delete via archivedAt; isNull filter on all public reads; archivedPosts+viewerOwnsPet on PetProfile; archiveConfirm state in mobile modal.
 - [FocalImage source-reset + pager renderItem stability](focal-image-pager-stability.md) — object-identity vs. URI-string dep in FocalImage; renderItem must be in useCallback in pager screens.
 - [expo-router blur listener pattern](expo-router-blur-listener.md) — useFocusEffect silently no-ops on tabs; use navigation.addListener('blur') via useNavigation instead.
+- [Vector Icons Web Font Loading](vector-icons-web-font-loading.md) — spread .font into useFonts for every @expo/vector-icons family used, or they render as empty squares on web export.
+- [Mobile Web Safe Area Bottom](mobile-web-safe-area-bottom.md) — tab bar needs viewport-fit=cover + env(safe-area-inset-bottom) paddingBottom + minHeight (not fixed height) on web.

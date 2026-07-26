@@ -389,13 +389,16 @@ export default function ActionRail({
   // animation + haptic. It handles the state/API side only.
   const handleBoopPress = useCallback(() => {
     onBoopOptimistic();
-    onBoopFired?.();
-    // Teaching pop — first boop ever on this device. Boops are optimistic so
-    // this fires immediately alongside onBoopFired.
+    // Teaching pop — first boop ever on this device.
+    // Only ONE label may show: if this is a teaching moment, spawn the teaching
+    // pop ("Boop") and suppress the regular pop ("Boop!") so they can't overlap.
+    // On every subsequent boop, spawn only the regular pop.
     if (!hasBoopTeachingRef.current) {
       hasBoopTeachingRef.current = true;
       AsyncStorage.setItem(TEACHING_KEY_BOOP, 'true').catch(() => {});
       onBoopTeaching?.();
+    } else {
+      onBoopFired?.();
     }
     doBoopPost({ id: postId });
   }, [onBoopOptimistic, onBoopFired, onBoopTeaching, doBoopPost, postId]);
@@ -536,14 +539,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
-  // Transient label: right: 50 puts its right edge 50px from the treat icon's
-  // right edge; width: 120 extends it leftward — safely left of the rail column.
+  // Transient label: positioned BELOW the treat icon+count (top: 44) so it sits
+  // beneath the pop spawn zone. Yum! pops spawn at ~bottomOffset+143 (above the
+  // treat section bottom) and float upward — placing the label below that level
+  // ensures pops never float through it. right: 50 / width: 120 keeps it well
+  // left of the rail column.
   transientLabel: {
     position: 'absolute',
     right: 50,
     width: 120,
     textAlign: 'right',
-    top: 2,
+    top: 44,
     fontSize: 10,
     fontWeight: '600' as const,
     lineHeight: 13,

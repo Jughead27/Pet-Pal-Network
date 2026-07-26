@@ -47,12 +47,19 @@ export default function TabLayout() {
           borderTopWidth: isWeb ? 1 : StyleSheet.hairlineWidth,
           borderTopColor: colors.border,
           elevation: 0,
-          paddingBottom: isWeb ? 0 : safeAreaInsets.bottom,
+          // On web: env(safe-area-inset-bottom) accounts for the iOS Safari browser
+          // chrome that overlaps the bottom of the viewport. Without it, icons and
+          // labels are clipped. viewport-fit=cover (set in app.json) is required
+          // for env() to return a non-zero value on Mobile Safari.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          paddingBottom: isWeb ? ('env(safe-area-inset-bottom)' as any) : safeAreaInsets.bottom,
           // overflow: visible lets the Add circle bleed above the bar on both
           // web (CSS overflow) and native (RN overflow). Without this the circle
           // is hard-clipped at the bar's top edge.
           overflow: 'visible',
-          ...(isWeb ? { height: 84 } : {}),
+          // Web: minHeight instead of fixed height so the bar grows with the safe-
+          // area padding. Native: no explicit height (React Navigation default).
+          ...(isWeb ? { minHeight: 84 } : {}),
         },
         tabBarBackground: () =>
           isIOS ? (

@@ -27,7 +27,12 @@
       "name": "pshpsh",
       "shortName": "pshpsh",
       "themeColor": "#060B10",
-      "backgroundColor": "#060B10"
+      "backgroundColor": "#060B10",
+      "meta": {
+        "viewport": {
+          "content": "width=device-width, initial-scale=1, viewport-fit=cover"
+        }
+      }
     },
     "plugins": [
       [

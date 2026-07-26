@@ -1,0 +1,49 @@
+SCOPE: Four production-web fixes, diagnosed from live evidence at
+https://pshpsh.net on a real mobile browser. Fix in source so all
+platforms benefit; verify against the DEPLOYED site, not the workshop.
+
+ISSUE 1 — ICONS (priority): In the production web build, SOME SVG icons
+render (Sniff giraffe, Nursery anchor) while others are empty squares
+(Home, Add, Profile tab icons; ALL right-rail icons: boop, treat,
+comment, share). DIAGNOSE FIRST: diff how a rendering icon component is
+built vs a non-rendering one — the failure is per-component, not the
+SVG library. Report the difference found, then fix the broken pattern.
+All icons must render identically on web production, iOS, and Android.
+
+ISSUE 2 — BOTTOM NAV vs BROWSER CHROME: on mobile web the tab bar's
+labels are clipped under the browser's own toolbar. Apply proper
+safe-area/viewport handling for mobile web (env(safe-area-inset-bottom)
+/ dynamic viewport height) so the full tab bar — icons AND labels — is
+visible above browser chrome. Recall the known gotcha: tabs web
+container height 0 → windowHeight on web; extend that handling, don't
+regress it.
+
+ISSUE 3 — FIRST-BOOP DOUBLE LABEL: on a first boop, two "Boop" labels
+render overlapping (teaching label + pop label colliding). Only one
+label may show at a time: if the teaching label is displayed, suppress
+the pop label for that interaction (or offset them so they can never
+overlap). Preserve the boop animation exactly otherwise.
+
+ISSUE 4 — TREAT "Yum!" COLLISION: the treat's Yum! label overlaps the
+treats-remaining indicator, nearly unreadable (the parked
+countdown-vs-Yum clearance issue, now confirmed live). Separate their
+positions so both are legible at every count. Preserve the treat
+animation and accepted-only Yum! rule.
+
+DO NOT MODIFY: reactions logic/API, feed queries, media routes, auth
+screens, mastheads, deployment secrets or build config.
+
+PRESERVATION CLAUSE: before editing the right rail, tab bar, or
+reaction animations, enumerate their existing capabilities (boop
+rapid-fire escalation + ripple + pops, treat cap + accepted-only Yum!,
+reduce-motion calm paths, tab navigation + grid re-entry rules). All
+must survive identically.
+
+ACCEPTANCE (verified on https://pshpsh.net from a real phone, hard
+refresh, after republish):
+1. Every tab icon and every right-rail icon renders.
+2. Full tab bar visible above browser chrome; nothing clipped.
+3. First boop on a fresh post: one clean label. Treat: Yum! and the
+   count both legible.
+4. Golden path on production: sign in → Home loads → boop persists
+   after refresh → Nursery opens pager → post flow → sign out.

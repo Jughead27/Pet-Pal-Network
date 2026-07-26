@@ -14,6 +14,12 @@ import {
   Inter_700Bold,
   useFonts,
 } from '@expo-google-fonts/inter';
+// Icon font files — must be loaded explicitly for web. On native, @expo/vector-icons
+// loads them automatically; on web the static export needs them pre-loaded or they
+// render as empty squares. Spreading .font into useFonts bundles the TTFs.
+import Feather from '@expo/vector-icons/Feather';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { PackProvider } from '@/context/PackContext';
@@ -112,6 +118,11 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    // Vector icon fonts — must be pre-loaded on web so the static bundle includes
+    // the TTF files. Native loads them lazily; web gets empty squares without this.
+    ...Feather.font,
+    ...MaterialCommunityIcons.font,
+    ...Ionicons.font,
   });
 
   useEffect(() => {
