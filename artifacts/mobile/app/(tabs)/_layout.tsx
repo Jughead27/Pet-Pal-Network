@@ -1,5 +1,5 @@
 import React from 'react';
-import { Platform, StyleSheet, useColorScheme, View } from 'react-native';
+import { Platform, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@clerk/clerk-expo';
 import { Feather } from '@expo/vector-icons';
@@ -8,6 +8,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SniffIcon from '@/components/SniffIcon';
 import HatchlingIcon from '@/components/HatchlingIcon';
+import { useGetMe } from '@workspace/api-client-react';
 
 // ─── TabLayout ────────────────────────────────────────────────────────────────
 //
@@ -16,16 +17,43 @@ import HatchlingIcon from '@/components/HatchlingIcon';
 // symbols via <Icon>, so it cannot render SniffIcon or HatchlingIcon, causing
 // Expo Go to show a compass (safari SF symbol) and a dove (bird SF symbol).
 
+/** Returns true when an ApiError carries { error: "suspended" }. */
+function isSuspendedError(e: unknown): boolean {
+  if (!e || typeof e !== 'object') return false;
+  const err = e as { status?: number; data?: unknown };
+  if (err.status !== 403) return false;
+  const data = err.data as { error?: string } | null | undefined;
+  return data?.error === 'suspended';
+}
+
 export default function TabLayout() {
   // All hooks must be called unconditionally before any early return.
   const { isSignedIn, isLoaded } = useAuth();
   const colors = useColors();
   const colorScheme = useColorScheme();
   const safeAreaInsets = useSafeAreaInsets();
+  const { error: meError } = useGetMe();
 
   // ─── Auth guard (after all hooks) ───────────────────────────────────────
   if (!isLoaded) return null;
   if (!isSignedIn) return <Redirect href="/(auth)/sign-in" />;
+
+  // ─── Suspension gate ─────────────────────────────────────────────────────
+  // When the server returns 403 { error: "suspended" }, show a plain full-screen
+  // notice. Every subsequent API call will also fail — this screen is final until
+  // an admin lifts the suspension.
+  if (isSuspendedError(meError)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 18, color: colors.foreground, textAlign: 'center', lineHeight: 28 }}>
+          this account is suspended.
+        </Text>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.mutedForeground, textAlign: 'center', marginTop: 12, lineHeight: 22 }}>
+          if you believe this is a mistake, contact support.
+        </Text>
+      </View>
+    );
+  }
   // ────────────────────────────────────────────────────────────────────────
 
   const isDark = colorScheme === 'dark';

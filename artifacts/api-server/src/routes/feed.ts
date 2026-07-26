@@ -11,7 +11,7 @@ import {
 } from "@workspace/db";
 import { and, eq, gte, desc, sql, isNull } from "drizzle-orm";
 import { mediaTokenUrl } from "../lib/r2.js";
-import { notBlockedPostOwner } from "../lib/excludeBlocked.js";
+import { notBlockedPostOwner, notHiddenByAdminPost } from "../lib/excludeBlocked.js";
 
 const router: IRouter = Router();
 
@@ -99,6 +99,8 @@ router.get("/feed", async (req, res) => {
       speciesId ? eq(petsTable.speciesId, speciesId) : undefined,
       // Exclude posts whose pet owner has a block relationship with the viewer
       notBlockedPostOwner(userId),
+      // Exclude posts hidden by admins
+      notHiddenByAdminPost(),
     ))
     .groupBy(postsTable.id, petsTable.id)
     .orderBy(...(sortPopular ? popularOrderBy : [desc(postsTable.createdAt)]));

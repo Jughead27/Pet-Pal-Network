@@ -49,7 +49,7 @@ export const requireClerkAuth: RequestHandler = async (req, res, next) => {
   let role: "member" | "admin" = "member";
   try {
     const [existing] = await db
-      .select({ id: usersTable.id, role: usersTable.role })
+      .select({ id: usersTable.id, role: usersTable.role, suspended: usersTable.suspended })
       .from(usersTable)
       .where(eq(usersTable.id, userId));
 
@@ -81,6 +81,11 @@ export const requireClerkAuth: RequestHandler = async (req, res, next) => {
       logger.info({ userId, username }, "Provisioned new user");
       // New users always start as 'member' (DB default); role stays 'member'.
     } else {
+      // Suspended users are blocked on every authenticated call.
+      if (existing.suspended) {
+        res.status(403).json({ error: "suspended" });
+        return;
+      }
       role = existing.role;
     }
   } catch (err) {

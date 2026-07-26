@@ -12,7 +12,7 @@ import {
 import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { CreatePostBody } from "@workspace/api-zod";
 import { deleteObject } from "../lib/r2.js";
-import { notBlockedCommentAuthor } from "../lib/excludeBlocked.js";
+import { notBlockedCommentAuthor, notHiddenByAdminComment } from "../lib/excludeBlocked.js";
 
 const router: IRouter = Router();
 
@@ -99,6 +99,8 @@ router.get("/posts/:id/comments", async (req, res) => {
       eq(commentsTable.postId, id),
       // Exclude comments from users who have a block relationship with the viewer
       notBlockedCommentAuthor(userId),
+      // Exclude comments hidden by admins
+      notHiddenByAdminComment(),
     ))
     .orderBy(asc(commentsTable.createdAt));
 

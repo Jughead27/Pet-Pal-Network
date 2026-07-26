@@ -682,6 +682,12 @@ export default function PetProfileScreen() {
                 style={styles.gridImage}
                 resizeMode="cover"
               />
+              {/* Owner sees "hidden by moderation" overlay on their admin-hidden posts */}
+              {pet.viewerOwnsPet && !!(post as unknown as { hiddenByAdmin?: boolean }).hiddenByAdmin && (
+                <View style={styles.hiddenOverlay}>
+                  <Text style={styles.hiddenOverlayText}>hidden</Text>
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </View>
@@ -722,6 +728,11 @@ export default function PetProfileScreen() {
                       style={styles.gridImage}
                       resizeMode="cover"
                     />
+                    {!!(post as unknown as { hiddenByAdmin?: boolean }).hiddenByAdmin && (
+                      <View style={styles.hiddenOverlay}>
+                        <Text style={styles.hiddenOverlayText}>hidden</Text>
+                      </View>
+                    )}
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1521,6 +1532,21 @@ const styles = StyleSheet.create({
   },
   gridItem:    { /* width/height set inline from gridItemSize */ },
   gridImage:   { width: "100%", height: "100%" },
+  // "hidden by moderation" overlay shown to owners on their admin-hidden posts
+  hiddenOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems:      "center",
+    justifyContent:  "center",
+  },
+  hiddenOverlayText: {
+    fontFamily:    "Inter_600SemiBold",
+    fontSize:      11,
+    color:         "#FFFFFF",
+    letterSpacing: 0.2,
+    textTransform: "uppercase" as const,
+    opacity:       0.9,
+  },
   modalOverlay: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "flex-end", alignItems: "center",

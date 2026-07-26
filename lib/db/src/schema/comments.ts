@@ -1,4 +1,4 @@
-import { pgTable, text, uuid, timestamp, index } from "drizzle-orm/pg-core";
+import { pgTable, text, uuid, timestamp, index, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { postsTable } from "./posts";
@@ -15,7 +15,10 @@ export const commentsTable = pgTable(
       .references(() => usersTable.id)
       .notNull(),
     text: text("text").notNull(),
-    createdAt: timestamp("created_at").defaultNow().notNull(),
+    createdAt:     timestamp("created_at").defaultNow().notNull(),
+    // Set by admins during moderation. Hidden comments excluded from all reads;
+    // comment author still sees their own comments via the owner path.
+    hiddenByAdmin: boolean("hidden_by_admin").notNull().default(false),
   },
   (table) => [
     index("comments_post_id_idx").on(table.postId),

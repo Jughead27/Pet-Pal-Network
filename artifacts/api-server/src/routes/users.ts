@@ -64,6 +64,7 @@ router.get("/me", async (req, res) => {
       locationCity: usersTable.locationCity,
       about:        usersTable.about,
       createdAt:    usersTable.createdAt,
+      role:         usersTable.role,
     })
     .from(usersTable)
     .where(eq(usersTable.id, userId));
@@ -80,6 +81,7 @@ router.get("/me", async (req, res) => {
     locationCity: user.locationCity ?? null,
     about:        user.about       ?? null,
     createdAt:    user.createdAt.toISOString(),
+    role:         user.role,
   });
 });
 

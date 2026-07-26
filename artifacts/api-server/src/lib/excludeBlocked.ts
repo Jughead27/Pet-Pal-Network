@@ -1,16 +1,17 @@
 /**
- * Centralized block-exclusion helpers for Drizzle queries.
+ * Centralized content-exclusion helpers for Drizzle queries.
  *
- * Each helper returns a correlated NOT EXISTS condition that filters out rows
- * whose relevant owner/author has a block relationship (in either direction)
- * with the viewer.  Apply them in the .where() clause of any query that reads
- * public content.
+ * Block exclusion: correlated NOT EXISTS against the blocks table.
+ * Admin-hide exclusion: simple column equality checks.
  *
- * DESIGN RULE: import from here — never inline block logic per-route.
+ * DESIGN RULE: import from here — never inline block or admin-hide logic
+ * per-route.  All public content reads must go through these helpers.
  */
 
-import { sql } from "drizzle-orm";
-import { petsTable, commentsTable } from "@workspace/db";
+import { sql, eq } from "drizzle-orm";
+import { petsTable, postsTable, commentsTable } from "@workspace/db";
+
+// ─── Block exclusion ─────────────────────────────────────────────────────────
 
 /**
  * Excludes posts whose pet's owner has blocked the viewer or been blocked by
@@ -40,4 +41,28 @@ export function notBlockedCommentAuthor(viewerId: string) {
     WHERE (b.blocker_id = ${viewerId} AND b.blocked_id = ${commentsTable.userId})
        OR (b.blocker_id = ${commentsTable.userId} AND b.blocked_id = ${viewerId})
   )`;
+}
+
+// ─── Admin-hide exclusion ─────────────────────────────────────────────────────
+
+/**
+ * Excludes posts that an admin has hidden.
+ *
+ * Apply to every public post read.  Owner-only surfaces (pet profile archived
+ * section) should NOT apply this — owners see their own hidden posts with a
+ * "hidden by moderation" note.
+ *
+ * REQUIRES: `postsTable` to be in scope in the calling query.
+ */
+export function notHiddenByAdminPost() {
+  return eq(postsTable.hiddenByAdmin, false);
+}
+
+/**
+ * Excludes comments that an admin has hidden.
+ *
+ * REQUIRES: `commentsTable` to be in scope in the calling query.
+ */
+export function notHiddenByAdminComment() {
+  return eq(commentsTable.hiddenByAdmin, false);
 }

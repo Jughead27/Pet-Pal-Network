@@ -1,0 +1,26 @@
+SCOPE: Admin queue — the moderation surface. Role-gated admin area with reports triage, invite-request list, and breed-suggestion approvals, plus content/user moderation actions. RIDER (small, separate concern): add a "cancel" whisper to EVERY step of ReportFlow (and tap-outside-to-dismiss on the reason list) — the flow currently has no exit.
+
+1. ACCESS: /admin route group in the app. Server: every admin endpoint behind requireRole('admin') — no exceptions. Client: expose role on GET /me; a quiet "admin" text link appears in the profile screen ONLY for admins (members never see it; the route 403s them regardless). Boring-utility register throughout — this surface is a tool, not a portal.
+
+2. REPORTS TRIAGE: list of pending reports — target preview (post thumbnail + caption snippet, or comment text), reason, reporter username, note, age. SORT: animal_cruelty reports ALWAYS first, then oldest-first. Actions per report:
+   - "dismiss" → status resolved, content untouched.
+   - "hide content" → sets hidden_by_admin on the post/comment (NEW flag, distinct from owner-archive); hidden content excluded from ALL reads via the same centralized pattern as blocking; owner still sees their own content with a quiet "hidden by moderation" note.
+   - "suspend owner" → NEW users.suspended boolean; requireClerkAuth returns 403 { error: "suspended" } for suspended users on every authenticated call; the app shows a plain full-screen notice ("this account is suspended.") on that response. Unsuspend available from the same surface.
+   - Every action resolves the report and is structured as a discrete server mutation (the audit-log delivery will wrap these next — design the handlers so logging slots in cleanly).
+
+3. INVITE REQUESTS: list from invite_requests (email, pet note, age, status) — actions: "mark contacted" / "close". No invite issuance yet (that arrives with Invites v2).
+
+4. BREED SUGGESTIONS: list the banked "Not listed" free-text submissions; actions: "approve" (creates the breed under its species in the taxonomy, immediately usable) / "reject". Duplicate-aware: approving a name that already exists ci-matches to the existing breed rather than creating a twin.
+
+DO NOT MODIFY: member-facing surfaces except the ReportFlow cancel rider and the suspended-notice screen, reactions, auth flows, blocking logic, deploy config. No new dependencies. All changes in SOURCE. Identically web/iOS/Android.
+
+PRESERVATION CLAUSE: everything a member can do today works identically for non-suspended members; report flow still submits; blocked-content exclusion unchanged; golden path intact.
+
+ACCEPTANCE — evidence pasted:
+1. /api/admin/ping live: admin session → 200 raw output; member or no session → 403/401 raw output (this closes the roles delivery's outstanding IOU).
+2. The test report James filed tonight, visible in the triage list, then dismissed — status change shown in the table.
+3. hidden_by_admin round trip: hide a dev post → absent from feed query results (paste before/after rows) → owner-view shows the moderation note.
+4. Suspension round trip on a dev test user: suspended → API 403 → unsuspended → restored (raw responses).
+5. A breed suggestion approved → new taxonomy row (paste it).
+6. ReportFlow cancel: works on every step (described per step).
+7. tsc clean both packages. Golden path intact.

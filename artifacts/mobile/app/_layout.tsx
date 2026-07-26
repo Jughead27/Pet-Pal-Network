@@ -86,8 +86,9 @@ function ClerkTokenSync() {
 function RootLayoutNav() {
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="(auth)"  options={{ headerShown: false }} />
+      <Stack.Screen name="(tabs)"  options={{ headerShown: false }} />
+      <Stack.Screen name="admin"   options={{ headerShown: false, animation: 'slide_from_right' }} />
       <Stack.Screen
         name="pet/create"
         options={{

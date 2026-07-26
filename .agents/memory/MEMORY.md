@@ -17,3 +17,4 @@
 - [Roles Architecture](roles-architecture.md) — role enum in users table; requireRole middleware; seed-admin script; single enforcement point pattern.
 - [Reports Architecture](reports-architecture.md) — reports table, POST /reports route, ReportFlow modal component, customFetch export fix.
 - [Blocks Architecture](blocks-architecture.md) — centralized excludeBlocked helpers; never inline per-route; ownerId/authorId via type assertions in mobile.
+- [Admin Queue Architecture](admin-queue-architecture.md) — reports triage, invite requests, breed suggestions; suspension wall in TabLayout; hiddenByAdmin boolean pattern.

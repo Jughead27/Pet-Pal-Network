@@ -6,6 +6,10 @@
  *   note     → optional "anything else?" textarea + "send report"
  *   done     → "thank you. we'll take a look." + optional block whisper
  *
+ * Every step has a "cancel" whisper that dismisses the flow immediately.
+ * Tap-outside on the reason list also dismisses (iOS native sheet gesture +
+ * Android onRequestClose).
+ *
  * Props:
  *   visible      — controls the Modal
  *   onClose      — called when the user dismisses or the flow completes
@@ -90,6 +94,12 @@ export default function ReportFlow({ visible, onClose, targetType, targetId, own
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
   }, []);
 
+  // Cancel — dismisses the flow immediately, clearing any pending timer.
+  const handleClose = useCallback(() => {
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    onClose();
+  }, [onClose]);
+
   const handlePickReason = (reason: Reason) => {
     setSelectedReason(reason);
     setStep('note');
@@ -113,7 +123,7 @@ export default function ReportFlow({ visible, onClose, targetType, targetId, own
     }
     setStep('done');
     // Auto-close after a beat.
-    closeTimerRef.current = setTimeout(onClose, 2200);
+    closeTimerRef.current = setTimeout(handleClose, 2200);
   };
 
   const handleBlock = async () => {
@@ -129,11 +139,7 @@ export default function ReportFlow({ visible, onClose, targetType, targetId, own
     }
     // Reset auto-close timer to give 2 s to read the block confirmation.
     if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = setTimeout(onClose, 2000);
-  };
-
-  const handleClose = () => {
-    onClose();
+    closeTimerRef.current = setTimeout(handleClose, 2000);
   };
 
   const pb = insets.bottom + (Platform.OS === 'web' ? 24 : 8);
@@ -150,16 +156,14 @@ export default function ReportFlow({ visible, onClose, targetType, targetId, own
         {/* Grabber + close */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={[styles.grabber, { backgroundColor: colors.border }]} />
-          {step !== 'done' && (
-            <TouchableOpacity
-              onPress={handleClose}
-              style={styles.closeBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-            >
-              <Text style={[styles.closeTxt, { color: colors.mutedForeground }]}>✕</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            onPress={handleClose}
+            style={styles.closeBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
+            <Text style={[styles.closeTxt, { color: colors.mutedForeground }]}>✕</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ── Reason step ─────────────────────────────────────────────────── */}
@@ -188,6 +192,18 @@ export default function ReportFlow({ visible, onClose, targetType, targetId, own
                 </Text>
               </Pressable>
             ))}
+            {/* Cancel whisper */}
+            <TouchableOpacity
+              onPress={handleClose}
+              style={styles.cancelWhisperBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel report"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={[styles.cancelWhisper, { color: colors.mutedForeground }]}>
+                cancel
+              </Text>
+            </TouchableOpacity>
           </ScrollView>
         )}
 
@@ -240,6 +256,21 @@ export default function ReportFlow({ visible, onClose, targetType, targetId, own
                 {step === 'sending' ? 'sending…' : 'send report'}
               </Text>
             </TouchableOpacity>
+
+            {/* Cancel whisper — hidden while sending */}
+            {step === 'note' && (
+              <TouchableOpacity
+                onPress={handleClose}
+                style={styles.cancelWhisperBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel report"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={[styles.cancelWhisper, { color: colors.mutedForeground }]}>
+                  cancel
+                </Text>
+              </TouchableOpacity>
+            )}
           </ScrollView>
         )}
 
@@ -267,6 +298,18 @@ export default function ReportFlow({ visible, onClose, targetType, targetId, own
                 blocked. you won't see each other's posts.
               </Text>
             )}
+            {/* Cancel / close whisper */}
+            <TouchableOpacity
+              onPress={handleClose}
+              style={styles.cancelWhisperBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={[styles.cancelWhisper, { color: colors.mutedForeground }]}>
+                close
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -370,5 +413,19 @@ const styles = StyleSheet.create({
     marginTop:    22,
     textAlign:    'center',
     letterSpacing: 0.1,
+  },
+
+  // Cancel whisper — appears at the bottom of every step
+  cancelWhisperBtn: {
+    alignSelf:   'center',
+    marginTop:   32,
+    paddingVertical: 4,
+  },
+  cancelWhisper: {
+    fontSize:      12,
+    opacity:       0.4,
+    fontFamily:    'Inter_400Regular',
+    letterSpacing: 0.1,
+    textAlign:     'center',
   },
 });

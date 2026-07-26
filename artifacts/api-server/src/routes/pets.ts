@@ -17,6 +17,7 @@ import {
 import { eq, desc, sql, and, or, isNull, isNotNull } from "drizzle-orm";
 import { CreatePetBody, PatchPetBody } from "@workspace/api-zod";
 import { mediaTokenUrl, copyObject } from "../lib/r2.js";
+import { notHiddenByAdminPost } from "../lib/excludeBlocked.js";
 
 const router: IRouter = Router();
 
@@ -156,7 +157,10 @@ router.get("/pets/:id", async (req, res) => {
     return;
   }
 
-  // Fetch that pet's posts with reaction counts and viewer flags
+  // Fetch that pet's posts with reaction counts and viewer flags.
+  // Non-owners: admin-hidden posts are excluded.
+  // Owners: all non-archived posts are returned, with hiddenByAdmin flag included
+  //         so the mobile can show "hidden by moderation" on their own content.
   const rows = await db
     .select({
       id:              postsTable.id,
@@ -167,6 +171,7 @@ router.get("/pets/:id", async (req, res) => {
       isNursery:       postsTable.isNursery,
       archivedAt:      postsTable.archivedAt,
       createdAt:       postsTable.createdAt,
+      hiddenByAdmin:   postsTable.hiddenByAdmin,
       boopCount:       sql<number>`count(distinct ${boopsTable.id})::int`,
       treatCount:      sql<number>`count(distinct ${treatsTable.id})::int`,
       commentCount:    sql<number>`count(distinct ${commentsTable.id})::int`,
@@ -177,7 +182,12 @@ router.get("/pets/:id", async (req, res) => {
     .leftJoin(boopsTable,    eq(boopsTable.postId,    postsTable.id))
     .leftJoin(treatsTable,   eq(treatsTable.postId,   postsTable.id))
     .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
-    .where(and(eq(postsTable.petId, id), isNull(postsTable.archivedAt)))
+    .where(and(
+      eq(postsTable.petId, id),
+      isNull(postsTable.archivedAt),
+      // Non-owners cannot see admin-hidden posts
+      viewerIsOwner ? undefined : notHiddenByAdminPost(),
+    ))
     .groupBy(postsTable.id)
     .orderBy(desc(postsTable.createdAt));
 
@@ -191,6 +201,9 @@ router.get("/pets/:id", async (req, res) => {
     isNursery:        r.isNursery,
     archivedAt:       r.archivedAt ? r.archivedAt.toISOString() : null,
     createdAt:        r.createdAt,
+    // hiddenByAdmin transmitted so owner sees "hidden by moderation" note on their
+    // own hidden posts; always false for non-owners (filtered at query level).
+    hiddenByAdmin:    r.hiddenByAdmin,
     pet:              petSummary,
     boopCount:        r.boopCount,
     treatCount:       r.treatCount,
@@ -211,6 +224,7 @@ router.get("/pets/:id", async (req, res) => {
           isNursery:        postsTable.isNursery,
           archivedAt:       postsTable.archivedAt,
           createdAt:        postsTable.createdAt,
+          hiddenByAdmin:    postsTable.hiddenByAdmin,
           boopCount:        sql<number>`count(distinct ${boopsTable.id})::int`,
           treatCount:       sql<number>`count(distinct ${treatsTable.id})::int`,
           commentCount:     sql<number>`count(distinct ${commentsTable.id})::int`,
@@ -236,6 +250,7 @@ router.get("/pets/:id", async (req, res) => {
     isNursery:        r.isNursery,
     archivedAt:       r.archivedAt ? r.archivedAt.toISOString() : null,
     createdAt:        r.createdAt,
+    hiddenByAdmin:    r.hiddenByAdmin,
     pet:              petSummary,
     boopCount:        r.boopCount,
     treatCount:       r.treatCount,

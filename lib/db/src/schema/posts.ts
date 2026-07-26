@@ -18,7 +18,11 @@ export const postsTable = pgTable(
     cropFocusX: real("crop_focus_x"),
     cropFocusY: real("crop_focus_y"),
     createdAt:  timestamp("created_at").defaultNow().notNull(),
-    archivedAt: timestamp("archived_at"),
+    archivedAt:    timestamp("archived_at"),
+    // Set by admins during moderation. Distinct from owner-archive:
+    // hidden posts are excluded from all public reads but remain visible to
+    // the owner on their pet profile with a "hidden by moderation" note.
+    hiddenByAdmin: boolean("hidden_by_admin").notNull().default(false),
   },
   (table) => [
     index("posts_pet_id_idx").on(table.petId),

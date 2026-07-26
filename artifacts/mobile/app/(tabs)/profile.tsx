@@ -242,6 +242,21 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
 
+        {/* Admin link — only visible to admins; quiet, no decoration */}
+        {(meData as unknown as { role?: string } | undefined)?.role === 'admin' && (
+          <TouchableOpacity
+            onPress={() => router.push('/admin')}
+            activeOpacity={0.7}
+            style={styles.editProfileRow}
+            accessibilityRole="link"
+            accessibilityLabel="Admin area"
+          >
+            <Text style={[styles.editProfileText, { color: colors.mutedForeground }]}>
+              admin
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {/* ══════════════ MY PETS ══════════════ */}
         <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
         <Text style={[styles.heading, { color: colors.foreground }]}>My Pets</Text>
