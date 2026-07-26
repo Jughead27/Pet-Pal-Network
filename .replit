@@ -1,11 +1,11 @@
-modules = ["nodejs-24", "python-base-3.13", "postgresql-16"]
+modules = ["nodejs-24", "postgresql-16", "python-base-3.13"]
 
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
 
 [deployment.postBuild]
-args = ["pnpm", "store", "prune"]
+args = ["bash", "scripts/prod-post-build.sh"]
 env = { "CI" = "true" }
 
 [workflows]
@@ -21,9 +21,3 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
-
-[userenv]
-
-[userenv.production]
-EXPO_PUBLIC_DOMAIN = "pshpsh.net"
-EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsucHNocHNoLm5ldCQ"
