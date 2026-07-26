@@ -19,6 +19,10 @@ run = "pnpm --filter @workspace/mobile run dev"
 [services.production.build]
 args = ["pnpm", "--filter", "@workspace/mobile", "exec", "expo", "export", "--platform", "web", "--output-dir", "dist-web"]
 
+[services.production.build.env]
+EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_live_Y2xlcmsucHNocHNoLm5ldCQ"
+EXPO_PUBLIC_DOMAIN = "pshpsh.net"
+
 [services.production.run]
 args = ["node", "--enable-source-maps", "artifacts/api-server/dist/index.mjs"]
 

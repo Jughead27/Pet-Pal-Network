@@ -46,13 +46,17 @@ if (fs.existsSync(WEB_DIST)) {
   // Serve JS bundles, fonts, images, and other static assets.
   app.use(express.static(WEB_DIST));
 
-  // SPA fallback: any route that doesn't start with /api returns index.html so
-  // client-side routes (e.g. /profile, /post/123) survive a hard refresh.
+  // SPA fallback: client-side routes (e.g. /profile, /post/123) return
+  // index.html so they survive a hard refresh.
   //
   // Uses a regex route — required for Express 5 / path-to-regexp v8 which
-  // rejects bare * wildcards. The negative lookahead ensures /api and /api/*
-  // (including /api/media/<key>) are never matched here.
-  app.get(/^(?!\/api(?:\/|$))/, (_req, res) => {
+  // rejects bare * wildcards. Two negative lookaheads:
+  //   1. (?!\/api(?:\/|$))  — never shadows /api/* (including /api/media/<key>)
+  //   2. (?!.*\.[a-zA-Z0-9]{1,8}$) — never catches static-asset requests
+  //      (.js .css .woff2 .ttf .png .ico .json …); those are served by
+  //      express.static above, and if missing they should 404, not return HTML
+  //      (returning HTML causes "invalid sfntVersion" font decode errors).
+  app.get(/^(?!\/api(?:\/|$))(?!.*\.[a-zA-Z0-9]{1,8}$)/, (_req, res) => {
     res.sendFile(path.join(WEB_DIST, "index.html"));
   });
 }
