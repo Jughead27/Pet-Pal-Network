@@ -264,6 +264,7 @@ export default function NurseryScreen() {
       >
         {effectivePageHeight > 0 && (
           <FlatList
+            key="pager"
             ref={pagerListRef}
             data={posts}
             renderItem={renderPagerItem}
@@ -339,6 +340,7 @@ export default function NurseryScreen() {
   return (
     <View style={containerStyle} onLayout={handleContainerLayout}>
       <FlatList
+        key="grid"
         ref={gridListRef}
         data={posts}
         renderItem={renderGridItem}

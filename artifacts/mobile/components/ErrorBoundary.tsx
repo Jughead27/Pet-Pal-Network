@@ -29,6 +29,14 @@ export class ErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: { componentStack: string }): void {
+    // Permanent diagnostic logging — always emit regardless of onError prop so
+    // the browser console and Metro logs always capture the full crash context.
+    console.error(
+      '[ErrorBoundary] Caught error\n',
+      'message:', error.message, '\n',
+      'stack:', error.stack, '\n',
+      'componentStack:', info.componentStack,
+    );
     if (typeof this.props.onError === 'function') {
       this.props.onError(error, info.componentStack);
     }
