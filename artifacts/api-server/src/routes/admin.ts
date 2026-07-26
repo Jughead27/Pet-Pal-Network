@@ -38,9 +38,12 @@ import { mediaTokenUrl } from "../lib/r2.js";
 const adminRouter = Router();
 
 // ─── Role gate ────────────────────────────────────────────────────────────────
-// Every route in this router requires admin role.  Applied once here so
-// individual handlers don't need to repeat the guard.
-adminRouter.use(requireRole("admin"));
+// Scoped to "/admin" so Express only invokes requireRole for paths that start
+// with /admin.  Without a path argument, Express would run this middleware for
+// EVERY request that reaches adminRouter (which is mounted without a prefix),
+// turning it into a blanket role gate that blocks /blocks, /reports, etc. for
+// member users before those routers ever get a chance to respond.
+adminRouter.use("/admin", requireRole("admin"));
 
 // ─── Ping ─────────────────────────────────────────────────────────────────────
 adminRouter.get("/admin/ping", (_req, res) => {

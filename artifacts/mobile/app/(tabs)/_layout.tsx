@@ -32,7 +32,13 @@ export default function TabLayout() {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const safeAreaInsets = useSafeAreaInsets();
-  const { error: meError } = useGetMe();
+  // Guard: only fire GET /me once Clerk has confirmed a live session.
+  // Without `enabled`, the query fires during the initial render while
+  // ClerkTokenSync's useEffect hasn't yet called setAuthTokenGetter — so the
+  // first request has no Authorization header and returns 401.  Gating on
+  // isLoaded && isSignedIn ensures the token getter is in place first.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error: meError } = useGetMe({ query: { enabled: isLoaded && isSignedIn === true } as any });
 
   // ─── Auth guard (after all hooks) ───────────────────────────────────────
   if (!isLoaded) return null;
