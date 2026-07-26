@@ -37,6 +37,11 @@ const SECTIONS = [
     label:       'Audit Log',
     description: 'Chronological record of every admin action. Read-only.',
   },
+  {
+    route:       '/admin/feedback' as const,
+    label:       'Feedback',
+    description: 'Member feedback submissions — mark reviewed when actioned.',
+  },
 ];
 
 export default function AdminIndexScreen() {

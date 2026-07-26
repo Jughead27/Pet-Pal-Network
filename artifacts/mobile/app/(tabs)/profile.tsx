@@ -20,6 +20,7 @@
  */
 
 import React, { useCallback, useMemo, useState } from 'react';
+import FeedbackFlow from '@/components/FeedbackFlow';
 import {
   ActivityIndicator,
   Platform,
@@ -79,6 +80,7 @@ export default function ProfileScreen() {
 
   // Sign-out confirmation state (inline, no Alert — works identically on all platforms)
   const [confirmSignOut,  setConfirmSignOut]  = useState(false);
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
   const [pendingBlockIds, setPendingBlockIds] = useState<Set<string>>(new Set());
   const addPendingBlock    = (id: string) => setPendingBlockIds((s) => new Set(s).add(id));
   const removePendingBlock = (id: string) => setPendingBlockIds((s) => { const n = new Set(s); n.delete(id); return n; });
@@ -423,6 +425,21 @@ export default function ProfileScreen() {
         {/* ══════════════ SIGN OUT ══════════════ */}
         <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
 
+        {/* Send feedback — quiet whisper-weight entry, above sign out */}
+        {!confirmSignOut && (
+          <TouchableOpacity
+            onPress={() => setFeedbackVisible(true)}
+            activeOpacity={0.7}
+            style={styles.feedbackRow}
+            accessibilityRole="button"
+            accessibilityLabel="Send feedback"
+          >
+            <Text style={[styles.feedbackText, { color: colors.mutedForeground }]}>
+              send feedback
+            </Text>
+          </TouchableOpacity>
+        )}
+
         {confirmSignOut ? (
           // Confirmation row — inline, no modal/Alert, works on all platforms
           <View style={styles.signOutConfirmRow}>
@@ -468,6 +485,12 @@ export default function ProfileScreen() {
         )}
 
       </ScrollView>
+
+      {/* Feedback modal — portal visual system */}
+      <FeedbackFlow
+        visible={feedbackVisible}
+        onClose={() => setFeedbackVisible(false)}
+      />
     </View>
   );
 }
@@ -785,6 +808,19 @@ const styles = StyleSheet.create({
   quietActionText: {
     fontFamily:    'Inter_500Medium',
     fontSize:      13,
+    letterSpacing: 0.1,
+  },
+
+  // Send feedback — whisper weight, sits above sign-out
+  feedbackRow: {
+    paddingVertical: 6,
+    alignSelf:       'flex-start',
+    marginBottom:    8,
+  },
+  feedbackText: {
+    fontFamily:    'Inter_400Regular',
+    fontSize:      13,
+    opacity:       0.7,
     letterSpacing: 0.1,
   },
 

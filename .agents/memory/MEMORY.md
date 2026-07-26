@@ -19,3 +19,4 @@
 - [Blocks Architecture](blocks-architecture.md) — centralized excludeBlocked helpers; never inline per-route; ownerId/authorId via type assertions in mobile.
 - [Admin Queue Architecture](admin-queue-architecture.md) — reports triage, invite requests, breed suggestions; suspension wall in TabLayout; hiddenByAdmin boolean pattern.
 - [Audit Log Architecture](audit-log-architecture.md) — append-only audit_log table; writeAudit(tx,...) helper; all admin mutations in db.transaction; GET /admin/audit paginated.
+- [Feedback Architecture](feedback-architecture.md) — feedback table, POST /feedback (5/hr rate limit), admin inbox + feedback.reviewed audit action.

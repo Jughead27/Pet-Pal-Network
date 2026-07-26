@@ -12,6 +12,7 @@ import usersRouter from "./users";
 import adminRouter from "./admin";
 import reportsRouter from "./reports";
 import blocksRouter from "./blocks";
+import feedbackRouter from "./feedback";
 import { requireClerkAuth } from "../middlewares/requireClerkAuth";
 import invitesRouter from "./invites";
 
@@ -40,5 +41,6 @@ router.use(usersRouter);  // GET /me  PATCH /me
 router.use(adminRouter);  // GET /admin/ping — and future admin routes
 router.use(reportsRouter); // POST /reports
 router.use(blocksRouter);  // POST /blocks  DELETE /blocks/:id  GET /blocks
+router.use(feedbackRouter); // POST /feedback
 
 export default router;
