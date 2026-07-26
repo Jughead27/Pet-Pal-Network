@@ -44,12 +44,16 @@ export default function SignInScreen() {
         identifier: email.trim(),
         password,
       });
+      // STEP0_TEMP_LOG — remove before final delivery
+      console.error('[CLERK:SIGNIN_RESULT]', JSON.stringify({ status: result.status, createdSessionId: result.createdSessionId }));
       if (result.status === 'complete') {
         await setActive({ session: result.createdSessionId });
       } else {
         setError('Sign-in could not be completed. Please try again.');
       }
     } catch (err: unknown) {
+      // STEP0_TEMP_LOG — remove before final delivery
+      console.error('[CLERK:SIGNIN_ERROR]', JSON.stringify(err));
       const msg =
         (err as { errors?: { message: string }[] })?.errors?.[0]?.message ??
         'An error occurred. Please try again.';
