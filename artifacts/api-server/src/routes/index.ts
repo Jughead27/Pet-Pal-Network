@@ -9,6 +9,8 @@ import speciesRouter from "./species";
 import packRouter from "./pack";
 import followsRouter from "./follows";
 import usersRouter from "./users";
+import adminRouter from "./admin";
+import reportsRouter from "./reports";
 import { requireClerkAuth } from "../middlewares/requireClerkAuth";
 import invitesRouter from "./invites";
 
@@ -34,5 +36,7 @@ router.use(speciesRouter); // GET /species  GET /species/:id/breeds
 router.use(packRouter);    // POST /pets/:id/pack  DELETE /pets/:id/pack
 router.use(followsRouter); // POST/DELETE /follows/species/:id  POST/DELETE /follows/breeds/:id  GET /me/follows
 router.use(usersRouter);  // GET /me  PATCH /me
+router.use(adminRouter);  // GET /admin/ping — and future admin routes
+router.use(reportsRouter); // POST /reports
 
 export default router;

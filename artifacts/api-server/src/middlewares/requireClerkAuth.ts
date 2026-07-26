@@ -44,10 +44,12 @@ export const requireClerkAuth: RequestHandler = async (req, res, next) => {
     return;
   }
 
-  // ── Step 2: Ensure user row exists ───────────────────────────────────────
+  // ── Step 2: Ensure user row exists; read role from DB ────────────────────
+  // role is ALWAYS sourced from our users table — never from client input.
+  let role: "member" | "admin" = "member";
   try {
     const [existing] = await db
-      .select({ id: usersTable.id })
+      .select({ id: usersTable.id, role: usersTable.role })
       .from(usersTable)
       .where(eq(usersTable.id, userId));
 
@@ -77,13 +79,16 @@ export const requireClerkAuth: RequestHandler = async (req, res, next) => {
 
       await db.insert(usersTable).values({ id: userId, username });
       logger.info({ userId, username }, "Provisioned new user");
+      // New users always start as 'member' (DB default); role stays 'member'.
+    } else {
+      role = existing.role;
     }
   } catch (err) {
     // Provisioning failure must never block the API — log and continue.
     logger.error({ err, userId }, "User provisioning failed");
   }
 
-  (req as Express.RequestWithAuth).auth = { userId };
+  (req as Express.RequestWithAuth).auth = { userId, role };
   next();
 };
 
@@ -92,7 +97,7 @@ declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface RequestWithAuth extends Request {
-      auth?: { userId: string };
+      auth?: { userId: string; role: "member" | "admin" };
     }
   }
 }

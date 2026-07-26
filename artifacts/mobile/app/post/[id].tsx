@@ -10,7 +10,7 @@
  * View-only for all viewers — delete is in the pet-profile post modal.
  */
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Platform,
   ScrollView,
@@ -30,15 +30,17 @@ import { getGetFeedQueryKey } from '@workspace/api-client-react';
 import type { FeedPost, FeedResponse } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import { formatPostAge } from '@/utils/formatPostAge';
+import ReportFlow from '@/components/ReportFlow';
 
 export default function PostDetailScreen() {
-  const colors      = useColors();
+  const colors        = useColors();
   // columnWidth is capped at COLUMN_MAX_WIDTH on web so the photo frame
   // matches the phone column, not the full browser window.
-  const columnWidth = useColumnWidth();
-  const insets      = useSafeAreaInsets();
-  const { id }      = useLocalSearchParams<{ id: string }>();
-  const queryClient = useQueryClient();
+  const columnWidth   = useColumnWidth();
+  const insets        = useSafeAreaInsets();
+  const { id }        = useLocalSearchParams<{ id: string }>();
+  const queryClient   = useQueryClient();
+  const [reportOpen, setReportOpen] = useState(false);
 
   // Look up the post from the feed cache.
   const feedData = queryClient.getQueryData<FeedResponse>(getGetFeedQueryKey());
@@ -111,12 +113,32 @@ export default function PostDetailScreen() {
             </Text>
           ) : null}
 
-          {/* Timestamp — ultra-subtle, 40% opacity, not tappable */}
-          <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>
-            {formatPostAge(post.createdAt)}
-          </Text>
+          {/* Timestamp + report whisper — same row, timestamp left, report right */}
+          <View style={styles.timestampRow}>
+            <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>
+              {formatPostAge(post.createdAt)}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setReportOpen(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Report this post"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={[styles.reportWhisper, { color: colors.mutedForeground }]}>
+                report
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
+
+      {/* Report flow — post */}
+      <ReportFlow
+        visible={reportOpen}
+        onClose={() => setReportOpen(false)}
+        targetType="post"
+        targetId={id ?? ''}
+      />
     </View>
   );
 }
@@ -169,10 +191,22 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 4,
   },
+  // Timestamp and report whisper share a row
+  timestampRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginTop:       2,
+  },
   timestamp: {
     fontSize:   12,
     opacity:    0.4,
-    marginTop:  2,
+    fontFamily: 'Inter_400Regular',
+  },
+  // "report" — smallest muted text, barely visible, per copy-law spec
+  reportWhisper: {
+    fontSize:   11,
+    opacity:    0.35,
     fontFamily: 'Inter_400Regular',
   },
 });

@@ -1,7 +1,12 @@
-import { pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex, pgEnum } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
+
+// ─── Role enum ────────────────────────────────────────────────────────────────
+// All new users default to 'member'. Admins are promoted via seed-admin.ts.
+// Never trust a client-supplied role; always read from this table.
+export const userRoleEnum = pgEnum("user_role", ["member", "admin"]);
 
 // id is the Clerk user ID (string), not a generated UUID.
 // username is nullable — users choose one via PATCH /me; middleware still
@@ -16,6 +21,7 @@ export const usersTable = pgTable(
     locationCity: text("location_city"),
     about:        text("about"),
     createdAt:    timestamp("created_at").defaultNow().notNull(),
+    role:         userRoleEnum("role").notNull().default("member"),
   },
   (t) => ({
     // Case-insensitive unique index — only indexes non-null usernames.

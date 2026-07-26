@@ -1,0 +1,21 @@
+SCOPE: Reports — schema, endpoint, and a quiet reporting surface for posts and comments. One delivery. No admin UI yet (the queue reads this table in a later delivery). No visible effect on reported content.
+
+1. SCHEMA: reports table — id, reporter_id (users FK), target_type enum ('post','comment'), target_id, reason enum EXACTLY this locked list: 'not_animal_content','animal_cruelty','mislabeled_pet','wrong_nursery_flag','spam','harassment','other'; note text nullable ≤200; status enum ('pending','resolved') default 'pending'; created_at. Unique constraint (reporter_id, target_type, target_id).
+
+2. API: POST /api/reports — authenticated (any member). Validates target exists; clamps note; duplicate report by same user on same target → 200 { ok: true, duplicate: true } (kind tone, no error). Rate limit 10/user/hour. animal_cruelty is stored like the rest — prioritization happens in the admin queue later.
+
+3. UI — boring-utility register, per the copy law: 
+   - POST DETAIL screen: a whisper "report" (smallest muted text, near the timestamp region) — never on the immersive feed pager.
+   - COMMENTS: a minimal per-comment affordance (quiet glyph or long-press, whichever fits existing comment rendering) → same flow.
+   - Flow: tapping report shows the reason list as TYPOGRAPHIC options (no pills), lowercase labels: "not animal content / animal cruelty / mislabeled pet / wrong nursery flag / spam / harassment / other" → optional "anything else?" note (≤200, counter) → "send report" bold text → confirmation: "thank you. we'll take a look."
+   - A user never sees their report's status; content never visibly changes from being reported.
+
+DO NOT MODIFY: feed pager chrome, reactions, auth, admin/ping, existing routes' behavior, deploy config. No new dependencies. All changes in SOURCE. Identically web/iOS/Android.
+
+PRESERVATION CLAUSE: post detail (timestamps, contain-fit, ↗ glyph), comments display and creation, boop/treat, golden path — all byte-identical outside the new affordances.
+
+ACCEPTANCE — evidence pasted:
+1. reports table schema + a real row created through the UI (paste the row).
+2. Duplicate submission → { ok, duplicate } raw response.
+3. Screenshots: the report whisper on post detail, the reason list, the confirmation state.
+4. Golden path: sign in → Home → boop persists → post detail → report a post → Nursery pager → sign out.

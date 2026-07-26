@@ -14,12 +14,14 @@ import {
   KeyboardAvoidingView,
   Modal,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
+import ReportFlow from '@/components/ReportFlow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -44,9 +46,11 @@ interface Props {
 function CommentRow({
   comment,
   colors,
+  onLongPress,
 }: {
   comment: PostComment;
   colors: ReturnType<typeof useColors>;
+  onLongPress: () => void;
 }) {
   const initials = comment.authorUsername
     .split(/[._-]/)
@@ -65,7 +69,13 @@ function CommentRow({
   })();
 
   return (
-    <View style={styles.commentRow}>
+    // Long-press opens the report flow for this comment.
+    <Pressable
+      onLongPress={onLongPress}
+      delayLongPress={400}
+      accessibilityHint="long-press to report"
+      style={styles.commentRow}
+    >
       <View style={[styles.avatar, { backgroundColor: colors.card }]}>
         <Text style={[styles.avatarText, { color: colors.primary }]}>
           {initials || '?'}
@@ -82,7 +92,7 @@ function CommentRow({
           {comment.text}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -94,6 +104,8 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState('');
   const inputRef = useRef<TextInput>(null);
+  // Report state — which comment is being reported (null = none open)
+  const [reportingCommentId, setReportingCommentId] = useState<string | null>(null);
 
   // Fetch server comments — disabled when no postId or sheet not visible
   const { data: serverComments, isLoading } = useGetPostComments(
@@ -155,7 +167,11 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
             data={serverComments ?? []}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <CommentRow comment={item} colors={colors} />
+              <CommentRow
+                comment={item}
+                colors={colors}
+                onLongPress={() => setReportingCommentId(item.id)}
+              />
             )}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
@@ -233,6 +249,14 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
           </View>
         </KeyboardAvoidingView>
       </View>
+
+      {/* Report flow — comment */}
+      <ReportFlow
+        visible={reportingCommentId !== null}
+        onClose={() => setReportingCommentId(null)}
+        targetType="comment"
+        targetId={reportingCommentId ?? ''}
+      />
     </Modal>
   );
 }
