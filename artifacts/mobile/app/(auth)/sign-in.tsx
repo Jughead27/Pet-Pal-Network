@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,7 +16,7 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useColors } from '@/hooks/useColors';
+import { getBaseUrl } from '@workspace/api-client-react';
 
 // Required for OAuth redirect to complete inside Expo Go.
 WebBrowser.maybeCompleteAuthSession();
@@ -24,12 +25,21 @@ type Step =
   | 'credentials'   // normal email + password
   | 'resetEmail'    // forgot-password: enter email
   | 'resetCode'     // forgot-password: enter code + new password
-  | 'secondFactor'; // device / client-trust: enter emailed code
+  | 'secondFactor'  // device / client-trust: enter emailed code
+  | 'invite';       // request-an-invite capture
+
+const LOGO = require('@/assets/icon.png');
+
+// ── Design tokens (portal palette) ────────────────────────────────────────────
+const BG         = '#060B10';
+const FG         = '#F0F4F8';
+const MUTED      = '#6B7FA0';
+const BORDER     = '#182030';
+const DESTRUCTIVE = '#FF4444';
 
 export default function SignInScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const router  = useRouter();
 
   const { signIn, setActive, isLoaded } = useSignIn();
   const { signUp } = useSignUp(); // needed for Google → new-user transfer
@@ -38,28 +48,35 @@ export default function SignInScreen() {
   const [step, setStep] = useState<Step>('credentials');
 
   // ── Credentials step ──────────────────────────────────────────────────────
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
 
   // ── Second-factor step ────────────────────────────────────────────────────
-  const [sfCode, setSfCode] = useState('');
+  const [sfCode, setSfCode]     = useState('');
   const [sfSending, setSfSending] = useState(false);
-  const [sfEmail, setSfEmail] = useState(''); // display-only safe identifier
+  const [sfEmail, setSfEmail]   = useState('');
 
   // ── Forgot-password steps ─────────────────────────────────────────────────
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetCode, setResetCode] = useState('');
-  const [newPassword, setNewPassword] = useState('');
+  const [resetEmail, setResetEmail]     = useState('');
+  const [resetCode, setResetCode]       = useState('');
+  const [newPassword, setNewPassword]   = useState('');
+
+  // ── Invite-request step ───────────────────────────────────────────────────
+  const [inviteEmail, setInviteEmail]   = useState('');
+  const [invitePet, setInvitePet]       = useState('');
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteSuccess, setInviteSuccess] = useState(false);
+  const [inviteError, setInviteError]   = useState<string | null>(null);
 
   // ── Shared ────────────────────────────────────────────────────────────────
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]       = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   function clerkMessage(err: unknown): string {
     const e = err as { errors?: { longMessage?: string; message?: string }[] };
-    return e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? 'An error occurred. Please try again.';
+    return e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? 'an error occurred. please try again.';
   }
 
   // ── Email + password sign-in ──────────────────────────────────────────────
@@ -77,20 +94,17 @@ export default function SignInScreen() {
         await setActive!({ session: result.createdSessionId });
 
       } else if (result.status === 'needs_second_factor') {
-        // Item 7: device verification / client-trust email-code flow.
         const emailCodeFactor = (
           result.supportedSecondFactors as Array<{ strategy: string; safeIdentifier?: string }> | undefined
         )?.find(f => f.strategy === 'email_code');
 
         if (!emailCodeFactor) {
-          // Unsupported strategy — surface it honestly (item 4).
           const strategies = (result.supportedSecondFactors as Array<{ strategy: string }> | undefined)
             ?.map(f => f.strategy).join(', ') ?? 'unknown';
-          setError(`Additional verification required (${strategies}). Contact support.`);
+          setError(`additional verification required (${strategies}). contact support.`);
           return;
         }
 
-        // Auto-send the code.
         setSfEmail(emailCodeFactor.safeIdentifier ?? email.trim());
         setSfSending(true);
         await signIn!.prepareSecondFactor({ strategy: 'email_code' });
@@ -98,8 +112,7 @@ export default function SignInScreen() {
         setStep('secondFactor');
 
       } else {
-        // Any other non-complete status — never silently swallow it.
-        setError(`Sign-in returned status "${result.status}". Check your Clerk dashboard configuration.`);
+        setError(`sign-in returned status "${result.status}". check your clerk dashboard configuration.`);
       }
     } catch (err) {
       setError(clerkMessage(err));
@@ -122,7 +135,7 @@ export default function SignInScreen() {
       if (result.status === 'complete') {
         await setActive!({ session: result.createdSessionId });
       } else {
-        setError(`Verification returned status "${result.status}". Please try again.`);
+        setError(`verification returned status "${result.status}". please try again.`);
       }
     } catch (err) {
       setError(clerkMessage(err));
@@ -178,12 +191,12 @@ export default function SignInScreen() {
         if (final.status === 'complete') {
           await setActive!({ session: final.createdSessionId });
         } else {
-          setError(`Password reset returned status "${final.status}". Please try again.`);
+          setError(`password reset returned status "${final.status}". please try again.`);
         }
       } else if (result.status === 'complete') {
         await setActive!({ session: result.createdSessionId });
       } else {
-        setError(`Verification returned status "${result.status}". Please try again.`);
+        setError(`verification returned status "${result.status}". please try again.`);
       }
     } catch (err) {
       setError(clerkMessage(err));
@@ -204,21 +217,19 @@ export default function SignInScreen() {
       const { createdSessionId, setActive: ssoSetActive, signIn: ssoSignIn } = result;
 
       if (createdSessionId && ssoSetActive) {
-        // Existing Google account — signed in directly.
         await ssoSetActive({ session: createdSessionId });
 
       } else if (ssoSignIn?.firstFactorVerification?.status === 'transferable') {
-        // New Google user arriving at sign-in — transfer to sign-up.
-        if (!signUp) { setError('Sign-up unavailable. Please try again.'); return; }
+        if (!signUp) { setError('sign-up unavailable. please try again.'); return; }
         const su = await signUp.create({ transfer: true });
         if (su.status === 'complete' && ssoSetActive) {
           await ssoSetActive({ session: su.createdSessionId! });
         } else if (su.status !== 'complete') {
-          setError(`Google sign-up returned status "${su.status}".`);
+          setError(`google sign-up returned status "${su.status}".`);
         }
 
       } else if (!createdSessionId) {
-        setError('Google sign-in could not be completed. Please try again.');
+        setError('google sign-in could not be completed. please try again.');
       }
     } catch (err) {
       setError(clerkMessage(err));
@@ -227,76 +238,110 @@ export default function SignInScreen() {
     }
   }, [startSSOFlow, signUp]);
 
-  const s = makeStyles(colors);
+  // ── Invite request submit ─────────────────────────────────────────────────
+  const handleInviteSubmit = useCallback(async () => {
+    setInviteLoading(true);
+    setInviteError(null);
+    try {
+      const baseUrl = getBaseUrl() ?? '';
+      const res = await fetch(`${baseUrl}/api/invites/request`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteEmail.trim(),
+          note: invitePet.trim() || undefined,
+        }),
+      });
+      const data = await res.json() as { ok: boolean; error?: string };
+      if (!data.ok) {
+        setInviteError(data.error ?? 'something went wrong. please try again.');
+      } else {
+        setInviteSuccess(true);
+      }
+    } catch {
+      setInviteError('could not submit request. check your connection and try again.');
+    } finally {
+      setInviteLoading(false);
+    }
+  }, [inviteEmail, invitePet]);
+
+  // ── Portal header (shared across all steps) ───────────────────────────────
+  const renderHeader = (subtitle?: { line1: string; line2?: string }) => (
+    <View style={s.header}>
+      <Image source={LOGO} style={s.logo} resizeMode="contain" />
+      <Text style={s.wordmark}>pshpsh</Text>
+      {subtitle ? (
+        <View style={s.sloganWrap}>
+          <Text style={s.slogan1}>{subtitle.line1}</Text>
+          {subtitle.line2 ? <Text style={s.slogan2}>{subtitle.line2}</Text> : null}
+        </View>
+      ) : (
+        <View style={s.sloganWrap}>
+          <Text style={s.slogan1}>follow pets, not people.</Text>
+          <Text style={s.slogan2}>curl up, you're home.</Text>
+        </View>
+      )}
+    </View>
+  );
 
   // ── Second-factor step ────────────────────────────────────────────────────
   if (step === 'secondFactor') {
     return (
-      <KeyboardAvoidingView
-        style={[s.flex, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
-          contentContainerStyle={[
-            s.scroll,
-            { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 32 },
-          ]}
+          contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={s.wordmark}>pshpsh</Text>
-          <Text style={s.tagline}>Check your email</Text>
-          {sfEmail ? (
-            <Text style={s.subtitle}>
-              we sent a verification code to{'\n'}
-              <Text style={{ color: colors.foreground }}>{sfEmail}</Text>
-            </Text>
-          ) : null}
+          <View style={s.col}>
+            {renderHeader({ line1: 'check your email.' })}
 
-          <View style={s.card}>
-            <Text style={s.label}>Verification Code</Text>
-            <TextInput
-              style={s.input}
-              value={sfCode}
-              onChangeText={setSfCode}
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              placeholderTextColor={colors.mutedForeground}
-              placeholder="6-digit code"
-              selectionColor={colors.primary}
-              onSubmitEditing={handleSecondFactor}
-              returnKeyType="go"
-              autoFocus
-            />
-            {error ? <Text style={s.error}>{error}</Text> : null}
+            {sfEmail ? (
+              <Text style={s.recipientLine}>
+                we sent a code to{' '}
+                <Text style={{ color: FG }}>{sfEmail}</Text>
+              </Text>
+            ) : null}
+            <Text style={s.spamHint}>not seeing it? check your spam folder</Text>
+
+            <View style={s.fieldGroup}>
+              <Text style={s.fieldLabel}>verification code</Text>
+              <TextInput
+                style={s.underlineInput}
+                value={sfCode}
+                onChangeText={setSfCode}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                placeholderTextColor={MUTED}
+                placeholder="6-digit code"
+                selectionColor={FG}
+                onSubmitEditing={handleSecondFactor}
+                returnKeyType="go"
+                autoFocus
+              />
+            </View>
+
+            {error ? <Text style={s.errorText}>{error}</Text> : null}
 
             <Pressable
-              style={({ pressed }) => [
-                s.primaryBtn,
-                pressed && s.pressed,
-                (loading || sfCode.length < 6) && s.btnDisabled,
-              ]}
+              style={({ pressed }) => [s.primaryAction, pressed && s.dimmed, (loading || sfCode.length < 6) && s.disabled]}
               onPress={handleSecondFactor}
               disabled={loading || sfCode.length < 6}
             >
-              {loading ? (
-                <ActivityIndicator color={colors.primaryForeground} />
-              ) : (
-                <Text style={s.primaryBtnText}>Verify</Text>
-              )}
+              {loading
+                ? <ActivityIndicator color={FG} size="small" />
+                : <Text style={s.primaryActionText}>verify</Text>}
             </Pressable>
-          </View>
 
-          <View style={s.switchRow}>
-            <Pressable onPress={handleResendCode} disabled={sfSending}>
-              <Text style={s.mutedLink}>
-                {sfSending ? 'sending…' : 'resend code'}
-              </Text>
-            </Pressable>
-            <Text style={s.switchText}> · </Text>
-            <Pressable onPress={() => { setStep('credentials'); setError(null); setSfCode(''); }}>
-              <Text style={s.mutedLink}>back</Text>
-            </Pressable>
+            <View style={s.whisperRow}>
+              <Pressable onPress={handleResendCode} disabled={sfSending}>
+                <Text style={s.whisper}>{sfSending ? 'sending…' : 'resend code'}</Text>
+              </Pressable>
+              <Text style={s.whisperDot}> · </Text>
+              <Pressable onPress={() => { setStep('credentials'); setError(null); setSfCode(''); }}>
+                <Text style={s.whisper}>back</Text>
+              </Pressable>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -306,64 +351,51 @@ export default function SignInScreen() {
   // ── Forgot-password: email step ───────────────────────────────────────────
   if (step === 'resetEmail') {
     return (
-      <KeyboardAvoidingView
-        style={[s.flex, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
-          contentContainerStyle={[
-            s.scroll,
-            { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 32 },
-          ]}
+          contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={s.wordmark}>pshpsh</Text>
-          <Text style={s.tagline}>Reset your password</Text>
-          <Text style={s.subtitle}>
-            we'll send a code to your email
-          </Text>
+          <View style={s.col}>
+            {renderHeader({ line1: 'reset your password.' })}
 
-          <View style={s.card}>
-            <Text style={s.label}>Email</Text>
-            <TextInput
-              style={s.input}
-              value={resetEmail}
-              onChangeText={setResetEmail}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="email-address"
-              textContentType="emailAddress"
-              placeholderTextColor={colors.mutedForeground}
-              placeholder="you@example.com"
-              selectionColor={colors.primary}
-              onSubmitEditing={handleForgotPassword}
-              returnKeyType="go"
-              autoFocus
-            />
-            {error ? <Text style={s.error}>{error}</Text> : null}
+            <View style={s.fieldGroup}>
+              <Text style={s.fieldLabel}>email</Text>
+              <TextInput
+                style={s.underlineInput}
+                value={resetEmail}
+                onChangeText={setResetEmail}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                placeholderTextColor={MUTED}
+                placeholder="you@example.com"
+                selectionColor={FG}
+                onSubmitEditing={handleForgotPassword}
+                returnKeyType="go"
+                autoFocus
+              />
+            </View>
+
+            {error ? <Text style={s.errorText}>{error}</Text> : null}
 
             <Pressable
-              style={({ pressed }) => [
-                s.primaryBtn,
-                pressed && s.pressed,
-                (loading || !resetEmail) && s.btnDisabled,
-              ]}
+              style={({ pressed }) => [s.primaryAction, pressed && s.dimmed, (loading || !resetEmail) && s.disabled]}
               onPress={handleForgotPassword}
               disabled={loading || !resetEmail}
             >
-              {loading ? (
-                <ActivityIndicator color={colors.primaryForeground} />
-              ) : (
-                <Text style={s.primaryBtnText}>Send Code</Text>
-              )}
+              {loading
+                ? <ActivityIndicator color={FG} size="small" />
+                : <Text style={s.primaryActionText}>send code</Text>}
             </Pressable>
-          </View>
 
-          <View style={s.switchRow}>
-            <Pressable onPress={() => { setStep('credentials'); setError(null); }}>
-              <Text style={s.mutedLink}>← back to sign in</Text>
-            </Pressable>
+            <View style={s.whisperRow}>
+              <Pressable onPress={() => { setStep('credentials'); setError(null); }}>
+                <Text style={s.whisper}>← back to sign in</Text>
+              </Pressable>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -373,76 +405,173 @@ export default function SignInScreen() {
   // ── Forgot-password: code + new password step ─────────────────────────────
   if (step === 'resetCode') {
     return (
-      <KeyboardAvoidingView
-        style={[s.flex, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
-          contentContainerStyle={[
-            s.scroll,
-            { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 32 },
-          ]}
+          contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={s.wordmark}>pshpsh</Text>
-          <Text style={s.tagline}>Set a new password</Text>
-          <Text style={s.subtitle}>
-            enter the code sent to{'\n'}
-            <Text style={{ color: colors.foreground }}>{resetEmail}</Text>
-          </Text>
+          <View style={s.col}>
+            {renderHeader({ line1: 'set a new password.' })}
 
-          <View style={s.card}>
-            <Text style={s.label}>Code</Text>
-            <TextInput
-              style={s.input}
-              value={resetCode}
-              onChangeText={setResetCode}
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              placeholderTextColor={colors.mutedForeground}
-              placeholder="6-digit code"
-              selectionColor={colors.primary}
-              autoFocus
-            />
+            <Text style={s.recipientLine}>
+              enter the code sent to{' '}
+              <Text style={{ color: FG }}>{resetEmail}</Text>
+            </Text>
 
-            <Text style={[s.label, { marginTop: 16 }]}>New Password</Text>
-            <TextInput
-              style={s.input}
-              value={newPassword}
-              onChangeText={setNewPassword}
-              secureTextEntry
-              textContentType="newPassword"
-              placeholderTextColor={colors.mutedForeground}
-              placeholder="8+ characters"
-              selectionColor={colors.primary}
-              onSubmitEditing={handleResetVerify}
-              returnKeyType="go"
-            />
+            <View style={s.fieldGroup}>
+              <Text style={s.fieldLabel}>code</Text>
+              <TextInput
+                style={s.underlineInput}
+                value={resetCode}
+                onChangeText={setResetCode}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                placeholderTextColor={MUTED}
+                placeholder="6-digit code"
+                selectionColor={FG}
+                autoFocus
+              />
+            </View>
 
-            {error ? <Text style={s.error}>{error}</Text> : null}
+            <View style={s.fieldGroup}>
+              <Text style={s.fieldLabel}>new password</Text>
+              <TextInput
+                style={s.underlineInput}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                secureTextEntry
+                textContentType="newPassword"
+                placeholderTextColor={MUTED}
+                placeholder="8+ characters"
+                selectionColor={FG}
+                onSubmitEditing={handleResetVerify}
+                returnKeyType="go"
+              />
+            </View>
+
+            {error ? <Text style={s.errorText}>{error}</Text> : null}
 
             <Pressable
               style={({ pressed }) => [
-                s.primaryBtn,
-                pressed && s.pressed,
-                (loading || resetCode.length < 6 || newPassword.length < 8) && s.btnDisabled,
+                s.primaryAction, pressed && s.dimmed,
+                (loading || resetCode.length < 6 || newPassword.length < 8) && s.disabled,
               ]}
               onPress={handleResetVerify}
               disabled={loading || resetCode.length < 6 || newPassword.length < 8}
             >
-              {loading ? (
-                <ActivityIndicator color={colors.primaryForeground} />
-              ) : (
-                <Text style={s.primaryBtnText}>Reset Password</Text>
-              )}
+              {loading
+                ? <ActivityIndicator color={FG} size="small" />
+                : <Text style={s.primaryActionText}>reset password</Text>}
             </Pressable>
-          </View>
 
-          <View style={s.switchRow}>
-            <Pressable onPress={() => { setStep('resetEmail'); setError(null); }}>
-              <Text style={s.mutedLink}>← resend code</Text>
+            <View style={s.whisperRow}>
+              <Pressable onPress={() => { setStep('resetEmail'); setError(null); }}>
+                <Text style={s.whisper}>← resend code</Text>
+              </Pressable>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ── Invite-request step ───────────────────────────────────────────────────
+  if (step === 'invite') {
+    // Success confirmation state
+    if (inviteSuccess) {
+      return (
+        <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+          <ScrollView
+            contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 }]}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={s.col}>
+              {renderHeader({ line1: "thank you.", line2: "we'll call you." })}
+
+              <View style={[s.whisperRow, { marginTop: 64 }]}>
+                <Pressable onPress={() => {
+                  setStep('credentials');
+                  setInviteSuccess(false);
+                  setInviteEmail('');
+                  setInvitePet('');
+                  setInviteError(null);
+                }}>
+                  <Text style={s.whisper}>← back to sign in</Text>
+                </Pressable>
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      );
+    }
+
+    const inviteReady = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim());
+
+    return (
+      <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView
+          contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={s.col}>
+            {renderHeader({ line1: 'request an invite.' })}
+
+            <View style={s.fieldGroup}>
+              <Text style={s.fieldLabel}>email</Text>
+              <TextInput
+                style={s.underlineInput}
+                value={inviteEmail}
+                onChangeText={setInviteEmail}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="email-address"
+                textContentType="emailAddress"
+                placeholderTextColor={MUTED}
+                placeholder="you@example.com"
+                selectionColor={FG}
+                autoFocus
+              />
+            </View>
+
+            <View style={s.fieldGroup}>
+              <View style={s.fieldLabelRow}>
+                <Text style={s.fieldLabel}>tell us about your pet</Text>
+                <Text style={s.charCount}>{invitePet.length}/200</Text>
+              </View>
+              <TextInput
+                style={[s.underlineInput, s.multilineInput]}
+                value={invitePet}
+                onChangeText={t => setInvitePet(t.slice(0, 200))}
+                multiline
+                numberOfLines={3}
+                placeholderTextColor={MUTED}
+                placeholder="optional"
+                selectionColor={FG}
+                textAlignVertical="top"
+              />
+            </View>
+
+            {inviteError ? <Text style={s.errorText}>{inviteError}</Text> : null}
+
+            <Pressable
+              style={({ pressed }) => [
+                s.primaryAction, pressed && s.dimmed, (!inviteReady || inviteLoading) && s.disabled,
+              ]}
+              onPress={handleInviteSubmit}
+              disabled={!inviteReady || inviteLoading}
+            >
+              {inviteLoading
+                ? <ActivityIndicator color={FG} size="small" />
+                : <Text style={s.primaryActionText}>send request</Text>}
             </Pressable>
+
+            <View style={s.whisperRow}>
+              <Pressable onPress={() => { setStep('credentials'); setInviteError(null); }}>
+                <Text style={s.whisper}>cancel</Text>
+              </Pressable>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -451,260 +580,288 @@ export default function SignInScreen() {
 
   // ── Credentials step (default) ────────────────────────────────────────────
   return (
-    <KeyboardAvoidingView
-      style={[s.flex, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
-        contentContainerStyle={[
-          s.scroll,
-          { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 32 },
-        ]}
+        contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Wordmark */}
-        <Text style={s.wordmark}>pshpsh</Text>
-        <Text style={s.tagline}>Sign in to continue</Text>
+        <View style={s.col}>
+          {/* ── Portal header ── */}
+          {renderHeader()}
 
-        {/* Form card */}
-        <View style={s.card}>
-          {/* Email */}
-          <Text style={s.label}>Email</Text>
-          <TextInput
-            style={s.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            placeholderTextColor={colors.mutedForeground}
-            placeholder="you@example.com"
-            selectionColor={colors.primary}
-          />
-
-          {/* Password + forgot link */}
-          <View style={s.passwordHeader}>
-            <Text style={s.label}>Password</Text>
-            <Pressable
-              onPress={() => {
-                setResetEmail(email);
-                setError(null);
-                setStep('resetEmail');
-              }}
-              hitSlop={8}
-            >
-              <Text style={s.forgotLink}>Forgot password?</Text>
-            </Pressable>
+          {/* ── Email field ── */}
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>email</Text>
+            <TextInput
+              style={s.underlineInput}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              placeholderTextColor={MUTED}
+              placeholder="you@example.com"
+              selectionColor={FG}
+            />
           </View>
-          <TextInput
-            style={s.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            textContentType="password"
-            placeholderTextColor={colors.mutedForeground}
-            placeholder="••••••••"
-            selectionColor={colors.primary}
-            onSubmitEditing={handleSignIn}
-            returnKeyType="go"
-          />
 
-          {/* Error */}
-          {error ? <Text style={s.error}>{error}</Text> : null}
+          {/* ── Password field ── */}
+          <View style={s.fieldGroup}>
+            <View style={s.fieldLabelRow}>
+              <Text style={s.fieldLabel}>password</Text>
+              <Pressable
+                onPress={() => { setResetEmail(email); setError(null); setStep('resetEmail'); }}
+                hitSlop={8}
+              >
+                <Text style={s.whisper}>forgot password?</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              style={s.underlineInput}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              textContentType="password"
+              placeholderTextColor={MUTED}
+              placeholder="••••••••"
+              selectionColor={FG}
+              onSubmitEditing={handleSignIn}
+              returnKeyType="go"
+            />
+          </View>
 
-          {/* Primary button */}
+          {error ? <Text style={s.errorText}>{error}</Text> : null}
+
+          {/* ── Primary action ── */}
           <Pressable
-            style={({ pressed }) => [
-              s.primaryBtn,
-              pressed && s.pressed,
-              (loading || !email || !password) && s.btnDisabled,
-            ]}
+            style={({ pressed }) => [s.primaryAction, pressed && s.dimmed, (!email || !password || loading) && s.disabled]}
             onPress={handleSignIn}
-            disabled={loading || !email || !password}
+            disabled={!email || !password || loading}
           >
-            {loading ? (
-              <ActivityIndicator color={colors.primaryForeground} />
-            ) : (
-              <Text style={s.primaryBtnText}>Sign In</Text>
-            )}
+            {loading
+              ? <ActivityIndicator color={FG} size="small" />
+              : <Text style={s.primaryActionText}>sign in</Text>}
           </Pressable>
 
-          {/* Divider */}
-          <View style={s.dividerRow}>
-            <View style={s.dividerLine} />
-            <Text style={s.dividerText}>or</Text>
-            <View style={s.dividerLine} />
-          </View>
-
-          {/* Google */}
+          {/* ── Google SSO ── */}
           <Pressable
-            style={({ pressed }) => [s.secondaryBtn, pressed && s.pressed]}
+            style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed]}
             onPress={handleGoogle}
             disabled={ssoLoading}
           >
-            {ssoLoading ? (
-              <ActivityIndicator color={colors.foreground} />
-            ) : (
-              <Text style={s.secondaryBtnText}>Continue with Google</Text>
-            )}
+            {ssoLoading
+              ? <ActivityIndicator color={MUTED} size="small" />
+              : <Text style={s.secondaryActionText}>continue with google</Text>}
           </Pressable>
-        </View>
 
-        {/* Item 6 copy — invite-only message; tappable to sign-up for testing */}
-        <View style={s.switchRow}>
-          <Text
-            style={s.switchText}
-            onPress={() => router.push('/(auth)/sign-up')}
-            suppressHighlighting
-          >
-            pshpsh is invite-only.
-          </Text>
+          {/* ── Invite-only gate ── */}
+          <View style={s.inviteGate}>
+            <Text style={s.inviteGateText}>pshpsh is invite-only.</Text>
+            <Pressable
+              onPress={() => {
+                setInviteEmail(email);
+                setInviteError(null);
+                setInviteSuccess(false);
+                setStep('invite');
+              }}
+              hitSlop={8}
+            >
+              <Text style={s.inviteLink}>request an invite</Text>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
-  return StyleSheet.create({
-    flex: { flex: 1 },
-    scroll: { flexGrow: 1, paddingHorizontal: 24 },
+// ── Styles ────────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: BG,
+  },
 
-    wordmark: {
-      fontFamily: 'Inter_700Bold',
-      fontSize: 28,
-      color: c.foreground,
-      textAlign: 'center',
-      letterSpacing: -0.5,
-    },
-    tagline: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 15,
-      color: c.mutedForeground,
-      textAlign: 'center',
-      marginTop: 6,
-      marginBottom: 40,
-    },
-    subtitle: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 14,
-      color: c.mutedForeground,
-      textAlign: 'center',
-      lineHeight: 22,
-      marginTop: -28,
-      marginBottom: 32,
-    },
+  // Centers content in a phone-width column on wide (web desktop) viewports.
+  scroll: {
+    flexGrow: 1,
+    alignItems: 'center',
+  },
+  col: {
+    width: '100%',
+    maxWidth: 430,
+    paddingHorizontal: 32,
+  },
 
-    card: {
-      backgroundColor: c.card,
-      borderRadius: c.radius,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: c.border,
-      padding: 24,
-    },
+  // ── Portal header ──────────────────────────────────────────────────────────
+  header: {
+    alignItems: 'center',
+    marginBottom: 56,
+  },
+  logo: {
+    width: 200,
+    height: 200,
+  },
+  wordmark: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 32,
+    color: FG,
+    letterSpacing: -1,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  sloganWrap: {
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 6,
+  },
+  slogan1: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: FG,
+    opacity: 0.72,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  slogan2: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: MUTED,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 
-    label: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 13,
-      color: c.mutedForeground,
-      marginBottom: 8,
-      letterSpacing: 0.2,
-    },
-    passwordHeader: {
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'baseline',
-      marginTop: 16,
-      marginBottom: 8,
-    },
-    forgotLink: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 13,
-      color: c.mutedForeground,
-    },
-    input: {
-      backgroundColor: c.secondary,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: c.border,
-      borderRadius: c.radius - 4,
-      paddingHorizontal: 14,
-      paddingVertical: Platform.OS === 'ios' ? 13 : 10,
-      fontFamily: 'Inter_400Regular',
-      fontSize: 15,
-      color: c.foreground,
-    },
-    error: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 13,
-      color: c.destructive,
-      marginTop: 12,
-    },
+  // ── Form fields ───────────────────────────────────────────────────────────
+  fieldGroup: {
+    marginBottom: 28,
+  },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginBottom: 10,
+  },
+  fieldLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: MUTED,
+    letterSpacing: 0.7,
+    marginBottom: 10,
+  },
+  underlineInput: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
+    color: FG,
+    paddingVertical: 10,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+  },
+  multilineInput: {
+    minHeight: 72,
+    paddingTop: 10,
+  },
+  charCount: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: MUTED,
+    opacity: 0.6,
+  },
 
-    primaryBtn: {
-      backgroundColor: c.primary,
-      borderRadius: c.radius - 4,
-      paddingVertical: 14,
-      alignItems: 'center',
-      marginTop: 24,
-    },
-    primaryBtnText: {
-      fontFamily: 'Inter_600SemiBold',
-      fontSize: 15,
-      color: c.primaryForeground,
-    },
-    btnDisabled: { opacity: 0.5 },
+  // ── Recipients / sub-headings ─────────────────────────────────────────────
+  recipientLine: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: MUTED,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 6,
+  },
+  spamHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    opacity: 0.55,
+    textAlign: 'center',
+    marginBottom: 36,
+  },
 
-    pressed: { opacity: 0.75 },
+  // ── Error ─────────────────────────────────────────────────────────────────
+  errorText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: DESTRUCTIVE,
+    marginBottom: 16,
+    lineHeight: 19,
+  },
 
-    dividerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginVertical: 20,
-      gap: 12,
-    },
-    dividerLine: {
-      flex: 1,
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: c.border,
-    },
-    dividerText: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 13,
-      color: c.mutedForeground,
-    },
+  // ── Actions ───────────────────────────────────────────────────────────────
+  primaryAction: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  primaryActionText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+    color: FG,
+    textAlign: 'center',
+  },
+  disabled: { opacity: 0.35 },
+  dimmed: { opacity: 0.65 },
 
-    secondaryBtn: {
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: c.border,
-      borderRadius: c.radius - 4,
-      paddingVertical: 14,
-      alignItems: 'center',
-      backgroundColor: c.secondary,
-    },
-    secondaryBtnText: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 15,
-      color: c.foreground,
-    },
+  secondaryAction: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  secondaryActionText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: MUTED,
+    textAlign: 'center',
+  },
 
-    switchRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      alignItems: 'center',
-      marginTop: 32,
-    },
-    switchText: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 14,
-      color: c.mutedForeground,
-    },
-    mutedLink: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 14,
-      color: c.mutedForeground,
-    },
-  });
-}
+  // ── Whispers ──────────────────────────────────────────────────────────────
+  whisperRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 28,
+  },
+  whisper: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    opacity: 0.7,
+  },
+  whisperDot: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    opacity: 0.4,
+  },
+
+  // ── Invite gate (bottom of credentials step) ──────────────────────────────
+  inviteGate: {
+    alignItems: 'center',
+    marginTop: 48,
+    gap: 8,
+  },
+  inviteGateText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: MUTED,
+    opacity: 0.7,
+    textAlign: 'center',
+  },
+  inviteLink: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: MUTED,
+    textAlign: 'center',
+  },
+});

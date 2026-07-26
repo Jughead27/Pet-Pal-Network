@@ -1,0 +1,29 @@
+SCOPE: Visual redesign of the sign-in, sign-up, and email-code screens ("the portal"), plus a request-an-invite capture. This is a RESTYLE + one small capture feature. The auth LOGIC shipped tonight (SSO callback, OAuth transfer, forgot password, honest inline errors, session redirect, email-code second factor) is FROZEN — zero changes to handlers, flows, state machines, or Clerk calls. Styling and copy only, plus the new capture form and its endpoint.
+
+DESIGN (all portal screens, identically web/iOS/Android):
+- #060B10 edge to edge; on wide viewports the content sits in a centered phone-width column (~430px); deliberate air throughout — these screens should feel like portals, not forms.
+- The nest-cat logo LARGE at top — this is its showcase surface; the curled composition with paws must be visible. Use the installed brand asset at high resolution; never a small favicon-scale render.
+- Beneath it: the wordmark "pshpsh" (lowercase ALWAYS, even sentence-start).
+- Beneath the wordmark, two lines, both lowercase: "follow pets, not people." then "curl up, you're home." — slogan slightly more present, vision line one step softer/smaller; generous line-height between them.
+- NO pills, NO capsules, NO filled/colored buttons anywhere on these screens — the teal capsule dies. Minimal typographic form: inputs sit directly on the dark ground (hairline underline or borderless), labels muted and small.
+- Primary action "sign in" = bold foreground TEXT, not a button shape. "continue with google" = muted text. "forgot password?" = whisper (smallest, most muted register).
+- Email-code screen: same treatment; keep recipient address display, code input, "verify" as bold text, "resend code · back" as whispers; ADD one whisper line: "not seeing it? check your spam folder"
+- Sign-up screen: same visual system throughout.
+- All copy on these screens lowercase.
+- Bottom of sign-in: "pshpsh is invite-only." followed by "request an invite" as a quiet tappable.
+
+REQUEST-AN-INVITE CAPTURE (the one functional addition):
+- Tapping "request an invite" shows a minimal form in the same visual system: email (required, validated) + optional "tell us about your pet" (≤200 chars) + submit as bold text.
+- Server: new invite_requests table (id, email, note, requested_at, status default 'pending'); public POST endpoint with validation + basic abuse guard (rate limit by IP; duplicate email gets a kind message, not an error tone). No admin UI yet — the table surfaces in the admin queue later.
+- Confirmation state, quiet: "thank you. we'll call you."
+- Keep the existing route to /sign-up reachable (invite gate is NOT live yet; testing must not be blocked).
+
+DO NOT MODIFY: any auth handler logic, Clerk calls, the /sso-callback route, API routes other than the new invite endpoint, feed/tabs/profile/anything outside the auth screens, fonts, icons, static-serving config, deploy config, secrets. No Reanimated. No new dependencies. All changes in SOURCE files — the deploy rebuilds from source.
+
+PRESERVATION CLAUSE — every one of these must work after the restyle; losing any = failed delivery: email+password sign-in including the email-code second-factor step; wrong password shows Clerk's real message inline; forgot-password flow reachable and functional; google button initiates OAuth; sign-up flow including email verification; session-aware redirect; sign-out. Also remove any leftover temporary [CLERK:SIGNIN_RESULT] console probes if still present.
+
+ACCEPTANCE — on the LIVE domain after the user redeploys, evidence pasted, not asserted:
+1. Screenshots of sign-in, email-code, sign-up, and invite-request screens at phone width AND desktop width (centered column on the dark ground).
+2. A submitted invite request visible as a row in invite_requests (paste the row).
+3. Wrong password on sign-in shows Clerk's real message inline.
+4. GOLDEN PATH: sign in (completing the email-code step if requested) → Home loads → boop persists after refresh → Nursery pager → post flow → sign out.

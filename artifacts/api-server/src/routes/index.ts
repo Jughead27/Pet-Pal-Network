@@ -10,13 +10,15 @@ import packRouter from "./pack";
 import followsRouter from "./follows";
 import usersRouter from "./users";
 import { requireClerkAuth } from "../middlewares/requireClerkAuth";
+import invitesRouter from "./invites";
 
 const router: IRouter = Router();
 
 // ─── Public routes ────────────────────────────────────────────────────────────
 // Mounted BEFORE requireClerkAuth — always reachable without a token.
-router.use(healthRouter); // GET /healthz
-router.use(mediaRouter);  // GET /media/* — HMAC-token-gated, no Clerk session
+router.use(healthRouter);  // GET /healthz
+router.use(mediaRouter);   // GET /media/* — HMAC-token-gated, no Clerk session
+router.use(invitesRouter); // POST /invites/request — public invite capture
 
 // ─── Auth boundary ────────────────────────────────────────────────────────────
 // Every route registered after this point requires a valid Clerk session token.

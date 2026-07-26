@@ -12,3 +12,5 @@
 - [expo-router blur listener pattern](expo-router-blur-listener.md) — useFocusEffect silently no-ops on tabs; use navigation.addListener('blur') via useNavigation instead.
 - [Vector Icons Web Font Loading](vector-icons-web-font-loading.md) — spread .font into useFonts for every @expo/vector-icons family used, or they render as empty squares on web export.
 - [Mobile Web Safe Area Bottom](mobile-web-safe-area-bottom.md) — tab bar needs viewport-fit=cover + env(safe-area-inset-bottom) paddingBottom + minHeight (not fixed height) on web.
+- [Auth Screens Architecture](auth-screens-architecture.md) — Clerk quirks, SSO patterns, email-code device verification, state machines for sign-in/sign-up.
+- [Portal Design System](portal-design-system.md) — auth screen visual tokens, logo asset, centered column pattern for wide viewports.

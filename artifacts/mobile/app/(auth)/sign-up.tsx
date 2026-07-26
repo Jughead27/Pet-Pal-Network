@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -15,34 +16,41 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useColors } from '@/hooks/useColors';
 
 // Required for OAuth redirect to complete inside Expo Go.
 WebBrowser.maybeCompleteAuthSession();
 
+const LOGO = require('@/assets/icon.png');
+
+// ── Design tokens (portal palette) ────────────────────────────────────────────
+const BG          = '#060B10';
+const FG          = '#F0F4F8';
+const MUTED       = '#6B7FA0';
+const BORDER      = '#182030';
+const DESTRUCTIVE = '#FF4444';
+
 export default function SignUpScreen() {
-  const colors = useColors();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const router  = useRouter();
 
   const { signUp, setActive, isLoaded } = useSignUp();
   const { signIn } = useSignIn(); // needed for Google → existing-user transfer
   const { startSSOFlow } = useSSO();
 
-  const [email, setEmail] = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [code, setCode] = useState('');
+  const [code, setCode]         = useState('');
 
   const [pendingVerification, setPendingVerification] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading]     = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError]         = useState<string | null>(null);
 
   // ── Helper ────────────────────────────────────────────────────────────────
   function clerkMessage(err: unknown): string {
     const e = err as { errors?: { longMessage?: string; message?: string }[] };
-    return e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? 'An error occurred. Please try again.';
+    return e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? 'an error occurred. please try again.';
   }
 
   // ── Step 1: Create account ────────────────────────────────────────────────
@@ -74,7 +82,7 @@ export default function SignUpScreen() {
       if (result.status === 'complete') {
         await setActive!({ session: result.createdSessionId });
       } else {
-        setError(`Verification returned status "${result.status}". Please try again.`);
+        setError(`verification returned status "${result.status}". please try again.`);
       }
     } catch (err) {
       setError(clerkMessage(err));
@@ -100,16 +108,16 @@ export default function SignUpScreen() {
 
       } else if (ssoSignUp?.verifications?.externalAccount?.status === 'transferable') {
         // Existing Google user arriving at sign-up — transfer to sign-in.
-        if (!signIn) { setError('Sign-in unavailable. Please try again.'); return; }
+        if (!signIn) { setError('sign-in unavailable. please try again.'); return; }
         const si = await signIn.create({ transfer: true });
         if (si.status === 'complete' && ssoSetActive) {
           await ssoSetActive({ session: si.createdSessionId! });
         } else if (si.status !== 'complete') {
-          setError(`Google sign-in returned status "${si.status}".`);
+          setError(`google sign-in returned status "${si.status}".`);
         }
 
       } else if (!createdSessionId) {
-        setError('Google sign-in could not be completed. Please try again.');
+        setError('google sign-in could not be completed. please try again.');
       }
     } catch (err) {
       setError(clerkMessage(err));
@@ -118,69 +126,67 @@ export default function SignUpScreen() {
     }
   }, [startSSOFlow, signIn]);
 
-  const s = makeStyles(colors);
-
   // ── Verification step ─────────────────────────────────────────────────────
   if (pendingVerification) {
     return (
-      <KeyboardAvoidingView
-        style={[s.flex, { backgroundColor: colors.background }]}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      >
+      <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
-          contentContainerStyle={[
-            s.scroll,
-            { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 32 },
-          ]}
+          contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={s.wordmark}>pshpsh</Text>
-          <Text style={s.tagline}>Check your email</Text>
-          <Text style={s.verifySubtitle}>
-            We sent a verification code to{'\n'}
-            <Text style={{ color: colors.foreground }}>{email}</Text>
-          </Text>
+          <View style={s.col}>
+            {/* ── Portal header ── */}
+            <View style={s.header}>
+              <Image source={LOGO} style={s.logo} resizeMode="contain" />
+              <Text style={s.wordmark}>pshpsh</Text>
+              <View style={s.sloganWrap}>
+                <Text style={s.slogan1}>check your email.</Text>
+              </View>
+            </View>
 
-          <View style={s.card}>
-            <Text style={s.label}>Verification Code</Text>
-            <TextInput
-              style={s.input}
-              value={code}
-              onChangeText={setCode}
-              keyboardType="number-pad"
-              textContentType="oneTimeCode"
-              placeholderTextColor={colors.mutedForeground}
-              placeholder="6-digit code"
-              selectionColor={colors.primary}
-              onSubmitEditing={handleVerify}
-              returnKeyType="go"
-              autoFocus
-            />
+            <Text style={s.recipientLine}>
+              we sent a verification code to{'\n'}
+              <Text style={{ color: FG }}>{email}</Text>
+            </Text>
+            <Text style={s.spamHint}>not seeing it? check your spam folder</Text>
 
-            {error ? <Text style={s.error}>{error}</Text> : null}
+            <View style={s.fieldGroup}>
+              <Text style={s.fieldLabel}>verification code</Text>
+              <TextInput
+                style={s.underlineInput}
+                value={code}
+                onChangeText={setCode}
+                keyboardType="number-pad"
+                textContentType="oneTimeCode"
+                placeholderTextColor={MUTED}
+                placeholder="6-digit code"
+                selectionColor={FG}
+                onSubmitEditing={handleVerify}
+                returnKeyType="go"
+                autoFocus
+              />
+            </View>
+
+            {error ? <Text style={s.errorText}>{error}</Text> : null}
 
             <Pressable
               style={({ pressed }) => [
-                s.primaryBtn,
-                pressed && s.pressed,
-                (verifying || code.length < 6) && s.btnDisabled,
+                s.primaryAction, pressed && s.dimmed, (verifying || code.length < 6) && s.disabled,
               ]}
               onPress={handleVerify}
               disabled={verifying || code.length < 6}
             >
-              {verifying ? (
-                <ActivityIndicator color={colors.primaryForeground} />
-              ) : (
-                <Text style={s.primaryBtnText}>Verify Email</Text>
-              )}
+              {verifying
+                ? <ActivityIndicator color={FG} size="small" />
+                : <Text style={s.primaryActionText}>verify email</Text>}
             </Pressable>
-          </View>
 
-          <View style={s.switchRow}>
-            <Pressable onPress={() => { setPendingVerification(false); setError(null); }}>
-              <Text style={s.switchLink}>← Back</Text>
-            </Pressable>
+            <View style={s.whisperRow}>
+              <Pressable onPress={() => { setPendingVerification(false); setError(null); }}>
+                <Text style={s.whisper}>← back</Text>
+              </Pressable>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -189,232 +195,257 @@ export default function SignUpScreen() {
 
   // ── Registration step ─────────────────────────────────────────────────────
   return (
-    <KeyboardAvoidingView
-      style={[s.flex, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
-        contentContainerStyle={[
-          s.scroll,
-          { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 32 },
-        ]}
+        contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Wordmark */}
-        <Text style={s.wordmark}>pshpsh</Text>
-        <Text style={s.tagline}>Create your account</Text>
+        <View style={s.col}>
+          {/* ── Portal header ── */}
+          <View style={s.header}>
+            <Image source={LOGO} style={s.logo} resizeMode="contain" />
+            <Text style={s.wordmark}>pshpsh</Text>
+            <View style={s.sloganWrap}>
+              <Text style={s.slogan1}>follow pets, not people.</Text>
+              <Text style={s.slogan2}>curl up, you're home.</Text>
+            </View>
+          </View>
 
-        {/* Form card */}
-        <View style={s.card}>
-          {/* Email */}
-          <Text style={s.label}>Email</Text>
-          <TextInput
-            style={s.input}
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="email-address"
-            textContentType="emailAddress"
-            placeholderTextColor={colors.mutedForeground}
-            placeholder="you@example.com"
-            selectionColor={colors.primary}
-          />
+          {/* ── Email field ── */}
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>email</Text>
+            <TextInput
+              style={s.underlineInput}
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              placeholderTextColor={MUTED}
+              placeholder="you@example.com"
+              selectionColor={FG}
+            />
+          </View>
 
-          {/* Password */}
-          <Text style={[s.label, { marginTop: 16 }]}>Password</Text>
-          <TextInput
-            style={s.input}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            textContentType="newPassword"
-            placeholderTextColor={colors.mutedForeground}
-            placeholder="8+ characters"
-            selectionColor={colors.primary}
-            onSubmitEditing={handleSignUp}
-            returnKeyType="go"
-          />
+          {/* ── Password field ── */}
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>password</Text>
+            <TextInput
+              style={s.underlineInput}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              textContentType="newPassword"
+              placeholderTextColor={MUTED}
+              placeholder="8+ characters"
+              selectionColor={FG}
+              onSubmitEditing={handleSignUp}
+              returnKeyType="go"
+            />
+          </View>
 
-          {/* Error */}
-          {error ? <Text style={s.error}>{error}</Text> : null}
+          {error ? <Text style={s.errorText}>{error}</Text> : null}
 
-          {/* Primary button */}
+          {/* ── Primary action ── */}
           <Pressable
             style={({ pressed }) => [
-              s.primaryBtn,
-              pressed && s.pressed,
-              (loading || !email || password.length < 8) && s.btnDisabled,
+              s.primaryAction, pressed && s.dimmed, (loading || !email || password.length < 8) && s.disabled,
             ]}
             onPress={handleSignUp}
             disabled={loading || !email || password.length < 8}
           >
-            {loading ? (
-              <ActivityIndicator color={colors.primaryForeground} />
-            ) : (
-              <Text style={s.primaryBtnText}>Create Account</Text>
-            )}
+            {loading
+              ? <ActivityIndicator color={FG} size="small" />
+              : <Text style={s.primaryActionText}>create account</Text>}
           </Pressable>
 
-          {/* Divider */}
-          <View style={s.dividerRow}>
-            <View style={s.dividerLine} />
-            <Text style={s.dividerText}>or</Text>
-            <View style={s.dividerLine} />
-          </View>
-
-          {/* Google */}
+          {/* ── Google SSO ── */}
           <Pressable
-            style={({ pressed }) => [s.secondaryBtn, pressed && s.pressed]}
+            style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed]}
             onPress={handleGoogle}
             disabled={ssoLoading}
           >
-            {ssoLoading ? (
-              <ActivityIndicator color={colors.foreground} />
-            ) : (
-              <Text style={s.secondaryBtnText}>Continue with Google</Text>
-            )}
+            {ssoLoading
+              ? <ActivityIndicator color={MUTED} size="small" />
+              : <Text style={s.secondaryActionText}>continue with google</Text>}
           </Pressable>
-        </View>
 
-        {/* Switch to sign-in */}
-        <View style={s.switchRow}>
-          <Text style={s.switchText}>Already have an account? </Text>
-          <Pressable onPress={() => router.push('/(auth)/sign-in')}>
-            <Text style={s.switchLink}>Sign in</Text>
-          </Pressable>
+          {/* ── Switch to sign-in ── */}
+          <View style={s.switchRow}>
+            <Text style={s.switchText}>already have an account? </Text>
+            <Pressable onPress={() => router.push('/(auth)/sign-in')}>
+              <Text style={s.switchLink}>sign in</Text>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
-  return StyleSheet.create({
-    flex: { flex: 1 },
-    scroll: { flexGrow: 1, paddingHorizontal: 24 },
+// ── Styles ────────────────────────────────────────────────────────────────────
+const s = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: BG,
+  },
 
-    wordmark: {
-      fontFamily: 'Inter_700Bold',
-      fontSize: 28,
-      color: c.foreground,
-      textAlign: 'center',
-      letterSpacing: -0.5,
-    },
-    tagline: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 15,
-      color: c.mutedForeground,
-      textAlign: 'center',
-      marginTop: 6,
-      marginBottom: 40,
-    },
-    verifySubtitle: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 14,
-      color: c.mutedForeground,
-      textAlign: 'center',
-      lineHeight: 22,
-      marginTop: -28,
-      marginBottom: 32,
-    },
+  scroll: {
+    flexGrow: 1,
+    alignItems: 'center',
+  },
+  col: {
+    width: '100%',
+    maxWidth: 430,
+    paddingHorizontal: 32,
+  },
 
-    card: {
-      backgroundColor: c.card,
-      borderRadius: c.radius,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: c.border,
-      padding: 24,
-    },
+  // ── Portal header ──────────────────────────────────────────────────────────
+  header: {
+    alignItems: 'center',
+    marginBottom: 56,
+  },
+  logo: {
+    width: 200,
+    height: 200,
+  },
+  wordmark: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 32,
+    color: FG,
+    letterSpacing: -1,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  sloganWrap: {
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 6,
+  },
+  slogan1: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 15,
+    color: FG,
+    opacity: 0.72,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  slogan2: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: MUTED,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 
-    label: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 13,
-      color: c.mutedForeground,
-      marginBottom: 8,
-      letterSpacing: 0.2,
-    },
-    input: {
-      backgroundColor: c.secondary,
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: c.border,
-      borderRadius: c.radius - 4,
-      paddingHorizontal: 14,
-      paddingVertical: Platform.OS === 'ios' ? 13 : 10,
-      fontFamily: 'Inter_400Regular',
-      fontSize: 15,
-      color: c.foreground,
-    },
-    error: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 13,
-      color: c.destructive,
-      marginTop: 12,
-    },
+  // ── Form fields ───────────────────────────────────────────────────────────
+  fieldGroup: {
+    marginBottom: 28,
+  },
+  fieldLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 11,
+    color: MUTED,
+    letterSpacing: 0.7,
+    marginBottom: 10,
+  },
+  underlineInput: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 16,
+    color: FG,
+    paddingVertical: 10,
+    paddingHorizontal: 0,
+    backgroundColor: 'transparent',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: BORDER,
+  },
 
-    primaryBtn: {
-      backgroundColor: c.primary,
-      borderRadius: c.radius - 4,
-      paddingVertical: 14,
-      alignItems: 'center',
-      marginTop: 24,
-    },
-    primaryBtnText: {
-      fontFamily: 'Inter_600SemiBold',
-      fontSize: 15,
-      color: c.primaryForeground,
-    },
-    btnDisabled: { opacity: 0.5 },
+  // ── Recipients / sub-headings ─────────────────────────────────────────────
+  recipientLine: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: MUTED,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 6,
+  },
+  spamHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    opacity: 0.55,
+    textAlign: 'center',
+    marginBottom: 36,
+  },
 
-    pressed: { opacity: 0.75 },
+  // ── Error ─────────────────────────────────────────────────────────────────
+  errorText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: DESTRUCTIVE,
+    marginBottom: 16,
+    lineHeight: 19,
+  },
 
-    dividerRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      marginVertical: 20,
-      gap: 12,
-    },
-    dividerLine: {
-      flex: 1,
-      height: StyleSheet.hairlineWidth,
-      backgroundColor: c.border,
-    },
-    dividerText: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 13,
-      color: c.mutedForeground,
-    },
+  // ── Actions ───────────────────────────────────────────────────────────────
+  primaryAction: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  primaryActionText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize: 17,
+    color: FG,
+    textAlign: 'center',
+  },
+  disabled: { opacity: 0.35 },
+  dimmed:   { opacity: 0.65 },
 
-    secondaryBtn: {
-      borderWidth: StyleSheet.hairlineWidth,
-      borderColor: c.border,
-      borderRadius: c.radius - 4,
-      paddingVertical: 14,
-      alignItems: 'center',
-      backgroundColor: c.secondary,
-    },
-    secondaryBtnText: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 15,
-      color: c.foreground,
-    },
+  secondaryAction: {
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  secondaryActionText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 14,
+    color: MUTED,
+    textAlign: 'center',
+  },
 
-    switchRow: {
-      flexDirection: 'row',
-      justifyContent: 'center',
-      marginTop: 32,
-    },
-    switchText: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 14,
-      color: c.mutedForeground,
-    },
-    switchLink: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 14,
-      color: c.primary,
-    },
-  });
-}
+  // ── Whispers ──────────────────────────────────────────────────────────────
+  whisperRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 28,
+  },
+  whisper: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    opacity: 0.7,
+  },
+
+  // ── Switch row (bottom) ───────────────────────────────────────────────────
+  switchRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 48,
+  },
+  switchText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: MUTED,
+    opacity: 0.7,
+  },
+  switchLink: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13,
+    color: MUTED,
+  },
+});
