@@ -132,12 +132,13 @@ export default function PostDetailScreen() {
         </View>
       </ScrollView>
 
-      {/* Report flow — post */}
+      {/* Report flow — post.  ownerId comes from the feed cache (field added server-side). */}
       <ReportFlow
         visible={reportOpen}
         onClose={() => setReportOpen(false)}
         targetType="post"
         targetId={id ?? ''}
+        ownerUserId={(post.pet as unknown as { ownerId?: string }).ownerId}
       />
     </View>
   );

@@ -1,0 +1,25 @@
+SCOPE: User blocking — schema, server-side exclusion everywhere, minimal UI. App Store guideline 1.2 requirement. One delivery.
+
+1. SCHEMA: blocks table — id, blocker_id (users FK), blocked_id (users FK), created_at; UNIQUE (blocker_id, blocked_id); no self-blocks (reject server-side).
+
+2. EXCLUSION — the heart of this delivery, and it must be CENTRALIZED: one shared query helper/filter (e.g. excludeBlocked(viewerId)) applied to every content read — Home feed, Sniff (all modes), Nursery, post detail access, comments, and any future list. Blocking user X hides: all posts by X's pets, all comments by X, X's pets in any grid. Symmetric: content from someone who blocked YOU is also hidden from you. No inline per-route reimplementations — one helper, imported everywhere, so future surfaces inherit it.
+
+3. API: POST /api/blocks { blockedUserId } and DELETE /api/blocks/:blockedUserId — auth'd; idempotent (double-block → { ok, duplicate }); GET /api/blocks returns the viewer's list.
+
+4. UI — boring-utility register:
+   - Entry point: in the ReportFlow confirmation step, add a whisper option: "block this owner" (works for both post and comment reports — resolves the target's owner).
+   - Additionally on the pet profile's owner section: a quiet "block owner" whisper.
+   - Confirmation: "blocked. you won't see each other's posts." Unblock lives in a minimal "blocked owners" list reachable from the profile/settings surface (quiet list, "unblock" as muted text per row).
+   - Blocking never notifies the blocked user. No visible trace on either side.
+
+DO NOT MODIFY: reactions, auth flows, report submission logic, admin/ping, deploy config. No new dependencies. All changes in SOURCE. Identically web/iOS/Android.
+
+PRESERVATION CLAUSE: feed, Sniff, Nursery, post detail, comments, boop/treat, report flow, golden path — identical for users with no blocks. Query performance must not regress noticeably (the helper should be a join/subquery, not N+1).
+
+ACCEPTANCE — evidence pasted:
+1. blocks table schema + a real block row.
+2. Raw query evidence: a post visible to user A before blocking its owner, absent after (paste both result sets), and the symmetric case.
+3. Double-block → { ok, duplicate } raw response.
+4. tsc clean both packages.
+5. UI surfaces: described precisely with file paths (screenshots deferred to production, same as reports).
+6. Golden path unaffected for a no-blocks user.

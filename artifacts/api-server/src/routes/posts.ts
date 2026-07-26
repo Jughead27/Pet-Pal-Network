@@ -12,6 +12,7 @@ import {
 import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { CreatePostBody } from "@workspace/api-zod";
 import { deleteObject } from "../lib/r2.js";
+import { notBlockedCommentAuthor } from "../lib/excludeBlocked.js";
 
 const router: IRouter = Router();
 
@@ -81,17 +82,24 @@ router.post("/posts", async (req, res) => {
  */
 router.get("/posts/:id/comments", async (req, res) => {
   const { id } = req.params;
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
   const rows = await db
     .select({
-      id: commentsTable.id,
-      text: commentsTable.text,
+      id:             commentsTable.id,
+      text:           commentsTable.text,
       authorUsername: usersTable.username,
-      createdAt: commentsTable.createdAt,
+      // authorId transmitted for the block affordance in mobile (cast via type assertion)
+      authorId:       commentsTable.userId,
+      createdAt:      commentsTable.createdAt,
     })
     .from(commentsTable)
     .innerJoin(usersTable, eq(usersTable.id, commentsTable.userId))
-    .where(eq(commentsTable.postId, id))
+    .where(and(
+      eq(commentsTable.postId, id),
+      // Exclude comments from users who have a block relationship with the viewer
+      notBlockedCommentAuthor(userId),
+    ))
     .orderBy(asc(commentsTable.createdAt));
 
   res.json(rows);

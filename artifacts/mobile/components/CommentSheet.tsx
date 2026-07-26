@@ -250,12 +250,15 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
         </KeyboardAvoidingView>
       </View>
 
-      {/* Report flow — comment */}
+      {/* Report flow — comment.  authorId comes from the comments response (field added server-side). */}
       <ReportFlow
         visible={reportingCommentId !== null}
         onClose={() => setReportingCommentId(null)}
         targetType="comment"
         targetId={reportingCommentId ?? ''}
+        ownerUserId={
+          ((serverComments ?? []).find(c => c.id === reportingCommentId) as unknown as { authorId?: string })?.authorId
+        }
       />
     </Modal>
   );

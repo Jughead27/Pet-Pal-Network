@@ -34,7 +34,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@clerk/clerk-expo';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import MediaImage from '@/components/MediaImage';
 import {
@@ -46,6 +46,7 @@ import {
   useLeavePetPack,
   getGetMyFollowsQueryKey,
   getBaseUrl,
+  customFetch,
 } from '@workspace/api-client-react';
 import type { Pet, PackedPetItem, FollowedSpeciesItem, FollowedBreedItem } from '@workspace/api-client-react';
 import { useFollowsContext } from '@/context/FollowsContext';
@@ -77,7 +78,28 @@ export default function ProfileScreen() {
   const removePending = (id: string) => setPendingIds((s) => { const n = new Set(s); n.delete(id); return n; });
 
   // Sign-out confirmation state (inline, no Alert — works identically on all platforms)
-  const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [confirmSignOut,  setConfirmSignOut]  = useState(false);
+  const [pendingBlockIds, setPendingBlockIds] = useState<Set<string>>(new Set());
+  const addPendingBlock    = (id: string) => setPendingBlockIds((s) => new Set(s).add(id));
+  const removePendingBlock = (id: string) => setPendingBlockIds((s) => { const n = new Set(s); n.delete(id); return n; });
+
+  // Blocked owners list — loaded lazily, always fresh on mount
+  const { data: blocksData, refetch: refetchBlocks } = useQuery({
+    queryKey: ['my-blocks'],
+    queryFn:  () => customFetch<{ blocks: { userId: string; username: string | null; blockedAt: string }[] }>('/api/blocks'),
+  });
+  const blockedList = blocksData?.blocks ?? [];
+
+  const handleUnblock = useCallback(async (userId: string) => {
+    if (pendingBlockIds.has(userId)) return;
+    addPendingBlock(userId);
+    try {
+      await customFetch(`/api/blocks/${userId}`, { method: 'DELETE' });
+      await refetchBlocks();
+    } finally {
+      removePendingBlock(userId);
+    }
+  }, [pendingBlockIds, refetchBlocks]);
 
   const invalidateFollows = useCallback(() => {
     qc.invalidateQueries({ queryKey: getGetMyFollowsQueryKey() });
@@ -342,6 +364,45 @@ export default function ProfileScreen() {
               </>
             )}
           </View>
+        )}
+
+        {/* ══════════════ BLOCKED OWNERS ══════════════ */}
+        {blockedList.length > 0 && (
+          <>
+            <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
+            <Text style={[styles.heading, { color: colors.foreground }]}>Blocked Owners</Text>
+            <View style={styles.listGap}>
+              {blockedList.map((item) => (
+                <View
+                  key={item.userId}
+                  style={[styles.followRow, { borderColor: colors.border, backgroundColor: colors.card }]}
+                >
+                  <View style={styles.followRowContent}>
+                    <Text style={[styles.petName, { color: colors.foreground }]}>
+                      {item.username ?? item.userId}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => handleUnblock(item.userId)}
+                    disabled={pendingBlockIds.has(item.userId)}
+                    style={styles.quietAction}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Unblock ${item.username ?? 'user'}`}
+                  >
+                    <Text style={[
+                      styles.quietActionText,
+                      {
+                        color:   colors.mutedForeground,
+                        opacity: pendingBlockIds.has(item.userId) ? 0.4 : 1,
+                      },
+                    ]}>
+                      unblock
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          </>
         )}
 
         {/* ══════════════ SIGN OUT ══════════════ */}

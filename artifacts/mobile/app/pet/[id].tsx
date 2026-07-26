@@ -51,6 +51,7 @@ import {
   getGetPetQueryKey,
   getGetMyPetsQueryKey,
   getGetMyFollowsQueryKey,
+  customFetch,
 } from "@workspace/api-client-react";
 import type { FeedPost, PackResult } from "@workspace/api-client-react";
 import { resolveMediaKey } from "@/utils/mediaKey";
@@ -653,6 +654,14 @@ export default function PetProfileScreen() {
             </View>
           </View>
         </View>
+
+        {/* ── Block owner whisper — non-owners only ── */}
+        {!pet.viewerOwnsPet && (
+          <BlockOwnerWhisper
+            ownerId={(pet as unknown as { ownerId?: string }).ownerId}
+            colors={colors}
+          />
+        )}
 
         {/* ── Grid Divider ── */}
         <View style={[styles.gridDivider, { borderTopColor: colors.border }]} />
@@ -1281,6 +1290,53 @@ export default function PetProfileScreen() {
         </KeyboardAvoidingView>
       </Modal>
     </View>
+  );
+}
+
+// ── BlockOwnerWhisper ─────────────────────────────────────────────────────────
+// Quiet "block owner" affordance shown on non-owner pet profiles.
+
+function BlockOwnerWhisper({
+  ownerId,
+  colors,
+}: {
+  ownerId: string | undefined;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const [blockDone,  setBlockDone]  = useState(false);
+  const [blocking,   setBlocking]   = useState(false);
+
+  if (!ownerId) return null;
+
+  const handleBlock = async () => {
+    if (blockDone || blocking) return;
+    setBlocking(true);
+    try {
+      await customFetch<{ ok: boolean }>("/api/blocks", {
+        method: "POST",
+        body:   JSON.stringify({ blockedUserId: ownerId }),
+      });
+      setBlockDone(true);
+    } catch {
+      // Silent — this surface is low-stakes utility
+    } finally {
+      setBlocking(false);
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={handleBlock}
+      disabled={blockDone || blocking}
+      style={{ alignItems: "center", paddingVertical: 8, marginTop: 4 }}
+      accessibilityRole="button"
+      accessibilityLabel={blockDone ? "Owner blocked" : "Block this owner"}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+    >
+      <Text style={{ color: colors.mutedForeground, fontSize: 12, opacity: 0.4, fontFamily: "Inter_400Regular" }}>
+        {blockDone ? "blocked. you won't see each other's posts." : "block owner"}
+      </Text>
+    </TouchableOpacity>
   );
 }
 

@@ -10,3 +10,4 @@ export * from "./pack-follows";
 export * from "./interest-follows";
 export * from "./invite-requests";
 export * from "./reports";
+export * from "./blocks";

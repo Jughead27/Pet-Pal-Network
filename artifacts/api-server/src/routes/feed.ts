@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { and, eq, gte, desc, sql, isNull } from "drizzle-orm";
 import { mediaTokenUrl } from "../lib/r2.js";
+import { notBlockedPostOwner } from "../lib/excludeBlocked.js";
 
 const router: IRouter = Router();
 
@@ -84,6 +85,8 @@ router.get("/feed", async (req, res) => {
       )`,
       // Ownership flag — drives the delete affordance on the post-detail screen
       viewerOwnsPet: sql<boolean>`${petsTable.ownerId} = ${userId}`,
+      // Raw owner ID — used by the mobile block affordance in ReportFlow / post-detail
+      petOwnerId: petsTable.ownerId,
     })
     .from(postsTable)
     .innerJoin(petsTable,    eq(petsTable.id,    postsTable.petId))
@@ -94,6 +97,8 @@ router.get("/feed", async (req, res) => {
       isNull(postsTable.archivedAt),
       nurseryOnly ? eq(postsTable.isNursery, true) : undefined,
       speciesId ? eq(petsTable.speciesId, speciesId) : undefined,
+      // Exclude posts whose pet owner has a block relationship with the viewer
+      notBlockedPostOwner(userId),
     ))
     .groupBy(postsTable.id, petsTable.id)
     .orderBy(...(sortPopular ? popularOrderBy : [desc(postsTable.createdAt)]));
@@ -132,6 +137,8 @@ router.get("/feed", async (req, res) => {
       speciesId:     r.petSpeciesId ?? null,
       viewerInPack:  r.viewerInPack,
       viewerOwnsPet: r.viewerOwnsPet,
+      // ownerId transmitted for the block affordance; not typed in api-zod (cast in mobile)
+      ownerId:       r.petOwnerId,
     },
     boopCount:        r.boopCount,
     treatCount:       r.treatCount,

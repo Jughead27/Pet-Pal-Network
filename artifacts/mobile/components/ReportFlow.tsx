@@ -4,16 +4,18 @@
  * Three internal steps:
  *   reasons  → user picks a reason from a typographic list
  *   note     → optional "anything else?" textarea + "send report"
- *   done     → "thank you. we'll take a look."
+ *   done     → "thank you. we'll take a look." + optional block whisper
  *
  * Props:
- *   visible     — controls the Modal
- *   onClose     — called when the user dismisses or the flow completes
- *   targetType  — 'post' | 'comment'
- *   targetId    — the ID of the post or comment being reported
+ *   visible      — controls the Modal
+ *   onClose      — called when the user dismisses or the flow completes
+ *   targetType   — 'post' | 'comment'
+ *   targetId     — the ID of the post or comment being reported
+ *   ownerUserId  — (optional) Clerk user ID of the content owner; when provided,
+ *                  shows "block this owner" whisper in the done step.
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   Modal,
   Platform,
@@ -55,29 +57,37 @@ const NOTE_MAX = 200;
 // ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
-  visible:    boolean;
-  onClose:    () => void;
-  targetType: 'post' | 'comment';
-  targetId:   string;
+  visible:      boolean;
+  onClose:      () => void;
+  targetType:   'post' | 'comment';
+  targetId:     string;
+  /** Optional: when present, shows "block this owner" whisper in the done step. */
+  ownerUserId?: string;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 type Step = 'reasons' | 'note' | 'sending' | 'done';
 
-export default function ReportFlow({ visible, onClose, targetType, targetId }: Props) {
+export default function ReportFlow({ visible, onClose, targetType, targetId, ownerUserId }: Props) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
 
   const [step,           setStep]           = useState<Step>('reasons');
   const [selectedReason, setSelectedReason] = useState<Reason | null>(null);
   const [note,           setNote]           = useState('');
+  const [blockDone,      setBlockDone]      = useState(false);
+
+  // Tracks the auto-close timer so it can be reset when the user taps "block".
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reset internal state whenever the modal opens.
   const handleShow = useCallback(() => {
     setStep('reasons');
     setSelectedReason(null);
     setNote('');
+    setBlockDone(false);
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
   }, []);
 
   const handlePickReason = (reason: Reason) => {
@@ -103,7 +113,23 @@ export default function ReportFlow({ visible, onClose, targetType, targetId }: P
     }
     setStep('done');
     // Auto-close after a beat.
-    setTimeout(onClose, 2200);
+    closeTimerRef.current = setTimeout(onClose, 2200);
+  };
+
+  const handleBlock = async () => {
+    if (!ownerUserId || blockDone) return;
+    setBlockDone(true);
+    try {
+      await customFetch<{ ok: boolean }>('/api/blocks', {
+        method: 'POST',
+        body: JSON.stringify({ blockedUserId: ownerUserId }),
+      });
+    } catch {
+      // Silent — block confirmation already shown; don't alarm the user.
+    }
+    // Reset auto-close timer to give 2 s to read the block confirmation.
+    if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = setTimeout(onClose, 2000);
   };
 
   const handleClose = () => {
@@ -223,6 +249,24 @@ export default function ReportFlow({ visible, onClose, targetType, targetId }: P
             <Text style={[styles.doneTxt, { color: colors.foreground }]}>
               thank you.{'\n'}we'll take a look.
             </Text>
+            {/* Block whisper — only shown when ownerUserId was provided */}
+            {ownerUserId && !blockDone && (
+              <TouchableOpacity
+                onPress={handleBlock}
+                accessibilityRole="button"
+                accessibilityLabel="Block this owner"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={[styles.blockWhisper, { color: colors.mutedForeground }]}>
+                  block this owner
+                </Text>
+              </TouchableOpacity>
+            )}
+            {blockDone && (
+              <Text style={[styles.blockWhisper, { color: colors.mutedForeground }]}>
+                blocked. you won't see each other's posts.
+              </Text>
+            )}
           </View>
         )}
       </View>
@@ -317,5 +361,14 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     textAlign:  'center',
     lineHeight: 30,
+  },
+  // "block this owner" / confirmation — same quiet register as report whisper
+  blockWhisper: {
+    fontSize:     12,
+    opacity:      0.45,
+    fontFamily:   'Inter_400Regular',
+    marginTop:    22,
+    textAlign:    'center',
+    letterSpacing: 0.1,
   },
 });

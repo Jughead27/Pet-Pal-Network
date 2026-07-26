@@ -12,8 +12,9 @@ import {
   packFollowsTable,
   interestFollowsTable,
   usersTable,
+  blocksTable,
 } from "@workspace/db";
-import { eq, desc, sql, and, isNull, isNotNull } from "drizzle-orm";
+import { eq, desc, sql, and, or, isNull, isNotNull } from "drizzle-orm";
 import { CreatePetBody, PatchPetBody } from "@workspace/api-zod";
 import { mediaTokenUrl, copyObject } from "../lib/r2.js";
 
@@ -107,6 +108,19 @@ router.get("/pets/:id", async (req, res) => {
 
   const viewerIsOwner = pet.ownerId === userId;
 
+  // If viewer and pet owner have a block relationship (and viewer is not the owner),
+  // return the profile metadata with empty posts so grids are hidden per spec.
+  const isBlocked = !viewerIsOwner && Boolean(
+    (await db
+      .select({ id: blocksTable.id })
+      .from(blocksTable)
+      .where(or(
+        and(eq(blocksTable.blockerId, userId),     eq(blocksTable.blockedId, pet.ownerId)),
+        and(eq(blocksTable.blockerId, pet.ownerId), eq(blocksTable.blockedId, userId)),
+      ))
+      .limit(1))[0],
+  );
+
   const petSummary = {
     id:            pet.id,
     name:          pet.name,
@@ -116,6 +130,31 @@ router.get("/pets/:id", async (req, res) => {
     // True when the signed-in user owns this pet — drives edit/archive/delete affordances.
     viewerOwnsPet: viewerIsOwner,
   };
+
+  // If blocked, skip the post queries — return empty arrays
+  if (isBlocked) {
+    res.json({
+      id:                  pet.id,
+      ownerId:             pet.ownerId,
+      name:                pet.name,
+      species:             pet.species,
+      breed:               pet.breed     ?? null,
+      bio:                 pet.bio       ?? null,
+      speciesId:           pet.speciesId ?? null,
+      breedId:             pet.breedId   ?? null,
+      packCount,
+      viewerInPack,
+      viewerFollowsSpecies,
+      viewerFollowsBreed,
+      viewerOwnsPet:       viewerIsOwner,
+      avatarUrl:           pet.avatarKey    ? mediaTokenUrl(pet.avatarKey)    : null,
+      avatarFocusX:        pet.avatarFocusX ?? null,
+      avatarFocusY:        pet.avatarFocusY ?? null,
+      posts:               [],
+      archivedPosts:       [],
+    });
+    return;
+  }
 
   // Fetch that pet's posts with reaction counts and viewer flags
   const rows = await db
@@ -207,6 +246,7 @@ router.get("/pets/:id", async (req, res) => {
 
   res.json({
     id:                  pet.id,
+    ownerId:             pet.ownerId,
     name:                pet.name,
     species:             pet.species,
     breed:               pet.breed     ?? null,
