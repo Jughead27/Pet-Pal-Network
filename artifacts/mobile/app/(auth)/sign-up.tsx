@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { useSignUp, useSSO } from '@clerk/clerk-expo';
+import { useSignIn, useSignUp, useSSO } from '@clerk/clerk-expo';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
@@ -26,6 +26,7 @@ export default function SignUpScreen() {
   const router = useRouter();
 
   const { signUp, setActive, isLoaded } = useSignUp();
+  const { signIn } = useSignIn(); // needed for Google → existing-user transfer
   const { startSSOFlow } = useSSO();
 
   const [email, setEmail] = useState('');
@@ -38,77 +39,88 @@ export default function SignUpScreen() {
   const [ssoLoading, setSsoLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // ─── Step 1: Create account ───────────────────────────────────────────────
+  // ── Helper ────────────────────────────────────────────────────────────────
+  function clerkMessage(err: unknown): string {
+    const e = err as { errors?: { longMessage?: string; message?: string }[] };
+    return e?.errors?.[0]?.longMessage ?? e?.errors?.[0]?.message ?? 'An error occurred. Please try again.';
+  }
+
+  // ── Step 1: Create account ────────────────────────────────────────────────
   const handleSignUp = useCallback(async () => {
     if (!isLoaded) return;
     setLoading(true);
     setError(null);
     try {
-      await signUp.create({
+      await signUp!.create({
         emailAddress: email.trim(),
         password,
       });
-      // Trigger email verification code.
-      await signUp.prepareEmailAddressVerification({ strategy: 'email_code' });
+      await signUp!.prepareEmailAddressVerification({ strategy: 'email_code' });
       setPendingVerification(true);
-    } catch (err: unknown) {
-      const msg =
-        (err as { errors?: { message: string }[] })?.errors?.[0]?.message ??
-        'An error occurred. Please try again.';
-      setError(msg);
+    } catch (err) {
+      setError(clerkMessage(err));
     } finally {
       setLoading(false);
     }
   }, [isLoaded, signUp, email, password]);
 
-  // ─── Step 2: Verify email OTP ─────────────────────────────────────────────
+  // ── Step 2: Verify email OTP ──────────────────────────────────────────────
   const handleVerify = useCallback(async () => {
     if (!isLoaded) return;
     setVerifying(true);
     setError(null);
     try {
-      const result = await signUp.attemptEmailAddressVerification({ code });
+      const result = await signUp!.attemptEmailAddressVerification({ code });
       if (result.status === 'complete') {
-        await setActive({ session: result.createdSessionId });
+        await setActive!({ session: result.createdSessionId });
       } else {
-        setError('Verification incomplete. Please try again.');
+        setError(`Verification returned status "${result.status}". Please try again.`);
       }
-    } catch (err: unknown) {
-      const msg =
-        (err as { errors?: { message: string }[] })?.errors?.[0]?.message ??
-        'Invalid code. Please try again.';
-      setError(msg);
+    } catch (err) {
+      setError(clerkMessage(err));
     } finally {
       setVerifying(false);
     }
   }, [isLoaded, signUp, code, setActive]);
 
-  // ─── Google SSO ──────────────────────────────────────────────────────────
+  // ── Google SSO ────────────────────────────────────────────────────────────
   const handleGoogle = useCallback(async () => {
     setSsoLoading(true);
     setError(null);
     try {
-      const redirectUrl = Linking.createURL('/');
-      const { createdSessionId, setActive: ssoSetActive } = await startSSOFlow({
+      const result = await startSSOFlow({
         strategy: 'oauth_google',
-        redirectUrl,
+        redirectUrl: Linking.createURL('/sso-callback'),
       });
+      const { createdSessionId, setActive: ssoSetActive, signUp: ssoSignUp } = result;
+
       if (createdSessionId && ssoSetActive) {
+        // New Google user — signed up directly.
         await ssoSetActive({ session: createdSessionId });
+
+      } else if (ssoSignUp?.verifications?.externalAccount?.status === 'transferable') {
+        // Existing Google user arriving at sign-up — transfer to sign-in.
+        if (!signIn) { setError('Sign-in unavailable. Please try again.'); return; }
+        const si = await signIn.create({ transfer: true });
+        if (si.status === 'complete' && ssoSetActive) {
+          await ssoSetActive({ session: si.createdSessionId! });
+        } else if (si.status !== 'complete') {
+          setError(`Google sign-in returned status "${si.status}".`);
+        }
+
+      } else if (!createdSessionId) {
+        setError('Google sign-in could not be completed. Please try again.');
       }
-    } catch (err: unknown) {
-      const msg =
-        (err as { errors?: { message: string }[] })?.errors?.[0]?.message ??
-        'Google sign-in failed. Ensure Google is enabled in your Clerk dashboard.';
-      setError(msg);
+    } catch (err) {
+      setError(clerkMessage(err));
     } finally {
       setSsoLoading(false);
     }
-  }, [startSSOFlow]);
+  }, [startSSOFlow, signIn]);
 
   const s = makeStyles(colors);
 
-  // ─── Verification step ───────────────────────────────────────────────────
+  // ── Verification step ─────────────────────────────────────────────────────
   if (pendingVerification) {
     return (
       <KeyboardAvoidingView
@@ -149,7 +161,11 @@ export default function SignUpScreen() {
             {error ? <Text style={s.error}>{error}</Text> : null}
 
             <Pressable
-              style={({ pressed }) => [s.primaryBtn, pressed && s.pressed]}
+              style={({ pressed }) => [
+                s.primaryBtn,
+                pressed && s.pressed,
+                (verifying || code.length < 6) && s.btnDisabled,
+              ]}
               onPress={handleVerify}
               disabled={verifying || code.length < 6}
             >
@@ -171,7 +187,7 @@ export default function SignUpScreen() {
     );
   }
 
-  // ─── Registration step ───────────────────────────────────────────────────
+  // ── Registration step ─────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
       style={[s.flex, { backgroundColor: colors.background }]}
@@ -226,7 +242,11 @@ export default function SignUpScreen() {
 
           {/* Primary button */}
           <Pressable
-            style={({ pressed }) => [s.primaryBtn, pressed && s.pressed]}
+            style={({ pressed }) => [
+              s.primaryBtn,
+              pressed && s.pressed,
+              (loading || !email || password.length < 8) && s.btnDisabled,
+            ]}
             onPress={handleSignUp}
             disabled={loading || !email || password.length < 8}
           >
@@ -346,6 +366,7 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       fontSize: 15,
       color: c.primaryForeground,
     },
+    btnDisabled: { opacity: 0.5 },
 
     pressed: { opacity: 0.75 },
 
