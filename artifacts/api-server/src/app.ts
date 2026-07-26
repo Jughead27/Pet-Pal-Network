@@ -44,7 +44,11 @@ const WEB_DIST = path.resolve(process.cwd(), "artifacts/mobile/dist-web");
 
 if (fs.existsSync(WEB_DIST)) {
   // Serve JS bundles, fonts, images, and other static assets.
-  app.use(express.static(WEB_DIST));
+  // dotfiles: 'allow' is required because Expo's Metro asset pipeline encodes
+  // node_modules paths as /assets/__node_modules/.pnpm/... — the ".pnpm"
+  // segment starts with a dot, and express.static's default (dotfiles:'ignore')
+  // silently returns 404 for any path that contains a dot-prefixed directory.
+  app.use(express.static(WEB_DIST, { dotfiles: 'allow' }));
 
   // SPA fallback: client-side routes (e.g. /profile, /post/123) return
   // index.html so they survive a hard refresh.
