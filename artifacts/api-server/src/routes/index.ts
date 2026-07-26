@@ -8,6 +8,7 @@ import uploadsRouter from "./uploads";
 import speciesRouter from "./species";
 import packRouter from "./pack";
 import followsRouter from "./follows";
+import usersRouter from "./users";
 import { requireClerkAuth } from "../middlewares/requireClerkAuth";
 
 const router: IRouter = Router();
@@ -30,5 +31,6 @@ router.use(uploadsRouter); // POST /uploads/presign
 router.use(speciesRouter); // GET /species  GET /species/:id/breeds
 router.use(packRouter);    // POST /pets/:id/pack  DELETE /pets/:id/pack
 router.use(followsRouter); // POST/DELETE /follows/species/:id  POST/DELETE /follows/breeds/:id  GET /me/follows
+router.use(usersRouter);  // GET /me  PATCH /me
 
 export default router;

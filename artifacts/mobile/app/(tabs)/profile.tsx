@@ -40,6 +40,7 @@ import MediaImage from '@/components/MediaImage';
 import {
   useGetMyPets,
   useGetMyFollows,
+  useGetMe,
   useUnfollowSpecies,
   useUnfollowBreed,
   useLeavePetPack,
@@ -60,6 +61,7 @@ export default function ProfileScreen() {
 
   const { data: petsData, isLoading: petsLoading, isError: petsError } = useGetMyPets();
   const { data: followsData, isLoading: followsLoading }               = useGetMyFollows();
+  const { data: meData }                                                = useGetMe();
   const pets = petsData?.pets ?? [];
 
   const { setSpeciesFollow, setBreedFollow } = useFollowsContext();
@@ -151,6 +153,13 @@ export default function ProfileScreen() {
   const followedBreeds  = followsData?.followedBreeds   ?? [];
   const hasFollows      = packedPets.length > 0 || followedSpecies.length > 0 || followedBreeds.length > 0;
 
+  // Owner header visibility helpers
+  const hasDisplayName  = Boolean(meData?.displayName);
+  const hasCity         = Boolean(meData?.locationCity);
+  const hasAbout        = Boolean(meData?.about);
+  const usernameUnset   = meData !== undefined && meData.username === null;
+  const showOwnerHeader = hasDisplayName || hasCity || hasAbout || usernameUnset;
+
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -162,7 +171,57 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
 
+        {/* ══════════════ OWNER HEADER ══════════════ */}
+        {showOwnerHeader && (
+          <View style={styles.ownerBlock}>
+            {hasDisplayName && (
+              <Text style={[styles.ownerDisplayName, { color: colors.foreground }]}>
+                {meData!.displayName}
+              </Text>
+            )}
+            {hasCity && (
+              <Text style={[styles.ownerMeta, { color: colors.mutedForeground }]}>
+                {meData!.locationCity}
+              </Text>
+            )}
+            {hasAbout && (
+              <Text style={[styles.ownerAbout, { color: colors.mutedForeground }]}>
+                {meData!.about}
+              </Text>
+            )}
+            {usernameUnset && (
+              <TouchableOpacity
+                onPress={() => router.push('/profile/edit')}
+                activeOpacity={0.7}
+                accessibilityRole="link"
+                accessibilityLabel="Choose a username"
+              >
+                <Text style={[styles.chooseUsername, { color: colors.mutedForeground }]}>
+                  Choose a username
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {/* Edit profile — typographic, always visible on own profile */}
+        <TouchableOpacity
+          onPress={() => router.push('/profile/edit')}
+          activeOpacity={0.7}
+          style={[
+            styles.editProfileRow,
+            showOwnerHeader && styles.editProfileRowSpaced,
+          ]}
+          accessibilityRole="link"
+          accessibilityLabel="Edit profile"
+        >
+          <Text style={[styles.editProfileText, { color: colors.mutedForeground }]}>
+            Edit profile
+          </Text>
+        </TouchableOpacity>
+
         {/* ══════════════ MY PETS ══════════════ */}
+        <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
         <Text style={[styles.heading, { color: colors.foreground }]}>My Pets</Text>
 
         {pets.length === 0 ? (
@@ -490,6 +549,44 @@ const styles = StyleSheet.create({
   fill:    { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center' },
   scroll:  { flexGrow: 1, paddingHorizontal: 20 },
+
+  // Owner header
+  ownerBlock: {
+    gap: 5,
+    marginBottom: 2,
+  },
+  ownerDisplayName: {
+    fontFamily:    'Inter_600SemiBold',
+    fontSize:      20,
+    letterSpacing: -0.2,
+  },
+  ownerMeta: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   14,
+  },
+  ownerAbout: {
+    fontFamily:  'Inter_400Regular',
+    fontSize:    14,
+    lineHeight:  20,
+    marginTop:   2,
+  },
+  chooseUsername: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+    marginTop:  4,
+    textDecorationLine: 'underline',
+  },
+  editProfileRow: {
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+  },
+  editProfileRowSpaced: {
+    marginTop: 10,
+  },
+  editProfileText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+  },
 
   heading: {
     fontFamily:    'Inter_700Bold',

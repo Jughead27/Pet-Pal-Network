@@ -1,0 +1,62 @@
+SCOPE: Add owner profile fields — username, display name, city, and a short
+"About the Owner" blurb — to the schema, API, and Profile screen. OpenAPI-
+first as always: edit the spec → orval codegen → npx tsc --build --force.
+
+SCHEMA (users table, additive columns only — no changes to existing columns):
+- username: text, nullable for now, UNIQUE case-insensitively (store
+  lowercase; add a unique index on lower(username))
+- display_name: text, nullable
+- location_city: text, nullable
+- about: text, nullable
+
+API:
+- GET /users/me returns the new fields.
+- PATCH /users/me accepts them, merge semantics (only provided fields
+  change), with ALL validation server-side:
+  - username: lowercase before validating/storing; must match
+    ^[a-z][a-z0-9._]{2,19}$ (3–20 chars, starts with a letter; letters,
+    numbers, period, underscore only); no consecutive or trailing "." or
+    "_"; rejected if on the reserved list: admin, administrator, mod,
+    moderator, staff, support, help, official, root, system, pshpsh,
+    pshpshapp, petpal, petpalnetwork; rejected with a clear "taken"
+    error if the lowercase value collides with an existing user.
+  - display_name: 1–40 chars, trimmed.
+  - location_city: 0–60 chars, trimmed, plain text.
+  - about: 0–200 chars, trimmed.
+- Client never enforces alone — server is the authority.
+
+PROFILE UI (same quiet typographic language as the rest of the app):
+- Profile screen header displays: display_name (primary), then
+  location_city and about beneath it in muted text, only when set. The
+  USERNAME IS NOT DISPLAYED on the profile — display_name is what people
+  see. Empty fields render nothing (no placeholders, no empty rows).
+- An "Edit profile" affordance on the OWN profile only — typographic, no
+  pill/capsule — opening an edit screen with the four fields:
+  Username, Owner (the display_name label reads "Owner"),
+  City, About the Owner (multiline, live character counter, 200 max).
+- Inline server-error display (e.g. "That username is taken").
+- If the signed-in user's username is not yet set, show one quiet muted
+  line on their own Profile: "Choose a username" linking to the edit
+  screen. No modals, no blocking.
+
+DO NOT MODIFY: pets, posts, feeds, reactions, taxonomy, Pack/interest
+follows, ownership suite, media routes, auth middleware behavior, Sniff/
+Nursery/Home screens, mastheads, or Secrets.
+
+PRESERVATION CLAUSE: Before editing the Profile screen, enumerate its
+existing capabilities (MY PETS grid, My Pack with PETS/SPECIES/BREEDS,
+Archived grid, sign-out, thumbnails, names never truncate, quiet Leave).
+All must work identically after this change. Losing any = failed delivery.
+
+ACCEPTANCE TEST (web, iOS, Android identically):
+1. Set username, Owner name, city, and About on my account; refresh —
+   all persist; profile shows Owner name, city, About; username visible
+   nowhere on the profile.
+2. Attempt username "Admin" → rejected (reserved). Attempt the same
+   username from the second test account with different casing →
+   rejected as taken. Attempt "x", "1abc", "a__b", "abc_" → all rejected
+   with clear messages.
+3. About accepts exactly 200 chars, rejects 201; counter matches.
+4. Clear city and About → profile renders without empty rows.
+5. Golden path: sign in → Home loads → boop persists after refresh →
+   Nursery thumbnail opens the pager → post flow works → sign out.

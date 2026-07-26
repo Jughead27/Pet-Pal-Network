@@ -29,6 +29,7 @@ import { useColors } from '@/hooks/useColors';
 import { getGetFeedQueryKey } from '@workspace/api-client-react';
 import type { FeedPost, FeedResponse } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
+import { formatPostAge } from '@/utils/formatPostAge';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -107,11 +108,12 @@ export default function PostDetailScreen() {
             <Text style={[styles.caption, { color: colors.foreground }]}>
               {post.caption}
             </Text>
-          ) : (
-            <Text style={[styles.emptyCaption, { color: colors.mutedForeground }]}>
-              No caption
-            </Text>
-          )}
+          ) : null}
+
+          {/* Timestamp — ultra-subtle, 40% opacity, not tappable */}
+          <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>
+            {formatPostAge(post.createdAt)}
+          </Text>
         </View>
       </ScrollView>
     </View>
@@ -168,9 +170,10 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: 4,
   },
-  emptyCaption: {
-    fontSize: 14,
-    fontStyle: 'italic',
-    marginTop: 4,
+  timestamp: {
+    fontSize:   12,
+    opacity:    0.4,
+    marginTop:  2,
+    fontFamily: 'Inter_400Regular',
   },
 });

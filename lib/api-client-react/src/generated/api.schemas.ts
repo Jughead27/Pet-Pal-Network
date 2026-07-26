@@ -437,6 +437,36 @@ export interface PackMembersResponse {
   members: PackMemberItem[];
 }
 
+/**
+ * The signed-in owner's profile fields
+ */
+export interface MeProfile {
+  id: string;
+  /** Chosen username (lowercase). Null until explicitly set. */
+  username: string | null;
+  /** Owner's display name shown on their profile. */
+  displayName: string | null;
+  /** City or location, plain text. */
+  locationCity: string | null;
+  /** Short bio about the owner (max 200 chars). */
+  about: string | null;
+  createdAt: string;
+}
+
+/**
+ * Fields to update on the owner profile. All fields are optional; omitted fields are left unchanged.
+ */
+export interface MePatchBody {
+  /** Desired username. Server lowercases, validates format, checks reserved list, and enforces case-insensitive uniqueness. */
+  username?: string;
+  /** Display name (1–40 chars, trimmed). Null clears it. */
+  displayName?: string | null;
+  /** City/location (0–60 chars, trimmed). Null or empty string clears it. */
+  locationCity?: string | null;
+  /** About blurb (0–200 chars, trimmed). Null or empty string clears it. */
+  about?: string | null;
+}
+
 export type GetFeedParams = {
 /**
  * When true, returns only nursery (is_nursery=true) posts. Omit or false for the full feed.

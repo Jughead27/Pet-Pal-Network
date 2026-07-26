@@ -1,0 +1,49 @@
+SCOPE: Add an ultra-subtle timestamp to the post detail screen
+(post/[id] — the "view full photo" page) ONLY. One small text element,
+one shared formatting helper. Nothing else changes, no other surface
+gets a timestamp.
+
+FORMATTING HELPER (shared util, from the post's createdAt):
+- Under 1 hour: minutes, e.g. "12m" (under 1 minute: "now")
+- Under 24 hours: hours, e.g. "3h"
+- Under 7 days: days, e.g. "3d"
+- 7 days or older: short absolute date, lowercase, e.g. "jun 12" —
+  append the year only when it isn't the current year: "jun 12, 2025"
+- ALL lowercase, no "ago", no label, no icon, no prefix of any kind.
+
+PLACEMENT & TREATMENT (post/[id] only):
+- A single line below the caption block: fontSize 12, muted foreground
+  at 40% opacity — quieter than the caption and quieter than the 60%-
+  opacity ↗ glyph treatment. It should feel like a watermark you find,
+  not information you're shown.
+- When there is no caption, the timestamp sits alone where the caption
+  block would begin — same treatment.
+- Not tappable, no press feedback, excluded from any tap-toggles-chrome
+  behavior.
+
+EXPLICITLY NOT ADDED TO: Home pager, Sniff (grid or pager), Nursery
+(grid or pager), profile grids, pet profiles, comments, or anywhere
+else. The post detail screen is the only surface in the app that shows
+a timestamp.
+
+DO NOT MODIFY: the detail screen's contain-fit photo rendering, the
+↗ caption glyph treatment, feeds, reactions, mastheads, profile
+screens, API (createdAt is already in the post payload — confirm and
+use it; if it is somehow missing from the detail response, STOP and
+report rather than changing the API).
+
+PRESERVATION CLAUSE: Before editing post/[id], enumerate its existing
+capabilities (contain-fit display, caption rendering, navigation in/
+out, any reaction affordances present). All must work identically
+after this change.
+
+ACCEPTANCE TEST (web, iOS, Android identically):
+1. Open a post from today → shows e.g. "3h" below the caption, tiny
+   and faint; open an older seeded post → shows "jun 12" style.
+2. A post with no caption shows only the faint timestamp, correctly
+   placed.
+3. Timestamp is visibly quieter than the caption and the ↗ glyph;
+   nothing about the photo display or navigation changed.
+4. Home, Sniff, and Nursery show no timestamps anywhere.
+5. Golden path: sign in → Home loads → boop persists after refresh →
+   Nursery thumbnail opens the pager → post flow works → sign out.

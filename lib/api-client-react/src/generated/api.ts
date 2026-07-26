@@ -33,6 +33,8 @@ import type {
   GetFeedParams,
   HealthStatus,
   InterestFollowResult,
+  MePatchBody,
+  MeProfile,
   MyFollowsResponse,
   MyPetsResponse,
   PackMembersResponse,
@@ -1927,6 +1929,156 @@ export const useCreatePet = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getCreatePetMutationOptions(options));
+    }
+
+export const getGetMeUrl = () => {
+
+
+
+
+  return `/api/me`
+}
+
+/**
+ * Returns the owner profile fields for the authenticated user.
+ * @summary Get the signed-in user's profile
+ */
+export const getMe = async ( options?: RequestInit): Promise<MeProfile> => {
+
+  return customFetch<MeProfile>(getGetMeUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMeQueryKey = () => {
+    return [
+    `/api/me`
+    ] as const;
+    }
+
+
+export const getGetMeQueryOptions = <TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMeQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMe>>> = ({ signal }) => getMe({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMeQueryResult = NonNullable<Awaited<ReturnType<typeof getMe>>>
+export type GetMeQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get the signed-in user's profile
+ */
+
+export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMe>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMeQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getPatchMeUrl = () => {
+
+
+
+
+  return `/api/me`
+}
+
+/**
+ * Updates one or more owner profile fields for the authenticated user. Merge semantics — only provided fields change; omitted fields are left unchanged. All validation is server-side. Username is lowercased before storing. Returns 409 if the username is already taken (case-insensitively). Returns 400 for any other validation failure (format, reserved word, length).
+ * @summary Update the signed-in user's profile
+ */
+export const patchMe = async (mePatchBody: MePatchBody, options?: RequestInit): Promise<MeProfile> => {
+
+  return customFetch<MeProfile>(getPatchMeUrl(),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(mePatchBody)
+  }
+);}
+
+
+
+
+
+export const getPatchMeMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchMe>>, TError,{data: BodyType<MePatchBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof patchMe>>, TError,{data: BodyType<MePatchBody>}, TContext> => {
+
+const mutationKey = ['patchMe'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof patchMe>>, {data: BodyType<MePatchBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  patchMe(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PatchMeMutationResult = NonNullable<Awaited<ReturnType<typeof patchMe>>>
+    export type PatchMeMutationBody = BodyType<MePatchBody>
+    export type PatchMeMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Update the signed-in user's profile
+ */
+export const usePatchMe = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof patchMe>>, TError,{data: BodyType<MePatchBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof patchMe>>,
+        TError,
+        {data: BodyType<MePatchBody>},
+        TContext
+      > => {
+      return useMutation(getPatchMeMutationOptions(options));
     }
 
 export const getGetMyPetsUrl = () => {

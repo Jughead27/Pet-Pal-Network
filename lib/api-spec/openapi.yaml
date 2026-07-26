@@ -20,6 +20,8 @@ tags:
     description: Upload operations
   - name: species
     description: Species and breed catalogue
+  - name: users
+    description: Owner profile operations
 paths:
   /healthz:
     get:
@@ -955,6 +957,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /me:
+    get:
+      operationId: getMe
+      tags: [users]
+      summary: Get the signed-in user's profile
+      description: Returns the owner profile fields for the authenticated user.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeProfile"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    patch:
+      operationId: patchMe
+      tags: [users]
+      summary: Update the signed-in user's profile
+      description: >
+        Updates one or more owner profile fields for the authenticated user.
+        Merge semantics — only provided fields change; omitted fields are left unchanged.
+        All validation is server-side. Username is lowercased before storing.
+        Returns 409 if the username is already taken (case-insensitively).
+        Returns 400 for any other validation failure (format, reserved word, length).
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MePatchBody"
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeProfile"
+        "400":
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Username already taken
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /me/pets:
     get:
       operationId: getMyPets
@@ -1814,3 +1881,60 @@ components:
             $ref: "#/components/schemas/PackMemberItem"
       required:
         - members
+
+    MeProfile:
+      type: object
+      description: The signed-in owner's profile fields
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+          nullable: true
+          description: Chosen username (lowercase). Null until explicitly set.
+        displayName:
+          type: string
+          nullable: true
+          description: Owner's display name shown on their profile.
+        locationCity:
+          type: string
+          nullable: true
+          description: City or location, plain text.
+        about:
+          type: string
+          nullable: true
+          description: Short bio about the owner (max 200 chars).
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - username
+        - displayName
+        - locationCity
+        - about
+        - createdAt
+
+    MePatchBody:
+      type: object
+      description: >
+        Fields to update on the owner profile. All fields are optional;
+        omitted fields are left unchanged.
+      properties:
+        username:
+          type: string
+          description: >
+            Desired username. Server lowercases, validates format, checks reserved
+            list, and enforces case-insensitive uniqueness.
+        displayName:
+          type: string
+          nullable: true
+          description: Display name (1–40 chars, trimmed). Null clears it.
+        locationCity:
+          type: string
+          nullable: true
+          description: City/location (0–60 chars, trimmed). Null or empty string clears it.
+        about:
+          type: string
+          nullable: true
+          description: About blurb (0–200 chars, trimmed). Null or empty string clears it.

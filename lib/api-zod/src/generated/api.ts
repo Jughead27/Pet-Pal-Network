@@ -558,6 +558,41 @@ export const CreatePetResponse = zod.object({
 
 
 /**
+ * Returns the owner profile fields for the authenticated user.
+ * @summary Get the signed-in user's profile
+ */
+export const GetMeResponse = zod.object({
+  "id": zod.string(),
+  "username": zod.string().nullable().describe('Chosen username (lowercase). Null until explicitly set.'),
+  "displayName": zod.string().nullable().describe('Owner\'s display name shown on their profile.'),
+  "locationCity": zod.string().nullable().describe('City or location, plain text.'),
+  "about": zod.string().nullable().describe('Short bio about the owner (max 200 chars).'),
+  "createdAt": zod.coerce.date()
+}).describe('The signed-in owner\'s profile fields')
+
+
+/**
+ * Updates one or more owner profile fields for the authenticated user. Merge semantics — only provided fields change; omitted fields are left unchanged. All validation is server-side. Username is lowercased before storing. Returns 409 if the username is already taken (case-insensitively). Returns 400 for any other validation failure (format, reserved word, length).
+ * @summary Update the signed-in user's profile
+ */
+export const PatchMeBody = zod.object({
+  "username": zod.string().optional().describe('Desired username. Server lowercases, validates format, checks reserved list, and enforces case-insensitive uniqueness.\n'),
+  "displayName": zod.string().nullish().describe('Display name (1–40 chars, trimmed). Null clears it.'),
+  "locationCity": zod.string().nullish().describe('City\/location (0–60 chars, trimmed). Null or empty string clears it.'),
+  "about": zod.string().nullish().describe('About blurb (0–200 chars, trimmed). Null or empty string clears it.')
+}).describe('Fields to update on the owner profile. All fields are optional; omitted fields are left unchanged.\n')
+
+export const PatchMeResponse = zod.object({
+  "id": zod.string(),
+  "username": zod.string().nullable().describe('Chosen username (lowercase). Null until explicitly set.'),
+  "displayName": zod.string().nullable().describe('Owner\'s display name shown on their profile.'),
+  "locationCity": zod.string().nullable().describe('City or location, plain text.'),
+  "about": zod.string().nullable().describe('Short bio about the owner (max 200 chars).'),
+  "createdAt": zod.coerce.date()
+}).describe('The signed-in owner\'s profile fields')
+
+
+/**
  * Returns all pets owned by the authenticated user.
  * @summary Get caller's pets
  */

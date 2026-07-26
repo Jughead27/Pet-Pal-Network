@@ -24,6 +24,8 @@ export * from './getFeedParams';
 export * from './getFeedSort';
 export * from './healthStatus';
 export * from './interestFollowResult';
+export * from './mePatchBody';
+export * from './meProfile';
 export * from './myFollowsResponse';
 export * from './myPetsResponse';
 export * from './packedPetItem';
