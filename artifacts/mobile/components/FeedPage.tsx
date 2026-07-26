@@ -23,7 +23,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  Dimensions,
   Image,
   Pressable,
   StyleSheet,
@@ -36,6 +35,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
+import { COLUMN_MAX_WIDTH } from '@/hooks/useColumnWidth';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import { useBoopPost } from '@workspace/api-client-react';
 import type { FeedPost, PackResult } from '@workspace/api-client-react';
@@ -45,13 +45,13 @@ import PopText from '@/components/PopText';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// Horizontal exclusion zone: taps this far from the right edge won't toggle chrome
+// Horizontal exclusion zone constants — taps this far from the right edge won't toggle chrome.
+// RAIL_EXCLUSION_X is computed dynamically inside handleMediaPress from pageWidthRef.current
+// so it stays correct inside the 430-px web column (Dimensions.get returns the full window
+// width on web, not the column width).
 const RAIL_TOUCH_WIDTH   = 40;
 const RAIL_RIGHT_INSET   = 14;
 const RAIL_MARGIN        = 24;
-const RAIL_EXCLUSION_X   = SCREEN_WIDTH - RAIL_TOUCH_WIDTH - RAIL_RIGHT_INSET - RAIL_MARGIN;
 
 // Pop anchor constants — proportional to the measured page width.
 //
@@ -147,7 +147,10 @@ export default function FeedPage({
   // Measured page width — updated on every layout change so the pop anchor
   // is always proportional to the actual rendered width, not a stale module-
   // level Dimensions.get() snapshot that doesn't track web resize.
-  const pageWidthRef = useRef(SCREEN_WIDTH);
+  // Initial value: COLUMN_MAX_WIDTH is a safe default (430 px) for both web
+  // (the column is ≤ 430) and native (corrected immediately by the first onLayout
+  // callback before any user interaction can spawn a pop).
+  const pageWidthRef = useRef(COLUMN_MAX_WIDTH);
   const bottomOffset = insets.bottom + 110;
   // Pops spawn to the left of the rail column and transient label.
   // Boop icon is item 1 in the rail (higher up); treat is item 2.
@@ -248,11 +251,15 @@ export default function FeedPage({
     (e: { nativeEvent: { locationX: number; locationY: number } }) => {
       const { locationX, locationY } = e.nativeEvent;
 
-      // Exclusion zone: rail column (right) or bottom overlay (below petInfo)
+      // Exclusion zone: rail column (right) or bottom overlay (below petInfo).
+      // Computed from pageWidthRef.current so it tracks the actual rendered
+      // column width on web desktop (not the full window width).
+      const pw = pageWidthRef.current;
+      const railExclusionX = pw - RAIL_TOUCH_WIDTH - RAIL_RIGHT_INSET - RAIL_MARGIN;
       const bottomZoneTop = height - bottomOffset - petInfoHeightRef.current - 16;
       const inExclusionZone =
         chromeVisibleRef.current &&
-        (locationX >= RAIL_EXCLUSION_X || locationY >= bottomZoneTop);
+        (locationX >= railExclusionX || locationY >= bottomZoneTop);
 
       if (tapTimerRef.current !== null) {
         // Second tap within window → double-tap → boop

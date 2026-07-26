@@ -44,3 +44,16 @@ Table: `invite_requests` (id, email, note, requested_at, status='pending').
 
 **Why:** Auth screens use this endpoint unauthenticated; mounting invitesRouter
 before `requireClerkAuth` in routes/index.ts is intentional.
+
+## Phone-column desktop wrapper (web only)
+`COLUMN_MAX_WIDTH = 430` exported from `hooks/useColumnWidth.ts` — single source of truth.
+`GestureHandlerRootView` gets `backgroundColor: '#060B10', alignItems: 'center'` on web;
+inner `View` gets `maxWidth: COLUMN_MAX_WIDTH, width: '100%', flex: 1` — all absolute-positioned
+children (tab bar, rail, pops, modals) resolve inside the column.
+`useColumnWidth()` hook returns `Math.min(windowWidth, COLUMN_MAX_WIDTH)` on web, full width on native.
+Consumers: `FeedPage` (pageWidthRef init + railExclusionX), `nursery.tsx` + `discovery.tsx` (thumbnailSize).
+Auth screens import `COLUMN_MAX_WIDTH` for their `maxWidth` style — shared constant.
+
+**Why:** `Dimensions.get('window').width` and `useWindowDimensions().width` return the full
+viewport width on web, not the column width. Any component that drives layout from screen width
+must use `useColumnWidth()` so values are correct inside the 430px column.

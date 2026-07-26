@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from 'react';
+import { COLUMN_MAX_WIDTH } from '@/hooks/useColumnWidth';
 import {
   ActivityIndicator,
   Image,
@@ -691,7 +692,7 @@ const s = StyleSheet.create({
   },
   col: {
     width: '100%',
-    maxWidth: 430,
+    maxWidth: COLUMN_MAX_WIDTH,
     paddingHorizontal: 32,
   },
 

@@ -31,7 +31,6 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   BackHandler,
-  Dimensions,
   FlatList,
   Platform,
   Pressable,
@@ -42,6 +41,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { useColumnWidth } from '@/hooks/useColumnWidth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -57,10 +57,10 @@ import SniffIcon from '@/components/SniffIcon';
 
 // ─── Layout constants ──────────────────────────────────────────────────────────
 
-const SCREEN_WIDTH    = Dimensions.get('window').width;
-const NUM_COLS        = 3;
-const CELL_GAP        = 2;
-const THUMBNAIL_SIZE  = (SCREEN_WIDTH - CELL_GAP * (NUM_COLS - 1)) / NUM_COLS;
+// THUMBNAIL_SIZE is computed dynamically inside the component from useColumnWidth()
+// so it reflects the 430-px column width on web desktop, not the full window width.
+const NUM_COLS       = 3;
+const CELL_GAP       = 2;
 const CHIP_HEIGHT     = 36; // height of the chip/sort row band
 // Approximate width of the "Fresh | Popular" control — chips get right-padding
 // to prevent them scrolling underneath it.
@@ -81,10 +81,14 @@ interface SpeciesChip {
 // ─── SniffScreen ──────────────────────────────────────────────────────────────
 
 export default function SniffScreen() {
-  const colors       = useColors();
-  const insets       = useSafeAreaInsets();
+  const colors        = useColors();
+  const insets        = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const navigation   = useNavigation();
+  const navigation    = useNavigation();
+  // thumbnailSize uses the column width (capped at 430 on web) so that grid
+  // cells are correct inside the phone-column wrapper on desktop.
+  const columnWidth   = useColumnWidth();
+  const thumbnailSize = (columnWidth - CELL_GAP * (NUM_COLS - 1)) / NUM_COLS;
 
   // ── Species filter (null = "All") ─────────────────────────────────────────
   const [activeSpeciesId, setActiveSpeciesId] = useState<string | null>(null);
@@ -526,13 +530,13 @@ export default function SniffScreen() {
     <TouchableOpacity
       onPress={() => openPost(index)}
       activeOpacity={0.85}
-      style={styles.cell}
+      style={[styles.cell, { width: thumbnailSize, height: thumbnailSize }]}
       accessibilityRole="button"
       accessibilityLabel={item.caption ?? `Post ${index + 1}`}
     >
       <FocalImage
         source={resolveMediaKey(item.mediaKey, item.mediaUrl)}
-        style={styles.cellImage}
+        style={[styles.cellImage, { width: thumbnailSize, height: thumbnailSize }]}
         focusX={item.cropFocusX}
         focusY={item.cropFocusY}
       />
@@ -636,14 +640,13 @@ const styles = StyleSheet.create({
   // ── Grid ───────────────────────────────────────────────────────────────────
   columnWrapper: { gap: CELL_GAP },
   cell: {
-    width:        THUMBNAIL_SIZE,
-    height:       THUMBNAIL_SIZE,
+    // width/height set inline from dynamic thumbnailSize — correct in the
+    // 430-px web column and on any native screen width.
     marginBottom: CELL_GAP,
     overflow:     'hidden',
   },
   cellImage: {
-    width:  THUMBNAIL_SIZE,
-    height: THUMBNAIL_SIZE,
+    // width/height set inline from dynamic thumbnailSize.
   },
 
   // ── Empty states ───────────────────────────────────────────────────────────

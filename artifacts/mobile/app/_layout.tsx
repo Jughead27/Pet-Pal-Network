@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
-import { Platform } from 'react-native';
+import { Platform, View } from 'react-native';
+import { COLUMN_MAX_WIDTH } from '@/hooks/useColumnWidth';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
@@ -141,15 +142,39 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <ErrorBoundary>
           <QueryClientProvider client={queryClient}>
-            <GestureHandlerRootView style={{ flex: 1 }}>
-              <KeyboardProvider>
-                <PackProvider>
-                  <FollowsProvider>
-                    <ClerkTokenSync />
-                    <RootLayoutNav />
-                  </FollowsProvider>
-                </PackProvider>
-              </KeyboardProvider>
+            <GestureHandlerRootView
+              style={[
+                { flex: 1 },
+                // Web desktop: fill the viewport with the ground colour and centre
+                // the app in a phone-width column. Native: no change.
+                Platform.OS === 'web' && {
+                  backgroundColor: '#060B10',
+                  alignItems: 'center' as const,
+                },
+              ]}
+            >
+              {/* Phone-column wrapper — web only. Constrains the entire app
+                  (tabs, stack screens, modals, rails) to COLUMN_MAX_WIDTH.
+                  All position:absolute children resolve relative to this View,
+                  so the tab bar, right rail, boop pops, and scrims all stay
+                  inside the column. Native renders the inner View as flex:1
+                  with no visual difference. */}
+              <View
+                style={
+                  Platform.OS === 'web'
+                    ? { width: '100%', maxWidth: COLUMN_MAX_WIDTH, flex: 1 }
+                    : { flex: 1 }
+                }
+              >
+                <KeyboardProvider>
+                  <PackProvider>
+                    <FollowsProvider>
+                      <ClerkTokenSync />
+                      <RootLayoutNav />
+                    </FollowsProvider>
+                  </PackProvider>
+                </KeyboardProvider>
+              </View>
             </GestureHandlerRootView>
           </QueryClientProvider>
         </ErrorBoundary>

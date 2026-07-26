@@ -1,0 +1,20 @@
+SCOPE: Phone-column desktop wrapper — WEB ONLY, layout only. On wide viewports, the ENTIRE app renders inside a centered, phone-width column (max width 430px, matching the portal screens' existing constant — unify to ONE shared constant) on the #060B10 ground. Outside the column: pure #060B10, nothing else — no borders, no shadows, no frame chrome. Mobile web and native layouts are untouched; below the breakpoint everything renders exactly as today. NO logic changes anywhere.
+
+APPLIES TO EVERY SURFACE: tab screens (Home feed, Sniff, Nursery, profile), post detail, pet profiles, post/pet creation flows, edit screens, modals, and the auth/portal screens (already columned — just converge on the shared constant).
+
+CRITICAL POSITIONING RULES — the known failure modes of this change:
+- The frosted nav and bottom tab bar must span the COLUMN width, not the window width, and stay aligned to the column.
+- All absolutely/fixed-positioned elements — the right rail (boop/treat/comment/share), boop pops, scrims, mastheads, toasts, modals — must position relative to the COLUMN, not the viewport. A boop pop appearing at the window edge instead of the photo edge = failed delivery.
+- Full-bleed media is full-bleed TO THE COLUMN: photos span the column width edge to edge.
+- Vertical swipe feed paging, double-tap boop, tap-toggles-chrome, and exclusion zones must behave identically inside the column.
+- Scrolling happens inside the column exactly as it does on a phone; no horizontal scrollbars ever.
+
+DO NOT MODIFY: any handler or business logic, auth flows, API, fonts, icons, static serving, deploy config. No Reanimated. No new dependencies. All changes in SOURCE.
+
+PRESERVATION CLAUSE — must work identically after the change, losing any = failed delivery: sign-in (incl. email-code step), feed swipe + boop/treat with pops, post detail incl. timestamps, Nursery pager, Sniff grids + mastheads, post flow (capture → focal crop → publish), profile edit, invite-request capture, sign-out. Native and narrow-viewport rendering byte-identical to today.
+
+ACCEPTANCE — on the LIVE domain after the user redeploys:
+1. Screenshots at a wide desktop viewport: Home feed, post detail, Sniff, Nursery, a modal open, and the sign-in screen — all centered in the same-width column, ground clean on both sides.
+2. Screenshot at phone width confirming zero change.
+3. Confirm the right rail and boop pops render inside the column at desktop width (screenshot mid-boop).
+4. GOLDEN PATH at desktop width: sign in → Home → boop persists after refresh → Nursery pager → post flow → sign out.

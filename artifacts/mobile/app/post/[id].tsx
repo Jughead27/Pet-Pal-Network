@@ -12,7 +12,6 @@
 
 import React from 'react';
 import {
-  Dimensions,
   Platform,
   ScrollView,
   StyleSheet,
@@ -20,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useColumnWidth } from '@/hooks/useColumnWidth';
 import MediaImage from '@/components/MediaImage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -31,10 +31,11 @@ import type { FeedPost, FeedResponse } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import { formatPostAge } from '@/utils/formatPostAge';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
 export default function PostDetailScreen() {
   const colors      = useColors();
+  // columnWidth is capped at COLUMN_MAX_WIDTH on web so the photo frame
+  // matches the phone column, not the full browser window.
+  const columnWidth = useColumnWidth();
   const insets      = useSafeAreaInsets();
   const { id }      = useLocalSearchParams<{ id: string }>();
   const queryClient = useQueryClient();
@@ -78,10 +79,10 @@ export default function PostDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Full-frame contain-fit photo */}
-        <View style={[styles.photoWrapper, { paddingTop: topInset + 52 }]}>
+        <View style={[styles.photoWrapper, { paddingTop: topInset + 52, width: columnWidth }]}>
           <MediaImage
             source={photoSource}
-            style={styles.photo}
+            style={[styles.photo, { width: columnWidth, height: columnWidth, maxHeight: columnWidth * 1.5 }]}
             resizeMode="contain"
           />
         </View>
@@ -137,15 +138,13 @@ const styles = StyleSheet.create({
   },
 
   photoWrapper: {
-    width: SCREEN_WIDTH,
+    // width set inline from columnWidth — capped at 430 on web desktop.
     backgroundColor: '#000',
     alignItems: 'center',
     justifyContent: 'center',
   },
   photo: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_WIDTH,   // square max — actual height driven by aspect ratio via contain
-    maxHeight: SCREEN_WIDTH * 1.5,
+    // width/height/maxHeight set inline from columnWidth — capped at 430 on web desktop.
   },
 
   card: {

@@ -22,6 +22,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useColumnWidth } from "@/hooks/useColumnWidth";
 import * as ImagePicker from "expo-image-picker";
 import MediaImage from "@/components/MediaImage";
 import FocalImage from "@/components/FocalImage";
@@ -58,9 +59,10 @@ import AddToPackLink from "@/components/AddToPackLink";
 import InterestChip from "@/components/InterestChip";
 import { useFollowsContext } from "@/context/FollowsContext";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const HERO_HEIGHT = SCREEN_HEIGHT * 0.42;
-const GRID_ITEM_SIZE = (SCREEN_WIDTH - 4) / 3;
+// GRID_ITEM_SIZE computed dynamically inside component using useColumnWidth() so
+// it respects the 430-px web column rather than the full window width.
 
 function formatCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -77,8 +79,10 @@ function PawStatIcon({ size = 16, color }: { size?: number; color: string }) {
 }
 
 export default function PetProfileScreen() {
-  const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const colors      = useColors();
+  const insets      = useSafeAreaInsets();
+  const columnWidth = useColumnWidth();
+  const gridItemSize = (columnWidth - 4) / 3;
   const { id: rawId } = useLocalSearchParams();
   const petId = Array.isArray(rawId) ? rawId[0] : rawId;
 
@@ -235,7 +239,7 @@ export default function PetProfileScreen() {
     const uri = typeof source === "object" && "uri" in source
       ? (source as { uri: string }).uri
       : post.mediaUrl ?? post.mediaKey;
-    await processAvatarAsset(uri, SCREEN_WIDTH, SCREEN_WIDTH, post.mediaKey);
+    await processAvatarAsset(uri, columnWidth, columnWidth, post.mediaKey);
   }, [processAvatarAsset]);
 
   /** Camera source. */
@@ -660,7 +664,7 @@ export default function PetProfileScreen() {
               key={post.id}
               onPress={() => setSelectedPostId(post.id)}
               activeOpacity={0.85}
-              style={styles.gridItem}
+              style={[styles.gridItem, { width: gridItemSize, height: gridItemSize }]}
               accessibilityRole="button"
               accessibilityLabel={`View post: ${post.caption ?? ""}`}
             >
@@ -700,7 +704,7 @@ export default function PetProfileScreen() {
                     key={post.id}
                     onPress={() => setSelectedPostId(post.id)}
                     activeOpacity={0.85}
-                    style={styles.gridItem}
+                    style={[styles.gridItem, { width: gridItemSize, height: gridItemSize }]}
                     accessibilityRole="button"
                     accessibilityLabel={`View archived post: ${post.caption ?? ""}`}
                   >
@@ -796,7 +800,7 @@ export default function PetProfileScreen() {
         {avatarStep === "framing" && avatarUri && (
           <CropFramer
             uri={avatarUri}
-            naturalWidth={avatarNatural.current.width || SCREEN_WIDTH}
+            naturalWidth={avatarNatural.current.width || columnWidth}
             naturalHeight={avatarNatural.current.height || HERO_HEIGHT}
             frameHeight={HERO_HEIGHT}
             onConfirm={handleAvatarFrameConfirm}
@@ -853,7 +857,7 @@ export default function PetProfileScreen() {
                 {allPosts.map((post) => (
                   <TouchableOpacity
                     key={post.id}
-                    style={styles.pickerItem}
+                    style={[styles.pickerItem, { width: gridItemSize, height: gridItemSize }]}
                     activeOpacity={0.75}
                     onPress={() => handlePickFromPost(post as FeedPost)}
                     accessibilityRole="button"
@@ -984,13 +988,13 @@ export default function PetProfileScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
         <Pressable style={styles.modalOverlay} onPress={closePostModal}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { width: columnWidth - 32 }]}>
             {selectedPost && (
               <>
                 <MediaImage
                   key={selectedPostId ?? undefined}
                   source={resolveMediaKey(selectedPost.mediaKey, selectedPost.mediaUrl)}
-                  style={styles.modalImage}
+                  style={[styles.modalImage, { height: columnWidth - 32 }]}
                   resizeMode="contain"
                 />
                 <View style={[styles.modalCaption, { backgroundColor: colors.card }]}>
@@ -1394,8 +1398,7 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   pickerItem: {
-    width: GRID_ITEM_SIZE,
-    height: GRID_ITEM_SIZE,
+    // width/height set inline from gridItemSize — correct inside 430-px web column.
     position: "relative",
   },
   pickerItemImage: {
@@ -1460,7 +1463,7 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     letterSpacing: 0.2,
   },
-  gridItem:    { width: GRID_ITEM_SIZE, height: GRID_ITEM_SIZE },
+  gridItem:    { /* width/height set inline from gridItemSize */ },
   gridImage:   { width: "100%", height: "100%" },
   modalOverlay: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.6)",
@@ -1523,7 +1526,7 @@ const styles = StyleSheet.create({
   },
 
   // Post detail modal
-  modalContent: { width: SCREEN_WIDTH - 32, borderRadius: 16, overflow: "hidden" },
+  modalContent: { /* width set inline from columnWidth */ borderRadius: 16, overflow: "hidden" },
 
   // Delete affordance inside the post modal
   modalDeleteSection: {
@@ -1579,7 +1582,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Inter_600SemiBold",
   },
-  modalImage:       { width: "100%", height: SCREEN_WIDTH - 32 },
+  modalImage:       { width: "100%", /* height set inline from columnWidth */ },
   modalCaption:     { padding: 16, gap: 4 },
   modalPetName:     { fontSize: 13, fontFamily: "Inter_600SemiBold", letterSpacing: 0.4 },
   modalCaptionText: { fontSize: 14, lineHeight: 20, fontFamily: "Inter_400Regular" },

@@ -28,7 +28,6 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   BackHandler,
-  Dimensions,
   FlatList,
   Platform,
   StyleSheet,
@@ -37,6 +36,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { useColumnWidth } from '@/hooks/useColumnWidth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
@@ -52,21 +52,24 @@ import ShareSheet from '@/components/ShareSheet';
 
 // ─── Layout constants ──────────────────────────────────────────────────────────
 
-const SCREEN_WIDTH   = Dimensions.get('window').width;
-const NUM_COLS       = 3;
-const CELL_GAP       = 2;  // px between columns (and rows)
-// Each cell fills 1/3 of the screen minus the two inter-column gaps
-const THUMBNAIL_SIZE = (SCREEN_WIDTH - CELL_GAP * (NUM_COLS - 1)) / NUM_COLS;
+// THUMBNAIL_SIZE is computed dynamically inside the component from useColumnWidth()
+// so it reflects the 430-px column width on web desktop, not the full window width.
+const NUM_COLS  = 3;
+const CELL_GAP  = 2;  // px between columns (and rows)
 
 // ─── NurseryScreen ─────────────────────────────────────────────────────────────
 
 type ViewMode = 'grid' | 'pager';
 
 export default function NurseryScreen() {
-  const colors       = useColors();
-  const insets       = useSafeAreaInsets();
+  const colors        = useColors();
+  const insets        = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const navigation   = useNavigation();
+  const navigation    = useNavigation();
+  // thumbnailSize uses the column width (capped at 430 on web) so that grid
+  // cells are correct inside the phone-column wrapper on desktop.
+  const columnWidth   = useColumnWidth();
+  const thumbnailSize = (columnWidth - CELL_GAP * (NUM_COLS - 1)) / NUM_COLS;
 
   // ── Shared nursery data ────────────────────────────────────────────────────
   const { data, isLoading, isError } = useGetFeed({ nursery: true });
@@ -350,13 +353,13 @@ export default function NurseryScreen() {
     <TouchableOpacity
       onPress={() => openPost(index)}
       activeOpacity={0.85}
-      style={styles.cell}
+      style={[styles.cell, { width: thumbnailSize, height: thumbnailSize }]}
       accessibilityRole="button"
       accessibilityLabel={item.caption ?? `Nursery post ${index + 1}`}
     >
       <FocalImage
         source={resolveMediaKey(item.mediaKey, item.mediaUrl)}
-        style={styles.cellImage}
+        style={[styles.cellImage, { width: thumbnailSize, height: thumbnailSize }]}
         focusX={item.cropFocusX}
         focusY={item.cropFocusY}
       />
@@ -428,14 +431,13 @@ const styles = StyleSheet.create({
     gap: CELL_GAP,
   },
   cell: {
-    width:        THUMBNAIL_SIZE,
-    height:       THUMBNAIL_SIZE,
+    // width/height set inline from dynamic thumbnailSize — correct in the
+    // 430-px web column and on any native screen width.
     marginBottom: CELL_GAP,
     overflow:     'hidden',
   },
   cellImage: {
-    width:  THUMBNAIL_SIZE,
-    height: THUMBNAIL_SIZE,
+    // width/height set inline from dynamic thumbnailSize.
   },
 
   // ── Pager back button ──────────────────────────────────────────────────────
