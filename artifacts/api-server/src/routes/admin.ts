@@ -14,9 +14,12 @@
  *   GET  /admin/breed-suggestions             — distinct free-text breed submissions
  *   POST /admin/breed-suggestions/approve    — create breed in taxonomy, remap pets
  *   POST /admin/breed-suggestions/reject     — clear free-text breed from pets
+ *   GET  /admin/audit                         — paginated audit log, newest first
  *
- * Audit-log hooks: every mutating handler is structured so a logging wrapper
- * can be inserted before the final res.json() without changing business logic.
+ * Audit-log: every mutating handler writes an audit_log row IN THE SAME
+ * TRANSACTION as the action via writeAudit(tx, ...).  If the transaction rolls
+ * back, the log entry rolls back with it.  audit_log is APPEND-ONLY — no
+ * update or delete route exists or will be added.
  */
 
 import { Router } from "express";
@@ -30,10 +33,12 @@ import {
   inviteRequestsTable,
   speciesTable,
   breedsTable,
+  auditLogTable,
 } from "@workspace/db";
-import { eq, asc, sql, and, isNull } from "drizzle-orm";
+import { eq, asc, desc, sql, and, isNull } from "drizzle-orm";
 import { requireRole } from "../middlewares/requireRole";
 import { mediaTokenUrl } from "../lib/r2.js";
+import { writeAudit } from "../lib/writeAudit.js";
 
 const adminRouter = Router();
 
@@ -59,11 +64,13 @@ adminRouter.get("/admin/ping", (_req, res) => {
  * Sort: animal_cruelty first, then oldest-first.
  * Each row includes a target preview (post thumbnail + caption, or comment text)
  * and the reporter's username, note, and age.
+ *
+ * NOTE: db.execute() with drizzle-orm/node-postgres returns a pg.QueryResult
+ * object (shape: { rows, rowCount, fields, ... }), NOT a bare array.
+ * Always destructure .rows to get the actual data array.
  */
 adminRouter.get("/admin/reports", async (_req, res) => {
-  // Use raw SQL for the multi-table conditional join (posts OR comments per row).
-  // Drizzle's fluent API doesn't support conditional ON clauses well.
-  const rows = await db.execute(sql`
+  const { rows } = await db.execute(sql`
     SELECT
       r.id,
       r.target_type         AS "targetType",
@@ -127,17 +134,36 @@ adminRouter.get("/admin/reports", async (_req, res) => {
  * POST /admin/reports/:id/dismiss
  *
  * Resolves the report without touching the content.
+ * Audit: report.dismiss
  */
 adminRouter.post("/admin/reports/:id/dismiss", async (req, res) => {
-  const { id } = req.params;
+  const { id }      = req.params;
+  const { userId }  = (req as Express.RequestWithAuth).auth!;
 
-  const [updated] = await db
-    .update(reportsTable)
-    .set({ status: "resolved" })
-    .where(eq(reportsTable.id, id))
-    .returning({ id: reportsTable.id });
+  const result = await db.transaction(async (tx) => {
+    const [report] = await tx
+      .select({ targetType: reportsTable.targetType, targetId: reportsTable.targetId, reason: reportsTable.reason })
+      .from(reportsTable)
+      .where(eq(reportsTable.id, id))
+      .limit(1);
 
-  if (!updated) {
+    if (!report) return null;
+
+    await tx
+      .update(reportsTable)
+      .set({ status: "resolved" })
+      .where(eq(reportsTable.id, id));
+
+    await writeAudit(tx, userId, "report.dismiss", "report", id, {
+      targetType: report.targetType,
+      targetId:   report.targetId,
+      reason:     report.reason,
+    });
+
+    return { id };
+  });
+
+  if (!result) {
     res.status(404).json({ error: "Report not found" });
     return;
   }
@@ -150,41 +176,52 @@ adminRouter.post("/admin/reports/:id/dismiss", async (req, res) => {
  *
  * Sets hidden_by_admin on the target post or comment, then resolves the report.
  * Idempotent: re-hiding already-hidden content still resolves the report.
+ * Audit: report.hide
  */
 adminRouter.post("/admin/reports/:id/hide", async (req, res) => {
-  const { id } = req.params;
+  const { id }     = req.params;
+  const { userId } = (req as Express.RequestWithAuth).auth!;
 
-  const [report] = await db
-    .select()
-    .from(reportsTable)
-    .where(eq(reportsTable.id, id))
-    .limit(1);
+  const result = await db.transaction(async (tx) => {
+    const [report] = await tx
+      .select()
+      .from(reportsTable)
+      .where(eq(reportsTable.id, id))
+      .limit(1);
 
-  if (!report) {
+    if (!report) return null;
+
+    if (report.targetType === "post") {
+      await tx
+        .update(postsTable)
+        .set({ hiddenByAdmin: true })
+        .where(sql`${postsTable.id}::text = ${report.targetId}`);
+    } else {
+      await tx
+        .update(commentsTable)
+        .set({ hiddenByAdmin: true })
+        .where(sql`${commentsTable.id}::text = ${report.targetId}`);
+    }
+
+    await tx
+      .update(reportsTable)
+      .set({ status: "resolved" })
+      .where(eq(reportsTable.id, id));
+
+    await writeAudit(tx, userId, "report.hide", report.targetType, report.targetId, {
+      reportId: id,
+      reason:   report.reason,
+    });
+
+    return { targetType: report.targetType };
+  });
+
+  if (!result) {
     res.status(404).json({ error: "Report not found" });
     return;
   }
 
-  // Hide the content
-  if (report.targetType === "post") {
-    await db
-      .update(postsTable)
-      .set({ hiddenByAdmin: true })
-      .where(sql`${postsTable.id}::text = ${report.targetId}`);
-  } else {
-    await db
-      .update(commentsTable)
-      .set({ hiddenByAdmin: true })
-      .where(sql`${commentsTable.id}::text = ${report.targetId}`);
-  }
-
-  // Resolve report
-  await db
-    .update(reportsTable)
-    .set({ status: "resolved" })
-    .where(eq(reportsTable.id, id));
-
-  res.json({ ok: true, id, action: "hide", targetType: report.targetType });
+  res.json({ ok: true, id, action: "hide", targetType: result.targetType });
 });
 
 /**
@@ -193,10 +230,13 @@ adminRouter.post("/admin/reports/:id/hide", async (req, res) => {
  * Suspends the owner of the reported content, then resolves the report.
  * For a post report: suspends the pet's owner.
  * For a comment report: suspends the comment's author.
+ * Audit: user.suspend
  */
 adminRouter.post("/admin/reports/:id/suspend", async (req, res) => {
-  const { id } = req.params;
+  const { id }     = req.params;
+  const { userId } = (req as Express.RequestWithAuth).auth!;
 
+  // Resolve content owner outside transaction (read-only lookups first)
   const [report] = await db
     .select()
     .from(reportsTable)
@@ -208,7 +248,6 @@ adminRouter.post("/admin/reports/:id/suspend", async (req, res) => {
     return;
   }
 
-  // Resolve the content owner's user ID
   let ownerUserId: string | null = null;
 
   if (report.targetType === "post") {
@@ -233,41 +272,61 @@ adminRouter.post("/admin/reports/:id/suspend", async (req, res) => {
     return;
   }
 
-  // Suspend the user
-  await db
-    .update(usersTable)
-    .set({ suspended: true })
-    .where(eq(usersTable.id, ownerUserId));
+  const suspendedId = ownerUserId;
 
-  // Resolve report
-  await db
-    .update(reportsTable)
-    .set({ status: "resolved" })
-    .where(eq(reportsTable.id, id));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(usersTable)
+      .set({ suspended: true })
+      .where(eq(usersTable.id, suspendedId));
 
-  res.json({ ok: true, id, action: "suspend", suspendedUserId: ownerUserId });
+    await tx
+      .update(reportsTable)
+      .set({ status: "resolved" })
+      .where(eq(reportsTable.id, id));
+
+    await writeAudit(tx, userId, "user.suspend", "user", suspendedId, {
+      reportId:   id,
+      targetType: report.targetType,
+      targetId:   report.targetId,
+      reason:     report.reason,
+    });
+  });
+
+  res.json({ ok: true, id, action: "suspend", suspendedUserId: suspendedId });
 });
 
 /**
  * POST /admin/users/:userId/unsuspend
  *
- * Lifts a suspension. Safe to call on already-active users (no-op).
+ * Lifts a suspension. Safe to call on already-active users (no-op on the
+ * suspended flag, still logs the action).
+ * Audit: user.unsuspend
  */
 adminRouter.post("/admin/users/:userId/unsuspend", async (req, res) => {
-  const { userId } = req.params;
+  const { userId: targetUserId } = req.params;
+  const { userId: actorId }      = (req as Express.RequestWithAuth).auth!;
 
-  const [updated] = await db
-    .update(usersTable)
-    .set({ suspended: false })
-    .where(eq(usersTable.id, userId))
-    .returning({ id: usersTable.id, suspended: usersTable.suspended });
+  const result = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(usersTable)
+      .set({ suspended: false })
+      .where(eq(usersTable.id, targetUserId))
+      .returning({ id: usersTable.id, suspended: usersTable.suspended });
 
-  if (!updated) {
+    if (!updated) return null;
+
+    await writeAudit(tx, actorId, "user.unsuspend", "user", targetUserId, null);
+
+    return updated;
+  });
+
+  if (!result) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
-  res.json({ ok: true, userId, suspended: false });
+  res.json({ ok: true, userId: targetUserId, suspended: false });
 });
 
 // ─── Invite requests ──────────────────────────────────────────────────────────
@@ -275,7 +334,7 @@ adminRouter.post("/admin/users/:userId/unsuspend", async (req, res) => {
 /**
  * GET /admin/invite-requests
  *
- * Returns all invite requests, newest-first, with email, note, age, and status.
+ * Returns all invite requests, oldest-first, with email, note, age, and status.
  */
 adminRouter.get("/admin/invite-requests", async (_req, res) => {
   const rows = await db
@@ -290,17 +349,29 @@ adminRouter.get("/admin/invite-requests", async (_req, res) => {
  * POST /admin/invite-requests/:id/contact
  *
  * Marks an invite request as contacted.
+ * Audit: invite_request.contact
  */
 adminRouter.post("/admin/invite-requests/:id/contact", async (req, res) => {
-  const { id } = req.params;
+  const { id }     = req.params;
+  const { userId } = (req as Express.RequestWithAuth).auth!;
 
-  const [updated] = await db
-    .update(inviteRequestsTable)
-    .set({ status: "contacted" })
-    .where(eq(inviteRequestsTable.id, id))
-    .returning();
+  const result = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(inviteRequestsTable)
+      .set({ status: "contacted" })
+      .where(eq(inviteRequestsTable.id, id))
+      .returning();
 
-  if (!updated) {
+    if (!updated) return null;
+
+    await writeAudit(tx, userId, "invite_request.contact", "invite_request", id, {
+      email: updated.email,
+    });
+
+    return updated;
+  });
+
+  if (!result) {
     res.status(404).json({ error: "Invite request not found" });
     return;
   }
@@ -312,17 +383,29 @@ adminRouter.post("/admin/invite-requests/:id/contact", async (req, res) => {
  * POST /admin/invite-requests/:id/close
  *
  * Closes an invite request (no invitation issued — Invites v2 concern).
+ * Audit: invite_request.close
  */
 adminRouter.post("/admin/invite-requests/:id/close", async (req, res) => {
-  const { id } = req.params;
+  const { id }     = req.params;
+  const { userId } = (req as Express.RequestWithAuth).auth!;
 
-  const [updated] = await db
-    .update(inviteRequestsTable)
-    .set({ status: "closed" })
-    .where(eq(inviteRequestsTable.id, id))
-    .returning();
+  const result = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(inviteRequestsTable)
+      .set({ status: "closed" })
+      .where(eq(inviteRequestsTable.id, id))
+      .returning();
 
-  if (!updated) {
+    if (!updated) return null;
+
+    await writeAudit(tx, userId, "invite_request.close", "invite_request", id, {
+      email: updated.email,
+    });
+
+    return updated;
+  });
+
+  if (!result) {
     res.status(404).json({ error: "Invite request not found" });
     return;
   }
@@ -338,9 +421,12 @@ adminRouter.post("/admin/invite-requests/:id/close", async (req, res) => {
  * Returns distinct free-text breed submissions (pets where breedId IS NULL
  * and breed IS NOT NULL and speciesId IS NOT NULL), grouped by species + name
  * with a count of how many pets share each suggestion.
+ *
+ * NOTE: db.execute() with drizzle-orm/node-postgres returns a pg.QueryResult;
+ * destructure .rows to get the bare array.
  */
 adminRouter.get("/admin/breed-suggestions", async (_req, res) => {
-  const rows = await db.execute(sql`
+  const { rows } = await db.execute(sql`
     SELECT
       p.species_id     AS "speciesId",
       sp.name          AS "speciesName",
@@ -366,12 +452,14 @@ adminRouter.get("/admin/breed-suggestions", async (_req, res) => {
  * Duplicate-aware: if a breed with that name already exists for the species
  * (case-insensitive), ci-matches to the existing breed rather than creating a
  * twin. Updates all matching pets to use the canonical breedId.
+ * Audit: breed.approve
  */
 adminRouter.post("/admin/breed-suggestions/approve", async (req, res) => {
   const { speciesId, breedName } = req.body as {
     speciesId?: string;
     breedName?: string;
   };
+  const { userId } = (req as Express.RequestWithAuth).auth!;
 
   if (!speciesId || !breedName?.trim()) {
     res.status(400).json({ error: "speciesId and breedName are required" });
@@ -380,7 +468,7 @@ adminRouter.post("/admin/breed-suggestions/approve", async (req, res) => {
 
   const trimmedName = breedName.trim();
 
-  // Verify species exists
+  // Verify species exists (read-only, outside transaction)
   const [species] = await db
     .select()
     .from(speciesTable)
@@ -392,47 +480,57 @@ adminRouter.post("/admin/breed-suggestions/approve", async (req, res) => {
     return;
   }
 
-  // Check for existing breed (case-insensitive)
-  const [existing] = await db
-    .select()
-    .from(breedsTable)
-    .where(
-      and(
-        eq(breedsTable.speciesId, speciesId),
-        sql`lower(${breedsTable.name}) = lower(${trimmedName})`,
-      ),
-    )
-    .limit(1);
+  const result = await db.transaction(async (tx) => {
+    // Check for existing breed (case-insensitive)
+    const [existing] = await tx
+      .select()
+      .from(breedsTable)
+      .where(
+        and(
+          eq(breedsTable.speciesId, speciesId),
+          sql`lower(${breedsTable.name}) = lower(${trimmedName})`,
+        ),
+      )
+      .limit(1);
 
-  let canonicalBreed = existing;
+    let canonicalBreed = existing;
 
-  if (!canonicalBreed) {
-    // Create the new breed
-    const [created] = await db
-      .insert(breedsTable)
-      .values({ speciesId, name: trimmedName })
-      .returning();
-    canonicalBreed = created;
-  }
+    if (!canonicalBreed) {
+      const [created] = await tx
+        .insert(breedsTable)
+        .values({ speciesId, name: trimmedName })
+        .returning();
+      canonicalBreed = created;
+    }
 
-  // Update all matching pets to use the canonical breed
-  const updated = await db
-    .update(petsTable)
-    .set({ breedId: canonicalBreed.id, breed: canonicalBreed.name })
-    .where(
-      and(
-        eq(petsTable.speciesId, speciesId),
-        isNull(petsTable.breedId),
-        sql`lower(${petsTable.breed}) = lower(${trimmedName})`,
-      ),
-    )
-    .returning({ id: petsTable.id });
+    const updated = await tx
+      .update(petsTable)
+      .set({ breedId: canonicalBreed.id, breed: canonicalBreed.name })
+      .where(
+        and(
+          eq(petsTable.speciesId, speciesId),
+          isNull(petsTable.breedId),
+          sql`lower(${petsTable.breed}) = lower(${trimmedName})`,
+        ),
+      )
+      .returning({ id: petsTable.id });
+
+    await writeAudit(tx, userId, "breed.approve", "breed", canonicalBreed.id, {
+      speciesId,
+      speciesName:  species.name,
+      breedName:    canonicalBreed.name,
+      created:      !existing,
+      petsUpdated:  updated.length,
+    });
+
+    return { canonicalBreed, created: !existing, petsUpdated: updated.length };
+  });
 
   res.json({
-    ok:       true,
-    breed:    { id: canonicalBreed.id, name: canonicalBreed.name, speciesId },
-    created:  !existing,
-    petsUpdated: updated.length,
+    ok:          true,
+    breed:       { id: result.canonicalBreed.id, name: result.canonicalBreed.name, speciesId },
+    created:     result.created,
+    petsUpdated: result.petsUpdated,
   });
 });
 
@@ -443,12 +541,14 @@ adminRouter.post("/admin/breed-suggestions/approve", async (req, res) => {
  *
  * Clears the free-text breed from all matching pets (sets breed = null).
  * The pet owner can re-enter a breed if they wish.
+ * Audit: breed.reject
  */
 adminRouter.post("/admin/breed-suggestions/reject", async (req, res) => {
   const { speciesId, breedName } = req.body as {
     speciesId?: string;
     breedName?: string;
   };
+  const { userId } = (req as Express.RequestWithAuth).auth!;
 
   if (!speciesId || !breedName?.trim()) {
     res.status(400).json({ error: "speciesId and breedName are required" });
@@ -457,19 +557,70 @@ adminRouter.post("/admin/breed-suggestions/reject", async (req, res) => {
 
   const trimmedName = breedName.trim();
 
-  const updated = await db
-    .update(petsTable)
-    .set({ breed: null })
-    .where(
-      and(
-        eq(petsTable.speciesId, speciesId),
-        isNull(petsTable.breedId),
-        sql`lower(${petsTable.breed}) = lower(${trimmedName})`,
-      ),
-    )
-    .returning({ id: petsTable.id });
+  const petsUpdated = await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(petsTable)
+      .set({ breed: null })
+      .where(
+        and(
+          eq(petsTable.speciesId, speciesId),
+          isNull(petsTable.breedId),
+          sql`lower(${petsTable.breed}) = lower(${trimmedName})`,
+        ),
+      )
+      .returning({ id: petsTable.id });
 
-  res.json({ ok: true, petsUpdated: updated.length });
+    await writeAudit(tx, userId, "breed.reject", null, null, {
+      speciesId,
+      breedName:   trimmedName,
+      petsUpdated: updated.length,
+    });
+
+    return updated.length;
+  });
+
+  res.json({ ok: true, petsUpdated });
+});
+
+// ─── Audit log viewer ─────────────────────────────────────────────────────────
+
+/**
+ * GET /admin/audit?limit=20&offset=0
+ *
+ * Paginated audit log, newest first.  Joins users to surface actorUsername.
+ * Returns: { entries: AuditEntry[], total: number }
+ *
+ * Uses Drizzle fluent API (not raw SQL) so the result is a plain array —
+ * no .rows destructuring needed.
+ */
+adminRouter.get("/admin/audit", async (req, res) => {
+  const limit  = Math.min(Number(req.query.limit)  || 20, 100);
+  const offset = Math.max(Number(req.query.offset) || 0, 0);
+
+  const [entries, [{ count }]] = await Promise.all([
+    db
+      .select({
+        id:            auditLogTable.id,
+        actorId:       auditLogTable.actorId,
+        actorUsername: usersTable.username,
+        action:        auditLogTable.action,
+        targetType:    auditLogTable.targetType,
+        targetId:      auditLogTable.targetId,
+        metadata:      auditLogTable.metadata,
+        createdAt:     auditLogTable.createdAt,
+      })
+      .from(auditLogTable)
+      .leftJoin(usersTable, eq(usersTable.id, auditLogTable.actorId))
+      .orderBy(desc(auditLogTable.createdAt))
+      .limit(limit)
+      .offset(offset),
+
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(auditLogTable),
+  ]);
+
+  res.json({ entries, total: count });
 });
 
 export default adminRouter;

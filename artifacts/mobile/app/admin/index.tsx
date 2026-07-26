@@ -32,6 +32,11 @@ const SECTIONS = [
     label:       'Breed Suggestions',
     description: 'Approve or reject "Not listed" free-text breed submissions.',
   },
+  {
+    route:       '/admin/log' as const,
+    label:       'Audit Log',
+    description: 'Chronological record of every admin action. Read-only.',
+  },
 ];
 
 export default function AdminIndexScreen() {
