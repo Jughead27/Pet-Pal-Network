@@ -1,0 +1,25 @@
+SCOPE: Diagnose and fix why production fonts still 404 on https://pshpsh.net AFTER the dotfiles fix was built and a redeploy was performed. Evidence-first: every claim below must be backed by pasted command output. Do not touch anything outside static-file serving.
+
+STEP 1 — GROUND TRUTH ON DISK. Run:
+find dist-web -name "*.ttf" | head -5
+Paste the output. Pick one real Inter TTF path from it. If no TTFs exist in dist-web, say so and stop — that changes the diagnosis (export problem, not serving problem).
+
+STEP 2 — GROUND TRUTH ON THE LIVE DOMAIN. Using that exact on-disk path (correctly URL-encoded), run:
+curl -sI "https://pshpsh.net/<exact asset path from step 1>"
+Paste the raw response headers. Do not summarize them.
+
+STEP 3 — BRANCH ON THE EVIDENCE:
+
+IF STEP 2 RETURNS 200 with a font content-type: the server is already fixed. State plainly that the remaining problem is browser caching on the phone, make no code changes, and stop.
+
+IF STEP 2 RETURNS 404 or text/html: the running deployment does not have the fix. Then:
+a) Verify the fix exists in SOURCE, not just the compiled dist. Run:
+grep -rn "dotfiles" server/ apps/ lib/ --include="*.ts" --include="*.js"
+Paste the output. If the grep is EMPTY, that is the root cause: the change was made only to the compiled bundle, and the deployment's build step rebuilt from source and erased it.
+b) Apply dotfiles: "allow" to the express.static call that serves the web export, IN THE SOURCE FILE. Show the exact edit (file path + before/after lines).
+c) Rebuild the api-server dist with the project's normal build command. Paste the build success output and a grep confirming "allow" is present in the compiled output.
+d) Confirm git status is clean after committing — no uncommitted changes left behind.
+
+DO NOT MODIFY: SPA fallback ordering or its /api/* and file-extension exclusions, auth code, any app screens, secrets, the Expo export itself. One config change in one place.
+
+FINAL REPORT must state, in one line each: (1) what step 2 returned, (2) which branch was taken, (3) whether the fix is now in SOURCE + committed, (4) the exact curl command the user should run — or that the user should now click Redeploy and then hard-refresh. Be explicit that YOU cannot redeploy; the user must press Redeploy for any of this to reach pshpsh.net.
