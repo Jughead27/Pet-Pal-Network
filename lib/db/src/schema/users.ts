@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uniqueIndex, pgEnum, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, uniqueIndex, pgEnum, boolean, integer, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -23,7 +23,11 @@ export const usersTable = pgTable(
     createdAt:    timestamp("created_at").defaultNow().notNull(),
     role:      userRoleEnum("role").notNull().default("member"),
     // Set by admins. Suspended users receive 403 on every authenticated call.
-    suspended: boolean("suspended").notNull().default(false),
+    suspended:   boolean("suspended").notNull().default(false),
+    // Invite v2 — per-user quota override (null = use config default)
+    inviteQuota: integer("invite_quota"),
+    // Permanent attribution — who invited this user (null = founding account)
+    invitedBy:   text("invited_by").references((): AnyPgColumn => usersTable.id),
   },
   (t) => ({
     // Case-insensitive unique index — only indexes non-null usernames.

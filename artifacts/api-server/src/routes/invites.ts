@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, inviteRequestsTable } from "@workspace/db";
+import { db, inviteRequestsTable, invitesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -84,6 +84,26 @@ router.post("/invites/request", async (req, res) => {
   });
 
   res.status(201).json({ ok: true });
+});
+
+/**
+ * GET /api/invites/validate/:code
+ *
+ * Public endpoint — no auth required.
+ * Returns { valid: boolean } for a given invite code.
+ * Used by the landing page to confirm the link is still active before showing UI.
+ */
+router.get("/invites/validate/:code", async (req, res) => {
+  const { code } = req.params;
+  if (!code) { res.json({ valid: false }); return; }
+
+  const [invite] = await db
+    .select({ status: invitesTable.status })
+    .from(invitesTable)
+    .where(eq(invitesTable.code, code.trim()))
+    .limit(1);
+
+  res.json({ valid: invite?.status === "active" });
 });
 
 export default router;

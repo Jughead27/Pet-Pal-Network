@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Platform, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@clerk/clerk-expo';
@@ -8,7 +8,8 @@ import { Redirect, Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SniffIcon from '@/components/SniffIcon';
 import HatchlingIcon from '@/components/HatchlingIcon';
-import { useGetMe } from '@workspace/api-client-react';
+import { useGetMe, customFetch } from '@workspace/api-client-react';
+import * as SecureStore from 'expo-secure-store';
 
 // ─── TabLayout ────────────────────────────────────────────────────────────────
 //
@@ -39,6 +40,27 @@ export default function TabLayout() {
   // isLoaded && isSignedIn ensures the token getter is in place first.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error: meError } = useGetMe({ query: { enabled: isLoaded && isSignedIn === true } as any });
+
+  // Redeem any pending invite code that survived the OAuth round-trip.
+  // This handles both: (a) password signup where code was set but session activated async,
+  // and (b) Google OAuth where the browser round-trip clears React state but not SecureStore.
+  useEffect(() => {
+    if (!isSignedIn) return;
+    (async () => {
+      try {
+        const code = await SecureStore.getItemAsync('pendingInviteCode');
+        if (!code) return;
+        // Best-effort — if the code is expired or already used, the endpoint returns ok:false (no throw)
+        await customFetch('/api/invites/redeem', {
+          method: 'POST',
+          body:   JSON.stringify({ code }),
+        });
+      } catch { /* silent — invite attribution is best-effort */ } finally {
+        await SecureStore.deleteItemAsync('pendingInviteCode').catch(() => {});
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn]);
 
   // ─── Auth guard (after all hooks) ───────────────────────────────────────
   if (!isLoaded) return null;

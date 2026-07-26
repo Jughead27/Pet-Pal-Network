@@ -26,6 +26,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -92,6 +93,22 @@ export default function ProfileScreen() {
   });
   const blockedList = blocksData?.blocks ?? [];
 
+  // Invite data query
+  const { data: inviteData, refetch: refetchInvites } = useQuery({
+    queryKey: ['my-invites'],
+    queryFn:  () => customFetch<{
+      effectiveQuota:    number;
+      invitedByUsername: string | null;
+      nonRevokedCount:   number;
+      invites: {
+        id: string; code: string; status: 'active' | 'used' | 'revoked';
+        createdAt: string; usedByUsername: string | null;
+      }[];
+    }>('/api/invites/mine'),
+  });
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [revokingIds, setRevokingIds]       = useState<Set<string>>(new Set());
+
   const handleUnblock = useCallback(async (userId: string) => {
     if (pendingBlockIds.has(userId)) return;
     addPendingBlock(userId);
@@ -153,6 +170,44 @@ export default function ProfileScreen() {
     router.replace('/(auth)/sign-in');
   }, [signOut]);
 
+  // ── Invite handlers ──────────────────────────────────────────────────────
+  const handleCallInFriend = useCallback(async () => {
+    if (creatingInvite) return;
+    setCreatingInvite(true);
+    try {
+      const result = await customFetch<{ ok: boolean; invite: { id: string; code: string } }>(
+        '/api/invites', { method: 'POST' },
+      );
+      const link    = `https://pshpsh.net/invite/${result.invite.code}`;
+      const message = `you've been called. ${link}`;
+      if (Platform.OS === 'web') {
+        // Web Share API with clipboard fallback
+        try {
+          await (navigator as unknown as { share(o: object): Promise<void> }).share({ text: message, url: link });
+        } catch {
+          try {
+            await (navigator as unknown as { clipboard: { writeText(s: string): Promise<void> } }).clipboard.writeText(link);
+          } catch { /* silent */ }
+        }
+      } else {
+        await Share.share({ message });
+      }
+      await refetchInvites();
+    } catch { /* silent — quota exceeded or network error */ } finally {
+      setCreatingInvite(false);
+    }
+  }, [creatingInvite, refetchInvites]);
+
+  const handleRevoke = useCallback(async (inviteId: string) => {
+    setRevokingIds((prev) => new Set(prev).add(inviteId));
+    try {
+      await customFetch(`/api/invites/${inviteId}/revoke`, { method: 'POST' });
+      await refetchInvites();
+    } catch { /* silent */ } finally {
+      setRevokingIds((prev) => { const s = new Set(prev); s.delete(inviteId); return s; });
+    }
+  }, [refetchInvites]);
+
   // ── Loading ──────────────────────────────────────────────────────────────────
   if (petsLoading) {
     return (
@@ -176,6 +231,11 @@ export default function ProfileScreen() {
   const followedSpecies = followsData?.followedSpecies  ?? [];
   const followedBreeds  = followsData?.followedBreeds   ?? [];
   const hasFollows      = packedPets.length > 0 || followedSpecies.length > 0 || followedBreeds.length > 0;
+
+  // Invite derived values
+  const effectiveQuota  = inviteData?.effectiveQuota ?? 0;
+  const nonRevokedCount = inviteData?.nonRevokedCount ?? 0;
+  const remaining       = effectiveQuota - nonRevokedCount;
 
   // Owner header visibility helpers
   const hasDisplayName  = Boolean(meData?.displayName);
@@ -420,6 +480,92 @@ export default function ProfileScreen() {
               ))}
             </View>
           </>
+        )}
+
+        {/* ══════════════ YOUR INVITES ══════════════ */}
+        <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
+        <Text style={[styles.heading, { color: colors.foreground }]}>Your Invites</Text>
+
+        {/* Header copy — exact per spec, warm never scarcity-framed */}
+        <Text style={[styles.inviteIntro, { color: colors.mutedForeground }]}>
+          {inviteData?.invitedByUsername
+            ? `someone called you in. now you can call in ${effectiveQuota}.`
+            : `you can call in ${effectiveQuota} friends.`}
+        </Text>
+
+        {/* Progress text — only when some invites created */}
+        {nonRevokedCount > 0 && remaining > 0 && (
+          <Text style={[styles.inviteProgress, { color: colors.mutedForeground }]}>
+            {`you've called in ${nonRevokedCount}. ${remaining} more can join.`}
+          </Text>
+        )}
+        {remaining <= 0 && effectiveQuota > 0 && (
+          <Text style={[styles.inviteProgress, { color: colors.mutedForeground }]}>
+            {`your ${effectiveQuota} friends are in.`}
+          </Text>
+        )}
+
+        {/* "call in a friend" bold action — hidden when at quota */}
+        {effectiveQuota > 0 && remaining > 0 && (
+          <TouchableOpacity
+            onPress={handleCallInFriend}
+            disabled={creatingInvite}
+            activeOpacity={0.7}
+            style={styles.callInRow}
+            accessibilityRole="button"
+            accessibilityLabel="Call in a friend"
+          >
+            {creatingInvite
+              ? <ActivityIndicator size={14} color={colors.foreground} />
+              : <Text style={[styles.callInText, { color: colors.foreground }]}>call in a friend</Text>}
+          </TouchableOpacity>
+        )}
+
+        {/* Invite list — active, used, revoked */}
+        {(inviteData?.invites ?? []).length > 0 && (
+          <View style={[styles.listGap, { marginTop: 14 }]}>
+            {(inviteData?.invites ?? []).map((invite) => (
+              <View
+                key={invite.id}
+                style={[
+                  styles.followRow,
+                  {
+                    borderColor:     colors.border,
+                    backgroundColor: colors.card,
+                    opacity:         invite.status === 'revoked' ? 0.4 : 1,
+                  },
+                ]}
+              >
+                <View style={styles.followRowContent}>
+                  <View style={styles.petInfo}>
+                    <Text style={[styles.petName, { color: colors.foreground }]}>
+                      {invite.status === 'active'  ? 'shared'
+                        : invite.status === 'used'   ? `joined — ${invite.usedByUsername ?? '?'}`
+                        : 'revoked'}
+                    </Text>
+                    {invite.status === 'active' && (
+                      <Text style={[styles.petSubtitle, { color: colors.mutedForeground }]}>
+                        {invite.code}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+                {invite.status === 'active' && (
+                  <TouchableOpacity
+                    onPress={() => handleRevoke(invite.id)}
+                    disabled={revokingIds.has(invite.id)}
+                    style={[styles.quietAction, revokingIds.has(invite.id) && { opacity: 0.4 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Revoke invite"
+                  >
+                    {revokingIds.has(invite.id)
+                      ? <ActivityIndicator size={12} color={colors.mutedForeground} />
+                      : <Text style={[styles.quietActionText, { color: colors.mutedForeground }]}>revoke</Text>}
+                  </TouchableOpacity>
+                )}
+              </View>
+            ))}
+          </View>
         )}
 
         {/* ══════════════ SIGN OUT ══════════════ */}
@@ -809,6 +955,30 @@ const styles = StyleSheet.create({
     fontFamily:    'Inter_500Medium',
     fontSize:      13,
     letterSpacing: 0.1,
+  },
+
+  // Invite section
+  inviteIntro: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     15,
+    lineHeight:   22,
+    marginBottom: 8,
+  },
+  inviteProgress: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     13,
+    lineHeight:   20,
+    marginBottom: 12,
+    opacity:      0.75,
+  },
+  callInRow: {
+    paddingVertical: 10,
+    alignSelf:       'flex-start',
+    marginBottom:    4,
+  },
+  callInText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize:   15,
   },
 
   // Send feedback — whisper weight, sits above sign-out

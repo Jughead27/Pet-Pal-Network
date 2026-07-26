@@ -1,0 +1,35 @@
+SCOPE: Invites v2 — link-based invites, quota system, gated signup, full traceability. This delivery makes the invite gate REAL. One delivery.
+
+1. SCHEMA (state how each reaches PRODUCTION on deploy):
+   - config: add invite_default_quota = 5 (the global faucet, same pattern as the treat cap).
+   - users: add invite_quota int NULL (per-user admin override; effective quota = COALESCE(invite_quota, config default)) and invited_by text NULL FK → users.id (permanent attribution).
+   - invites table: id, code (short, URL-safe, unique, unguessable — 10+ chars), inviter_id FK, status enum ('active','used','revoked') default active, created_at, used_by FK NULL, used_at NULL.
+
+2. MEMBER FLOW — "your invites" (quiet section on the profile screen):
+   - Header copy EXACTLY: "someone called you in. now you can call in 5." (the number = their effective quota; if invited_by is null — founding accounts — use "you can call in 5 friends.").
+   - Progress phrasing, never scarcity: "you've called in 2. three more friends can join." NEVER the words limit/remaining/left/quota anywhere user-facing.
+   - "call in a friend" (bold text action) → creates an invite → opens the NATIVE SHARE SHEET with the link https://pshpsh.net/invite/CODE and a short message ("you've been called. [link]"). Web fallback: copy-to-clipboard with confirmation.
+   - List their invites: code's status only as warm copy (shared / joined — with the friend's username once used). Quiet "revoke" whisper on unused invites (status → revoked, audit-logged).
+   - Remaining = effective quota − count of non-revoked invites created. At zero: the action hides; copy stays warm ("your 5 friends are in.") — no error states.
+
+3. THE GATE — signup requires a valid code, ALL paths:
+   - /invite/CODE public landing page, portal visual system: nest-cat, "you've been called." as the headline, the wordmark + slogan, then "join pshpsh" (bold text) → sign-up with the code BOUND to the signup session.
+   - Password sign-up: without a bound valid code → kind block: "pshpsh is invite-only." + the existing request-an-invite capture. With code → proceeds.
+   - CRITICAL — OAuth path: the Google sign-in→sign-up TRANSFER flow must also respect the gate. A new Google user with NO bound code must be kindly blocked (no account created), same message; with a bound code (arrived via /invite/CODE landing), the transfer proceeds. State exactly how the code survives the OAuth round-trip (session/state param).
+   - On successful signup by any path: invite → used (used_by, used_at), new user's invited_by = inviter, all in ONE transaction, with a writeAudit entry ('invite.used', metadata: inviter, code).
+   - Existing accounts are NEVER affected; sign-IN paths unchanged.
+
+4. ADMIN: in the admin hub, an "invites" view: per-user effective quota with quiet edit ("set quota") → users.invite_quota, transaction + audit ('user.invite_quota_set', old/new in metadata). Show invited_by lineage per user (who called them in).
+
+DO NOT MODIFY: auth sign-IN flows, trust layer behavior, feedback channel, reactions. Raw SQL destructures { rows }. Every new screen/step has a cancel/exit. No new dependencies. All in SOURCE.
+
+PRESERVATION CLAUSE: existing sign-in (password + Google + email-code), request-an-invite capture, all trust surfaces, golden path — identical.
+
+ACCEPTANCE — evidence pasted, dev:
+1. James creates an invite → invites row + the share link.
+2. /invite/CODE landing renders (screenshot or full component description).
+3. Full gated signup with the code → new user row with invited_by set, invite status 'used', the 'invite.used' audit row — all pasted.
+4. Signup attempt WITHOUT a code (password AND the OAuth-transfer case) → kindly blocked, no account created.
+5. Quota math: effective quota honors config default and a per-user override; admin quota change + its audit row pasted.
+6. Revoke → revoked invite's code no longer admits.
+7. tsc clean both packages; migration-to-prod statement; golden path.

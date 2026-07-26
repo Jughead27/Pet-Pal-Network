@@ -42,6 +42,11 @@ const SECTIONS = [
     label:       'Feedback',
     description: 'Member feedback submissions — mark reviewed when actioned.',
   },
+  {
+    route:       '/admin/invite-management' as const,
+    label:       'Invite Management',
+    description: 'Per-user quota overrides and invited-by lineage.',
+  },
 ];
 
 export default function AdminIndexScreen() {

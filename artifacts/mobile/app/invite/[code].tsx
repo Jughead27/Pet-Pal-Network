@@ -1,0 +1,253 @@
+/**
+ * Invite landing page — /invite/[code]
+ *
+ * Portal visual system: logo, "you've been called." headline, wordmark + slogan,
+ * bold "join pshpsh" action.
+ *
+ * On mount: optionally validates the code against the API.
+ * On "join pshpsh": stores code in SecureStore → pushes to /(auth)/sign-up.
+ *
+ * Works for both signed-in and signed-out visitors.
+ * Signed-in users who tap "join pshpsh" are redirected by the (auth) guard.
+ */
+
+import React, { useEffect, useState } from 'react';
+import { COLUMN_MAX_WIDTH } from '@/hooks/useColumnWidth';
+import {
+  ActivityIndicator,
+  Image,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as SecureStore from 'expo-secure-store';
+import { getBaseUrl } from '@workspace/api-client-react';
+
+// ── Portal design tokens ───────────────────────────────────────────────────────
+const BG    = '#060B10';
+const FG    = '#F0F4F8';
+const MUTED = '#6B7FA0';
+
+const LOGO = require('@/assets/icon.png');
+
+type Status = 'loading' | 'valid' | 'invalid' | 'joining';
+
+export default function InviteLandingScreen() {
+  const insets           = useSafeAreaInsets();
+  const router           = useRouter();
+  const { code }         = useLocalSearchParams<{ code: string }>();
+  const [status, setStatus] = useState<Status>('loading');
+
+  // ── Validate code on mount ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!code) { setStatus('invalid'); return; }
+    const validate = async () => {
+      try {
+        const baseUrl = getBaseUrl() ?? '';
+        const res  = await fetch(`${baseUrl}/api/invites/validate/${encodeURIComponent(code)}`);
+        const data = await res.json() as { valid: boolean };
+        setStatus(data.valid ? 'valid' : 'invalid');
+      } catch {
+        // Network error — allow attempting anyway
+        setStatus('valid');
+      }
+    };
+    validate();
+  }, [code]);
+
+  // ── "join pshpsh" action ──────────────────────────────────────────────────
+  const handleJoin = async () => {
+    if (!code) return;
+    setStatus('joining');
+    try {
+      await SecureStore.setItemAsync('pendingInviteCode', code);
+    } catch { /* non-fatal */ }
+    // Navigate to sign-up with the code bound as a param
+    router.push({ pathname: '/(auth)/sign-up', params: { inviteCode: code } });
+  };
+
+  const pt = insets.top + (Platform.OS === 'web' ? 24 : 48);
+  const pb = insets.bottom + 40;
+
+  if (status === 'loading') {
+    return (
+      <View style={[styles.root, styles.centered]}>
+        <ActivityIndicator color={FG} size="small" />
+      </View>
+    );
+  }
+
+  if (status === 'invalid') {
+    return (
+      <ScrollView style={styles.root} contentContainerStyle={[styles.scroll, { paddingTop: pt, paddingBottom: pb }]}>
+        <View style={styles.col}>
+          <View style={styles.header}>
+            <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+            <Text style={styles.wordmark}>pshpsh</Text>
+          </View>
+          <Text style={styles.headline}>this invite has expired.</Text>
+          <Text style={styles.sub}>the link is no longer valid. ask your friend for a fresh one.</Text>
+          <Pressable
+            onPress={() => router.push('/(auth)/sign-in')}
+            style={styles.secondaryBtn}
+          >
+            <Text style={styles.secondaryTxt}>← sign in</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={[styles.scroll, { paddingTop: pt, paddingBottom: pb }]}
+      showsVerticalScrollIndicator={false}
+    >
+      <View style={styles.col}>
+        {/* Portal header */}
+        <View style={styles.header}>
+          <Image source={LOGO} style={styles.logo} resizeMode="contain" />
+          <Text style={styles.wordmark}>pshpsh</Text>
+          <View style={styles.sloganWrap}>
+            <Text style={styles.slogan1}>follow pets, not people.</Text>
+            <Text style={styles.slogan2}>curl up, you're home.</Text>
+          </View>
+        </View>
+
+        {/* Headline */}
+        <Text style={styles.headline}>you've been called.</Text>
+        <Text style={styles.sub}>
+          someone who loves animals thinks you'd fit right in.
+        </Text>
+
+        {/* Primary action */}
+        <Pressable
+          style={({ pressed }) => [styles.joinBtn, pressed && { opacity: 0.65 }]}
+          onPress={handleJoin}
+          disabled={status === 'joining'}
+          accessibilityRole="button"
+          accessibilityLabel="Join pshpsh"
+        >
+          {status === 'joining'
+            ? <ActivityIndicator color={FG} size="small" />
+            : <Text style={styles.joinTxt}>join pshpsh</Text>}
+        </Pressable>
+
+        {/* Already have an account */}
+        <Pressable
+          onPress={() => router.push('/(auth)/sign-in')}
+          style={styles.secondaryBtn}
+          accessibilityRole="button"
+        >
+          <Text style={styles.secondaryTxt}>already a member? sign in</Text>
+        </Pressable>
+      </View>
+    </ScrollView>
+  );
+}
+
+// ── Styles ────────────────────────────────────────────────────────────────────
+const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+    backgroundColor: BG,
+  },
+  centered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scroll: {
+    flexGrow: 1,
+    alignItems: 'center',
+  },
+  col: {
+    width: '100%',
+    maxWidth: COLUMN_MAX_WIDTH,
+    paddingHorizontal: 32,
+  },
+
+  // Portal header
+  header: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logo: {
+    width: 160,
+    height: 160,
+  },
+  wordmark: {
+    fontFamily:    'Inter_700Bold',
+    fontSize:      32,
+    color:         FG,
+    letterSpacing: -1,
+    marginTop:     8,
+    textAlign:     'center',
+  },
+  sloganWrap: {
+    alignItems: 'center',
+    marginTop:  16,
+    gap:        6,
+  },
+  slogan1: {
+    fontFamily: 'Inter_500Medium',
+    fontSize:   15,
+    color:      FG,
+    opacity:    0.72,
+    textAlign:  'center',
+    lineHeight: 22,
+  },
+  slogan2: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+    color:      MUTED,
+    textAlign:  'center',
+    lineHeight: 20,
+  },
+
+  // Content
+  headline: {
+    fontFamily:    'Inter_700Bold',
+    fontSize:      26,
+    color:         FG,
+    letterSpacing: -0.3,
+    textAlign:     'center',
+    marginBottom:  12,
+  },
+  sub: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     14,
+    color:        MUTED,
+    textAlign:    'center',
+    lineHeight:   22,
+    marginBottom: 48,
+  },
+
+  // Actions
+  joinBtn: {
+    paddingVertical: 16,
+    alignItems:      'center',
+    marginBottom:    8,
+  },
+  joinTxt: {
+    fontFamily: 'Inter_700Bold',
+    fontSize:   17,
+    color:      FG,
+  },
+  secondaryBtn: {
+    paddingVertical: 12,
+    alignItems:      'center',
+    marginTop:       8,
+  },
+  secondaryTxt: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+    color:      MUTED,
+    opacity:    0.7,
+  },
+});

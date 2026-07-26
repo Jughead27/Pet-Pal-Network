@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { COLUMN_MAX_WIDTH } from '@/hooks/useColumnWidth';
 import {
   ActivityIndicator,
@@ -15,8 +15,10 @@ import {
 import { useSignIn, useSignUp, useSSO } from '@clerk/clerk-expo';
 import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as SecureStore from 'expo-secure-store';
+import { getBaseUrl } from '@workspace/api-client-react';
 
 // Required for OAuth redirect to complete inside Expo Go.
 WebBrowser.maybeCompleteAuthSession();
@@ -30,23 +32,62 @@ const MUTED       = '#6B7FA0';
 const BORDER      = '#182030';
 const DESTRUCTIVE = '#FF4444';
 
+// ── Gate sub-steps ────────────────────────────────────────────────────────────
+type GateSub = 'block' | 'request' | 'success';
+
 export default function SignUpScreen() {
   const insets = useSafeAreaInsets();
   const router  = useRouter();
+  const params  = useLocalSearchParams<{ inviteCode?: string }>();
 
   const { signUp, setActive, isLoaded } = useSignUp();
   const { signIn } = useSignIn(); // needed for Google → existing-user transfer
   const { startSSOFlow } = useSSO();
 
+  // ── Invite gate ───────────────────────────────────────────────────────────
+  const [inviteCode, setInviteCode]           = useState<string | null>(null);
+  const [inviteCodeChecked, setInviteCodeChecked] = useState(false);
+  const [gateSub, setGateSub]                 = useState<GateSub>('block');
+
+  // Invite request form state (shown in gate)
+  const [inviteEmail, setInviteEmail]         = useState('');
+  const [invitePet, setInvitePet]             = useState('');
+  const [inviteRequestLoading, setInviteRequestLoading] = useState(false);
+  const [inviteRequestError, setInviteRequestError]     = useState<string | null>(null);
+
+  // ── Main form state ───────────────────────────────────────────────────────
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode]         = useState('');
 
   const [pendingVerification, setPendingVerification] = useState(false);
-  const [loading, setLoading]     = useState(false);
-  const [verifying, setVerifying] = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [verifying, setVerifying]   = useState(false);
   const [ssoLoading, setSsoLoading] = useState(false);
-  const [error, setError]         = useState<string | null>(null);
+  const [error, setError]           = useState<string | null>(null);
+
+  // ── Load invite code on mount ─────────────────────────────────────────────
+  // Priority: URL param (from /invite/[code]) > SecureStore (from previous landing page visit)
+  useEffect(() => {
+    const load = async () => {
+      if (params.inviteCode && typeof params.inviteCode === 'string') {
+        const code = params.inviteCode.trim();
+        if (code) {
+          setInviteCode(code);
+          // Persist for OAuth round-trip survival
+          await SecureStore.setItemAsync('pendingInviteCode', code).catch(() => {});
+          setInviteCodeChecked(true);
+          return;
+        }
+      }
+      // Fallback: check SecureStore (set by landing page or previous OAuth prep)
+      const stored = await SecureStore.getItemAsync('pendingInviteCode').catch(() => null);
+      setInviteCode(stored ?? null);
+      setInviteCodeChecked(true);
+    };
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Helper ────────────────────────────────────────────────────────────────
   function clerkMessage(err: unknown): string {
@@ -82,6 +123,7 @@ export default function SignUpScreen() {
       const result = await signUp!.attemptEmailAddressVerification({ code });
       if (result.status === 'complete') {
         await setActive!({ session: result.createdSessionId });
+        // pendingInviteCode already in SecureStore — tabs layout will redeem it
       } else {
         setError(`verification returned status "${result.status}". please try again.`);
       }
@@ -97,6 +139,11 @@ export default function SignUpScreen() {
     setSsoLoading(true);
     setError(null);
     try {
+      // Persist invite code so it survives the OAuth round-trip through the browser
+      if (inviteCode) {
+        await SecureStore.setItemAsync('pendingInviteCode', inviteCode).catch(() => {});
+      }
+
       const result = await startSSOFlow({
         strategy: 'oauth_google',
         redirectUrl: Linking.createURL('/sso-callback'),
@@ -105,10 +152,11 @@ export default function SignUpScreen() {
 
       if (createdSessionId && ssoSetActive) {
         // New Google user — signed up directly.
+        // pendingInviteCode is in SecureStore; tabs layout redeems it.
         await ssoSetActive({ session: createdSessionId });
 
       } else if (ssoSignUp?.verifications?.externalAccount?.status === 'transferable') {
-        // Existing Google user arriving at sign-up — transfer to sign-in.
+        // Existing Google user arriving at sign-up → transfer to sign-in
         if (!signIn) { setError('sign-in unavailable. please try again.'); return; }
         const si = await signIn.create({ transfer: true });
         if (si.status === 'complete' && ssoSetActive) {
@@ -125,14 +173,174 @@ export default function SignUpScreen() {
     } finally {
       setSsoLoading(false);
     }
-  }, [startSSOFlow, signIn]);
+  }, [startSSOFlow, signIn, inviteCode]);
+
+  // ── Invite request submit (gate) ──────────────────────────────────────────
+  const handleInviteRequest = useCallback(async () => {
+    if (!inviteEmail.trim()) return;
+    setInviteRequestLoading(true);
+    setInviteRequestError(null);
+    try {
+      const baseUrl = getBaseUrl() ?? '';
+      const res = await fetch(`${baseUrl}/api/invites/request`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ email: inviteEmail.trim(), about: invitePet.trim() }),
+      });
+      if (!res.ok && res.status !== 409) {
+        const body = await res.json().catch(() => ({})) as { error?: string };
+        setInviteRequestError(body.error ?? 'something went wrong. please try again.');
+        return;
+      }
+      setGateSub('success');
+    } catch {
+      setInviteRequestError('could not send your request. check your connection and try again.');
+    } finally {
+      setInviteRequestLoading(false);
+    }
+  }, [inviteEmail, invitePet]);
+
+  const pt = insets.top + (Platform.OS === 'web' ? 24 : 48);
+  const pb = insets.bottom + 40;
+
+  // ── Loading while reading SecureStore ─────────────────────────────────────
+  if (!inviteCodeChecked) {
+    return (
+      <View style={[s.root, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator color={FG} size="small" />
+      </View>
+    );
+  }
+
+  // ── Gate: no invite code ──────────────────────────────────────────────────
+  if (!inviteCode) {
+    return (
+      <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView
+          contentContainerStyle={[s.scroll, { paddingTop: pt, paddingBottom: pb }]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={s.col}>
+            {/* Portal header */}
+            <View style={s.header}>
+              <Image source={LOGO} style={s.logo} resizeMode="contain" />
+              <Text style={s.wordmark}>pshpsh</Text>
+            </View>
+
+            {gateSub === 'block' && (
+              <>
+                <Text style={s.gateHeadline}>invite only.</Text>
+                <Text style={s.gateSub}>
+                  pshpsh is by invitation. if a friend called you in, tap their invite link to join.
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [s.primaryAction, pressed && s.dimmed]}
+                  onPress={() => setGateSub('request')}
+                >
+                  <Text style={s.primaryActionText}>request an invite</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed]}
+                  onPress={() => router.push('/(auth)/sign-in')}
+                >
+                  <Text style={s.secondaryActionText}>← back to sign in</Text>
+                </Pressable>
+              </>
+            )}
+
+            {gateSub === 'request' && (
+              <>
+                <Text style={s.gateHeadline}>request an invite.</Text>
+                <Text style={s.gateSub}>
+                  we'll reach out when we open up more spots.
+                </Text>
+
+                <View style={s.fieldGroup}>
+                  <Text style={s.fieldLabel}>your email</Text>
+                  <TextInput
+                    style={s.underlineInput}
+                    value={inviteEmail}
+                    onChangeText={setInviteEmail}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    keyboardType="email-address"
+                    textContentType="emailAddress"
+                    placeholderTextColor={MUTED}
+                    placeholder="you@example.com"
+                    selectionColor={FG}
+                    autoFocus
+                  />
+                </View>
+
+                <View style={s.fieldGroup}>
+                  <Text style={s.fieldLabel}>tell us about your pets</Text>
+                  <TextInput
+                    style={[s.underlineInput, { paddingTop: 8 }]}
+                    value={invitePet}
+                    onChangeText={setInvitePet}
+                    multiline
+                    numberOfLines={3}
+                    placeholderTextColor={MUTED}
+                    placeholder="two cats and a betta fish..."
+                    selectionColor={FG}
+                    onSubmitEditing={handleInviteRequest}
+                  />
+                </View>
+
+                {inviteRequestError ? (
+                  <Text style={s.errorText}>{inviteRequestError}</Text>
+                ) : null}
+
+                <Pressable
+                  style={({ pressed }) => [
+                    s.primaryAction,
+                    pressed && s.dimmed,
+                    (!inviteEmail.trim() || inviteRequestLoading) && s.disabled,
+                  ]}
+                  onPress={handleInviteRequest}
+                  disabled={!inviteEmail.trim() || inviteRequestLoading}
+                >
+                  {inviteRequestLoading
+                    ? <ActivityIndicator color={FG} size="small" />
+                    : <Text style={s.primaryActionText}>send request</Text>}
+                </Pressable>
+
+                <Pressable
+                  style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed]}
+                  onPress={() => setGateSub('block')}
+                >
+                  <Text style={s.secondaryActionText}>← back</Text>
+                </Pressable>
+              </>
+            )}
+
+            {gateSub === 'success' && (
+              <>
+                <Text style={s.gateHeadline}>thank you.</Text>
+                <Text style={s.gateSub}>
+                  we'll be in touch. the more pets the better.
+                </Text>
+                <Pressable
+                  style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed]}
+                  onPress={() => router.push('/(auth)/sign-in')}
+                >
+                  <Text style={s.secondaryActionText}>← back to sign in</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
 
   // ── Verification step ─────────────────────────────────────────────────────
   if (pendingVerification) {
     return (
       <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView
-          contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 }]}
+          contentContainerStyle={[s.scroll, { paddingTop: pt, paddingBottom: pb }]}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -198,7 +406,7 @@ export default function SignUpScreen() {
   return (
     <KeyboardAvoidingView style={s.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <ScrollView
-        contentContainerStyle={[s.scroll, { paddingTop: insets.top + 48, paddingBottom: insets.bottom + 40 }]}
+        contentContainerStyle={[s.scroll, { paddingTop: pt, paddingBottom: pb }]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -339,6 +547,24 @@ const s = StyleSheet.create({
     color: MUTED,
     textAlign: 'center',
     lineHeight: 20,
+  },
+
+  // ── Gate ──────────────────────────────────────────────────────────────────
+  gateHeadline: {
+    fontFamily:    'Inter_700Bold',
+    fontSize:      26,
+    color:         FG,
+    letterSpacing: -0.3,
+    textAlign:     'center',
+    marginBottom:  12,
+  },
+  gateSub: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     14,
+    color:        MUTED,
+    textAlign:    'center',
+    lineHeight:   22,
+    marginBottom: 40,
   },
 
   // ── Form fields ───────────────────────────────────────────────────────────
