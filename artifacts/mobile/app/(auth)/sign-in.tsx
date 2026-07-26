@@ -98,7 +98,7 @@ export default function SignInScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Wordmark */}
-        <Text style={s.wordmark}>Fish Book</Text>
+        <Text style={s.wordmark}>pshpsh</Text>
         <Text style={s.tagline}>Sign in to continue</Text>
 
         {/* Form card */}

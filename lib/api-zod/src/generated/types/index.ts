@@ -21,6 +21,7 @@ export * from './feedResponse';
 export * from './followedBreedItem';
 export * from './followedSpeciesItem';
 export * from './getFeedParams';
+export * from './getFeedSort';
 export * from './healthStatus';
 export * from './interestFollowResult';
 export * from './myFollowsResponse';

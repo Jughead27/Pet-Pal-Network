@@ -22,7 +22,9 @@ export const HealthCheckResponse = zod.object({
  * @summary Get feed
  */
 export const GetFeedQueryParams = zod.object({
-  "nursery": zod.coerce.boolean().optional().describe('When true, returns only nursery (is_nursery=true) posts. Omit or false for the full feed.')
+  "nursery": zod.coerce.boolean().optional().describe('When true, returns only nursery (is_nursery=true) posts. Omit or false for the full feed.'),
+  "speciesId": zod.coerce.string().optional().describe('When set, returns only posts from pets of this species (by catalogue species UUID). Combinable with nursery. Omit for all species.'),
+  "sort": zod.enum(['fresh', 'popular']).optional().describe('Sort order for the feed. \"fresh\" (default) returns posts newest-first (current behaviour — Home and Nursery always use this default). \"popular\" orders by a 7-day engagement score (boops_7d + 3 × treats_7d), descending, tiebroken by created_at desc so zero-score posts still read newest-first. Combinable with speciesId and nursery; archived exclusion unchanged.\n')
 })
 
 export const GetFeedResponse = zod.object({
@@ -40,6 +42,7 @@ export const GetFeedResponse = zod.object({
   "name": zod.string(),
   "species": zod.string(),
   "breed": zod.string().nullish(),
+  "speciesId": zod.string().nullable().describe('FK to the species catalogue; null if pet was created without catalogue selection.'),
   "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
   "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet')
 }).describe('Minimal pet info embedded in feed posts'),
@@ -294,6 +297,7 @@ export const GetPetResponse = zod.object({
   "name": zod.string(),
   "species": zod.string(),
   "breed": zod.string().nullish(),
+  "speciesId": zod.string().nullable().describe('FK to the species catalogue; null if pet was created without catalogue selection.'),
   "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
   "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet')
 }).describe('Minimal pet info embedded in feed posts'),
@@ -318,6 +322,7 @@ export const GetPetResponse = zod.object({
   "name": zod.string(),
   "species": zod.string(),
   "breed": zod.string().nullish(),
+  "speciesId": zod.string().nullable().describe('FK to the species catalogue; null if pet was created without catalogue selection.'),
   "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
   "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet')
 }).describe('Minimal pet info embedded in feed posts'),

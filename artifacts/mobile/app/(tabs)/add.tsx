@@ -147,8 +147,8 @@ export default function AddScreen() {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       setError(
-        'Camera access is turned off for Fish Book. To take a photo, go to ' +
-        'Settings → Fish Book → Camera and enable it. You can still choose a ' +
+        'Camera access is turned off for pshpsh. To take a photo, go to ' +
+        'Settings → pshpsh → Camera and enable it. You can still choose a ' +
         'photo from your library below.',
       );
       return;

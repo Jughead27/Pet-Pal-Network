@@ -9,3 +9,4 @@
 - [Stable Media URL Architecture](stable-media-urls.md) — HMAC-signed /api/media/* route replaces perishable presigned URLs; regex route required for path-to-regexp v8 (Express 5).
 - [Archive Posts Architecture](archive-posts-architecture.md) — soft-delete via archivedAt; isNull filter on all public reads; archivedPosts+viewerOwnsPet on PetProfile; archiveConfirm state in mobile modal.
 - [FocalImage source-reset + pager renderItem stability](focal-image-pager-stability.md) — object-identity vs. URI-string dep in FocalImage; renderItem must be in useCallback in pager screens.
+- [expo-router blur listener pattern](expo-router-blur-listener.md) — useFocusEffect silently no-ops on tabs; use navigation.addListener('blur') via useNavigation instead.

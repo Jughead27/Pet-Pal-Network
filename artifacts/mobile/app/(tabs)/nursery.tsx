@@ -23,6 +23,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigation } from 'expo-router';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -44,6 +45,7 @@ import type { FeedPost } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import FocalImage from '@/components/FocalImage';
 import HatchlingIcon from '@/components/HatchlingIcon';
+import SectionMasthead from '@/components/SectionMasthead';
 import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
 import CommentSheet from '@/components/CommentSheet';
 import ShareSheet from '@/components/ShareSheet';
@@ -64,6 +66,7 @@ export default function NurseryScreen() {
   const colors       = useColors();
   const insets       = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
+  const navigation   = useNavigation();
 
   // ── Shared nursery data ────────────────────────────────────────────────────
   const { data, isLoading, isError } = useGetFeed({ nursery: true });
@@ -199,10 +202,26 @@ export default function NurseryScreen() {
     return () => handler.remove();
   }, [viewMode, closePost]);
 
+  // ── Reset to grid on tab blur ──────────────────────────────────────────────
+  // When the user leaves the Nursery tab (switching to Home, Profile, etc.)
+  // the screen stays mounted, so viewMode would persist. We subscribe to the
+  // navigation 'blur' event directly — bypassing useFocusEffect which guards on
+  // optionalNavigation and silently no-ops if that reference hasn't resolved.
+  // closePost() resets view mode + sheets and restores the grid scroll position.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('blur', () => {
+      closePost();
+    });
+    return unsubscribe;
+  }, [navigation, closePost]);
+
   // ── Shared container style ─────────────────────────────────────────────────
   const containerStyle = Platform.OS === 'web'
     ? [styles.fill, { height: windowHeight, backgroundColor: colors.background }]
     : [styles.fill, { backgroundColor: colors.background }];
+
+  // ── Top safe-area inset ────────────────────────────────────────────────────
+  const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
   // ── Shared layout handler ──────────────────────────────────────────────────
   const handleContainerLayout = useCallback(
@@ -235,15 +254,22 @@ export default function NurseryScreen() {
   // ── Empty state ────────────────────────────────────────────────────────────
   if (posts.length === 0) {
     return (
-      <View style={[containerStyle, styles.centered]}>
-        <View style={styles.emptyContent}>
-          <HatchlingIcon size={72} color={colors.mutedForeground} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
-            No nursery posts yet
-          </Text>
-          <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
-            Flag baby moments when you post and they'll{'\n'}hatch right here.
-          </Text>
+      <View style={containerStyle}>
+        <SectionMasthead
+          icon={<HatchlingIcon size={18} color={colors.foreground} />}
+          title="Nursery"
+          style={{ paddingTop: topInset }}
+        />
+        <View style={[styles.fill, styles.centered]}>
+          <View style={styles.emptyContent}>
+            <HatchlingIcon size={72} color={colors.mutedForeground} />
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+              No nursery posts yet
+            </Text>
+            <Text style={[styles.emptyBody, { color: colors.mutedForeground }]}>
+              Flag baby moments when you post and they'll{'\n'}hatch right here.
+            </Text>
+          </View>
         </View>
       </View>
     );
@@ -339,6 +365,11 @@ export default function NurseryScreen() {
 
   return (
     <View style={containerStyle} onLayout={handleContainerLayout}>
+      <SectionMasthead
+        icon={<HatchlingIcon size={18} color={colors.foreground} />}
+        title="Nursery"
+        style={{ paddingTop: topInset }}
+      />
       <FlatList
         key="grid"
         ref={gridListRef}
@@ -349,6 +380,7 @@ export default function NurseryScreen() {
         // 2 px gap between columns; rows are separated by marginBottom on each cell
         columnWrapperStyle={styles.columnWrapper}
         showsVerticalScrollIndicator={false}
+        style={styles.fill}
         // Track scroll offset for restoration when returning from pager
         onScroll={(e) => {
           gridScrollY.current = e.nativeEvent.contentOffset.y;
@@ -357,7 +389,7 @@ export default function NurseryScreen() {
         // Start content below the tab bar on web; native handles this via insets
         contentContainerStyle={
           Platform.OS === 'web'
-            ? { paddingTop: 0, paddingBottom: 84 }
+            ? { paddingBottom: 84 }
             : { paddingBottom: insets.bottom + 80 }
         }
       />

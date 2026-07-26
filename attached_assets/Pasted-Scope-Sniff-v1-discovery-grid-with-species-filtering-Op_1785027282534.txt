@@ -1,0 +1,12 @@
+Scope: Sniff v1 — discovery grid with species filtering. OpenAPI-first. Reuse the Nursery grid→pager pattern. No changes to Home, Nursery, reactions, or post management.
+
+Preservation clause: Home, Nursery (including the keyed-FlatList fix and blur-reset behavior), Profile, and all management flows preserved exactly. Enumerate the Sniff stub's current state before replacing it.
+
+API: GET /feed gains an optional speciesId query param (combinable with the existing shape; archived posts remain excluded). Same response schema, same viewer fields.
+Sniff screen (replaces the stub): a species chip row across the top — "All" first, then only species actually present in the results — in the typographic design language (muted inactive / bold foreground active; no pills, no containers, no truncation). Tapping a chip filters the grid via the new param; "All" clears.
+Grid → pager: below the chips, a 3-column FocalImage thumbnail grid (newest first) of the filtered results; tapping a thumbnail opens the full-screen pager at that post with the complete rail (boop, treat, comment, share, pack paw, caption → detail); back returns to the grid at the held scroll position; Android hardware back wired. The grid and pager must be separately keyed FlatLists (key="sniff-grid" / key="sniff-pager") — never one FlatList instance switching numColumns (this exact invariant crash was just fixed in Nursery).
+Tab re-entry resets to grid: when the Sniff tab loses focus, reset to grid mode and discard open-post pager state (same focus/blur mechanism as the Nursery fix); the grid's scroll position is retained. The tab button always lands on the grid.
+Empty states: a filtered result with no posts shows friendly copy + one-tap "Show all"; the no-content-at-all case shows a warm default. No dead ends.
+Apply identically to web, iOS, and Android. No react-native-reanimated imports.
+
+Acceptance test (physical iPhone + web): Sniff opens as a grid of all posts; tapping "Cat" shows only cat posts; tapping a thumbnail opens the pager and the rail works (boop persists after refresh); back holds grid position; switching to Home mid-pager and returning via the Sniff tab lands on the grid; repeated grid↔pager switching never crashes; a species with no posts is not offered as a chip. Golden path: sign in → Home loads → boop persists → Nursery tap opens pager → post flow works → sign out. pnpm run typecheck clean.

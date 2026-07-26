@@ -1,0 +1,44 @@
+SCOPE: Final direction round for the app icon — ALL TEAL. Six candidates
+varying eye-state and coat pattern. Base everything on the quality level
+of the strongest prior refinements. Then STOP for my selection.
+
+SHARED REQUIREMENTS (all six):
+- 1024×1024 square PNG, no transparency, no text or lettering.
+- A single long-haired cat curled into a circle, fur rendered as hundreds
+  of fine individual flowing strands with luminous rim-lighting — the
+  betta-fin silk quality. Painterly, rich, silky.
+- Palette: teal, cyan, aqua, and soft seafoam gradients only, with deep
+  blue-gray shadow tones. No warm colors except where a candidate's spec
+  says otherwise.
+- THE FACE IS THE HERO: head large (as in the best prior refinements),
+  centered or near-centered, with strong tonal contrast against the
+  surrounding fur; the face is the brightest focal area.
+- Background: clean near-black charcoal ONLY. No sparkles, no stars, no
+  particles, no secondary elements.
+- Outer glow: soft and fading gently into the dark ground — NEVER a hard
+  bright halo ring around the silhouette (a prior round drifted into an
+  "eclipse ring"; avoid that failure).
+- Perfectly centered, entire curl visible with a small margin.
+
+CANDIDATES:
+A — Sleeping teal tabby: eyes fully closed, serene, head resting on the
+    curl. The original cozy mood with the improved large face.
+B — Slow-blink teal tabby: eyes HALF-closed in the contented cat
+    "slow blink," calm and soft — not alert, not asleep. Frontal face.
+C — Eyes-open teal tabby: frontal face, gentle relaxed gaze (soft, not
+    intense or staring), glowing teal eyes, crisp ears.
+D — Sleeping teal calico: calico patch pattern reinterpreted in the teal
+    palette — patches of deep teal, pale seafoam/cream, and dark
+    blue-gray instead of orange/white/black. Eyes closed, serene.
+E — Slow-blink teal calico: same teal-calico patch pattern, eyes
+    half-closed in the slow blink. Frontal face.
+F — Wildcard: your best interpretation of "calm teal strand-cat" —
+    one free swing, same shared requirements.
+
+DELIVERY:
+- Deliver the six 1024×1024 master PNG files individually — no collage,
+  no downscaling, no compression of the masters.
+- Any previews must be Lanczos/bicubic downscales of the masters — never
+  regenerated small, never nearest-neighbor.
+- Then STOP. No installation, no app.json changes, nothing from Phase 2
+  until I approve a final.

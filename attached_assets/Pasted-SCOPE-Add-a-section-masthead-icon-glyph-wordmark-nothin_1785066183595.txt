@@ -1,0 +1,40 @@
+SCOPE: Add a section masthead (icon glyph + wordmark, nothing else) to the
+Sniff and Nursery grid surfaces so users know where they are. One shared
+component, two usages. No other changes.
+
+WHAT TO BUILD:
+- New shared component SectionMasthead: renders the section's existing shared
+  SVG icon at text height, then the section name in Inter semibold ~26px,
+  foreground color, on a single left-aligned row. No descriptor text, no
+  background, no border, no pill/capsule shapes — typographic only.
+- Sniff (discovery.tsx): masthead sits ABOVE the species-chip / Fresh|Popular
+  row, pinned (does not scroll). Icon = the Sniff tab glyph. Word = "Sniff".
+- Nursery: masthead sits directly above the grid, pinned. Icon = the anchor
+  (Nursery tab glyph). Word = "Nursery".
+- Masthead appears in GRID mode only. When either tab enters pager mode, the
+  masthead is not rendered — pager surfaces stay full-bleed and chromeless.
+- Reuse the existing shared SVG icon components — do not create new icon
+  variants. Respect safe-area insets at the top.
+
+DO NOT MODIFY:
+- The Sniff chip row / sort-control layout or its baseline alignment (just
+  fixed — do not touch its styles), the /feed queries, sort or filter logic,
+  the keyed grid/pager FlatLists, blur-reset behavior, Home, post/[id],
+  Profile, tab bar, or any API code.
+- No react-native-reanimated. Built-in layout only — no animation needed.
+
+PRESERVATION CLAUSE: Before editing discovery.tsx or the Nursery screen,
+enumerate their existing capabilities (chip filtering incl. All, Fresh|Popular
+sort with blur reset to Fresh, grid→pager transition, pager back behavior,
+grid re-entry rule, empty states, Android back). All must work identically
+after the change. Losing any of these = failed delivery.
+
+ACCEPTANCE TEST (web, iOS, Android identically):
+1. Open Sniff: masthead reads [icon] Sniff above the chip row; chips and
+   Fresh|Popular unchanged and still on one even baseline.
+2. Tap a grid tile → pager: no masthead in pager. Back → grid: masthead back.
+3. Open Nursery: masthead reads [icon] Nursery above the grid; same rules.
+4. Switch tabs away and back: both tabs re-enter on the grid, masthead
+   visible, sort reset to Fresh (Sniff).
+5. Golden path: sign in → Home loads → boop persists after refresh → Nursery
+   thumbnail opens the pager → post flow works → sign out.

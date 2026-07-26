@@ -1,0 +1,188 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "SzDsqTCKcNjruHUYOUpKE"
+uri = "file://attached_assets/generated_images/pshpsh-icon/d1-a.png"
+type = "image"
+title = "Direction 1-A — Teal Maine Coon (calm, clockwise flow)"
+
+[[outputs]]
+id = "CDLtG0KcM34fFXbyzDdp0"
+uri = "file://attached_assets/generated_images/pshpsh-icon/d1-b.png"
+type = "image"
+title = "Direction 1-B — Teal Maine Coon (dense anemone layers)"
+
+[[outputs]]
+id = "BcfaNRlk9K47wMCp37Knb"
+uri = "file://attached_assets/generated_images/pshpsh-icon/d1-c.png"
+type = "image"
+title = "Direction 1-C — Teal Maine Coon (dramatic rim light)"
+
+[[outputs]]
+id = "h1RrC0HIQ5RmsH1VCgkV6"
+uri = "file://attached_assets/generated_images/pshpsh-icon/d2-a.png"
+type = "image"
+title = "Direction 2-A — Coral Calico (calm, clockwise flow)"
+
+[[outputs]]
+id = "Zs3w0xIUDp-29W9TWnE2T"
+uri = "file://attached_assets/generated_images/pshpsh-icon/d2-b.png"
+type = "image"
+title = "Direction 2-B — Coral Calico (dense anemone layers)"
+
+[[outputs]]
+id = "KWrCb73554NIqp1kam2eU"
+uri = "file://attached_assets/generated_images/pshpsh-icon/d2-c.png"
+type = "image"
+title = "Direction 2-C — Coral Calico (dramatic rim light)"
+
+[[outputs]]
+id = "isUAzUfuPd1jOOCiOx-ZM"
+uri = "file://attached_assets/generated_images/pshpsh-icon/comparison-64px.png"
+type = "image"
+title = "64 px comparison — top row: D1 (teal) A · B · C  |  bottom row: D2 (coral) A · B · C"
+
+[[outputs]]
+id = "u_QI8mbWlgbG2BlBcMGj2"
+uri = "file://attached_assets/generated_images/pshpsh-icon/comparison-v2.png"
+type = "image"
+title = "Icon candidates — Row 1: Teal (1-A, 1-B, 1-C)  |  Row 2: Coral (2-A, 2-B, 2-C)"
+
+[[outputs]]
+id = "X1jPkMAVS5byMP54yioRN"
+uri = "file://attached_assets/generated_images/pshpsh-icon/refined/2b-r1.png"
+type = "image"
+title = "2-B · R1 — Coral calico, face-spotlight"
+
+[[outputs]]
+id = "M72NAX0-jl72xCDysULDB"
+uri = "file://attached_assets/generated_images/pshpsh-icon/refined/2b-r2.png"
+type = "image"
+title = "2-B · R2 — Coral calico, hearth-glow balance"
+
+[[outputs]]
+id = "hNHBE2deTJV0KlEU0Oc7_"
+uri = "file://attached_assets/generated_images/pshpsh-icon/refined/2b-r3.png"
+type = "image"
+title = "2-B · R3 — Coral calico, deep rich palette"
+
+[[outputs]]
+id = "fZyih-m4Xl3JuqcdY3TyM"
+uri = "file://attached_assets/generated_images/pshpsh-icon/refined/1c-r1.png"
+type = "image"
+title = "1-C · R1 — Teal tabby, front-left spotlight"
+
+[[outputs]]
+id = "g856MpgJen8ZRlukOcfsT"
+uri = "file://attached_assets/generated_images/pshpsh-icon/refined/1c-r2.png"
+type = "image"
+title = "1-C · R2 — Teal tabby, high-contrast face"
+
+[[outputs]]
+id = "B4i1qVHF9IXiXE-DxHmRw"
+uri = "file://attached_assets/generated_images/pshpsh-icon/refined/1c-r3.png"
+type = "image"
+title = "1-C · R3 — Teal tabby, emerging from darkness"
+
+[[outputs]]
+id = "XogMoSl1s5p4M5HUsw5zE"
+uri = "file://attached_assets/generated_images/pshpsh-icon/refined/comparison-refined.png"
+type = "image"
+title = "Refined candidates — Row 1: Coral 2-B (R1 · R2 · R3)  |  Row 2: Teal 1-C (R1 · R2 · R3)"
+
+[[outputs]]
+id = "Ol66fwHdBUwI0GcuvOzkw"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final/A-sleeping-tabby.png"
+type = "image"
+title = "A — Sleeping teal tabby"
+
+[[outputs]]
+id = "iaFPwHN9QVFsf4uCHootq"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final/B-slowblink-tabby.png"
+type = "image"
+title = "ORIGINAL — Round-3 candidate B (incumbent)"
+
+[[outputs]]
+id = "Nqk5Y9phDzazjtrIfL78q"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final/C-eyes-open-tabby.png"
+type = "image"
+title = "C — Eyes-open teal tabby"
+
+[[outputs]]
+id = "Lfx90SCMPfo1UgIIwqq9J"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final/D-sleeping-calico.png"
+type = "image"
+title = "D — Sleeping teal calico"
+
+[[outputs]]
+id = "MxgaNpw5i6JIhiKhTDJbc"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final/E-slowblink-calico.png"
+type = "image"
+title = "E — Slow-blink teal calico"
+
+[[outputs]]
+id = "hwDLZOwcLd1l6HBPI903D"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final/F-wildcard.png"
+type = "image"
+title = "F — Wildcard (strand nest)"
+
+[[outputs]]
+id = "_JJjpLYUlfZiAJX7yefJx"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final/comparison-final.png"
+type = "image"
+title = "Row 1: A (sleeping tabby) · B (slow-blink tabby) · C (eyes-open tabby)  |  Row 2: D (sleeping calico) · E (slow-blink calico) · F (wildcard)"
+
+[[outputs]]
+id = "IHM9G4V8uDz1LmxtVE9mD"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final2/D1-v1.png"
+type = "image"
+title = "D1-V1 — Curl cradle, restrained lower mass"
+
+[[outputs]]
+id = "8ng0rO49ehAce5wAyxzr0"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final2/D1-v2.png"
+type = "image"
+title = "D1-V2 — Floating cradle, airy chin"
+
+[[outputs]]
+id = "mtsJKH8RVP24rQ5z-l_YH"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final2/D2-v1.png"
+type = "image"
+title = "D2-V1 — Full-frame calm flow"
+
+[[outputs]]
+id = "AAt0t0D3d0QzA8hFn2Uwb"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final2/D2-v2.png"
+type = "image"
+title = "D2-V2 — Full-frame, deep corner vignette"
+
+[[outputs]]
+id = "YP42wErTJ_brw_h1xy-kF"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final2/comparison.png"
+type = "image"
+title = "D1-V1 (curl cradle) · D1-V2 (floating cradle) · D2-V1 (full-frame calm) · D2-V2 (full-frame vignette)"
+
+[[outputs]]
+id = "tf0dZNjE2p6VzBvdBxemQ"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final3/B-ref1.png"
+type = "image"
+title = "B-R1 — Curl as luminous ring, head in upper arc"
+
+[[outputs]]
+id = "LzTtbZGQwlnsKa3x6kbzH"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final3/B-ref2.png"
+type = "image"
+title = "B-R2 — Slight top-down read, tail meets paws"
+
+[[outputs]]
+id = "PsmRXZtKzRL_WYt_6bd-Y"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final3/B-ref3.png"
+type = "image"
+title = "B-R3 — Lower arc fills bottom third, face upper-center"
+
+[[outputs]]
+id = "LNRcjfHsOnm5Ndh2mu8Gb"
+uri = "file://attached_assets/generated_images/pshpsh-icon/final3/comparison.png"
+type = "image"
+title = "ORIGINAL · B-R1 (curl ring) · B-R2 (top-down) · B-R3 (lower arc grounds)"

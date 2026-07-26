@@ -1,4 +1,4 @@
-# Pet Pal Network (product name: Snout Stack)
+# pshpsh
 
 A pet-only social network: pets are the profiles, humans are accounts that act on their behalf. Photo/video-first immersive feed for web, iOS, and Android.
 
@@ -38,7 +38,7 @@ A pet-only social network: pets are the profiles, humans are accounts that act o
 - **Nursery** = per-POST baby-content flag, set at upload.
 - Rule: playful names for social actions and places; boring names for utilities (Add, Profile, Settings).
 
-## Design system (locked)
+## pshpsh design system (locked)
 
 - Inter only; monochrome ink; full-bleed immersive media; frosted-glass bottom nav.
 - Teal is the SOLE nav accent (active tab). Coral `#FF7A5C` and gold `#F4C542` are reserved EXCLUSIVELY for boop/treat reacted states.

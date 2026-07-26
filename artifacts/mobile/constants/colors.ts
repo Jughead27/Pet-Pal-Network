@@ -1,5 +1,6 @@
 /**
- * Fish Book design tokens — dark, minimal, cinematic.
+ * pshpsh design tokens — dark, minimal, cinematic.
+ * (Fish Book was the working title during development.)
  *
  * Primary palette: deep navy-black with teal accent and coral highlights.
  * Inspired by the depth and iridescence of betta fish.
@@ -27,7 +28,7 @@ const fishBookPalette = {
 };
 
 const colors = {
-  // Fish Book is a dark-first app — both light and dark use the same deep palette
+  // pshpsh is a dark-first app — both light and dark use the same deep palette
   light: fishBookPalette,
   dark: {
     // Legacy aliases

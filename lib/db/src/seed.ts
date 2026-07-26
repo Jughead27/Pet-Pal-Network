@@ -249,12 +249,39 @@ async function main() {
   for (const pet of pets) {
     if (pet.speciesId) continue; // already backfilled
 
-    // Match species (case-insensitive)
-    const [matchedSpecies] = await db
+    // Pass 1: match the free-text species column against a catalogue species name (case-insensitive).
+    let matchedSpecies = await db
       .select()
       .from(schema.speciesTable)
       .where(sql`lower(${schema.speciesTable.name}) = lower(${pet.species})`)
-      .limit(1);
+      .limit(1)
+      .then((r) => r[0] ?? null);
+
+    // Pass 2 (fallback): the free-text species column may hold a *breed* name instead
+    // of a species name (e.g. pet.species = "Betta" when the catalogue species is "Fish").
+    // Look the value up in the breeds table and infer the parent species from there.
+    let speciesTextNeedsSync = false;
+    if (!matchedSpecies) {
+      const breedRow = await db
+        .select({ parentSpeciesId: schema.breedsTable.speciesId })
+        .from(schema.breedsTable)
+        .where(sql`lower(${schema.breedsTable.name}) = lower(${pet.species})`)
+        .limit(1)
+        .then((r) => r[0] ?? null);
+
+      if (breedRow) {
+        matchedSpecies = await db
+          .select()
+          .from(schema.speciesTable)
+          .where(eq(schema.speciesTable.id, breedRow.parentSpeciesId))
+          .limit(1)
+          .then((r) => r[0] ?? null);
+
+        // The text column held a breed name — mirror the canonical species name
+        // back so display code (which reads the text column) stays correct.
+        if (matchedSpecies) speciesTextNeedsSync = true;
+      }
+    }
 
     if (!matchedSpecies) continue;
 
@@ -276,13 +303,19 @@ async function main() {
 
     await db
       .update(schema.petsTable)
-      .set({ speciesId: matchedSpecies.id, breedId: matchedBreedId })
+      .set({
+        speciesId: matchedSpecies.id,
+        breedId:   matchedBreedId,
+        // Sync text column when it held a breed name rather than the species name.
+        ...(speciesTextNeedsSync ? { species: matchedSpecies.name } : {}),
+      })
       .where(eq(schema.petsTable.id, pet.id));
 
     backfilledCount++;
     console.log(
       `  ✓ ${pet.name} → ${matchedSpecies.name}` +
-      (matchedBreedId ? ` / ${pet.breed}` : " (no breed match)"),
+      (matchedBreedId ? ` / ${pet.breed}` : " (no breed match)") +
+      (speciesTextNeedsSync ? ` (species text corrected from "${pet.species}")` : ""),
     );
   }
 

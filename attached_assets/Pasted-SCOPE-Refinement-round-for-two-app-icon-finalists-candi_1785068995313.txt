@@ -1,0 +1,43 @@
+SCOPE: Refinement round for two app-icon finalists — candidates 2-B (coral
+calico) and 1-C (teal rim-light tabby). Refine each per the notes below.
+Do not generate new directions. Then STOP for my selection.
+
+SHARED REQUIREMENTS (both candidates):
+- 1024×1024 square PNG, no transparency, no text or lettering.
+- Preserve each candidate's existing palette, curl composition, and
+  flowing-strand fur style — these are refinements, not reinterpretations.
+- The single most important goal: THE CAT'S FACE MUST READ INSTANTLY AT
+  TINY SIZES. Enlarge the head ~15–20% relative to the body and increase
+  the face's tonal contrast against the surrounding fur.
+- Perfectly centered composition; the full curl visible with a small
+  margin, not cropped by the frame.
+- Background: clean near-black charcoal only — remove every other
+  background element.
+- Keep the outer glow soft and contained; no flame-like licks escaping
+  the silhouette.
+
+CANDIDATE 2-B (coral calico) specific:
+- Keep the large sleeping calico face and the coral/gold/cream strand
+  palette exactly.
+- Deepen contrast between the white-and-black head markings and the
+  surrounding coral fur so the face pops even harder.
+- Slightly reduce the hottest oranges at the outer rim — at small sizes
+  it drifts toward "ball of fire"; the target is warm hearth-glow, not
+  flame.
+
+CANDIDATE 1-C (teal rim-light tabby) specific:
+- Keep the gray tabby + teal rim-lit strand treatment exactly.
+- REMOVE the starfield / sparkle dots entirely — plain near-black ground.
+- Recenter the composition (currently drifts up-left).
+- Brighten the rim-light on the face specifically, so the head is the
+  brightest focal area of the image.
+
+DELIVERY:
+- Produce 2–3 refined variants of EACH candidate.
+- Deliver the 1024×1024 master PNG files themselves — do not embed them
+  in a collage, do not downscale them, do not compress them.
+- If you present any small previews, create them by downscaling the 1024
+  masters with high-quality Lanczos/bicubic resampling (e.g. ImageMagick)
+  — NEVER regenerate at small size, never nearest-neighbor.
+- Then STOP. No installation, no app.json changes, nothing from Phase 2
+  until I approve a final.

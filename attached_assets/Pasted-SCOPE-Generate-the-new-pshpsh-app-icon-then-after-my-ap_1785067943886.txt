@@ -1,0 +1,57 @@
+SCOPE: Generate the new "pshpsh" app icon, then (after my approval) install
+it as icon + splash + favicon + web manifest and rename the app. Two phases.
+Do not start Phase 2 until I approve a candidate.
+
+PHASE 1 — GENERATE (then STOP for my selection)
+Generate app icon candidates: 1024×1024 square PNG, no transparency, no
+text or lettering anywhere in the artwork.
+Produce 3 candidates of each direction:
+
+Direction 1: "App icon illustration: a single elegant long-haired cat,
+Maine Coon style, curled into a circle, its plumed tail and fur rendered as
+hundreds of fine individual flowing strands sweeping around its body,
+exactly like the delicate fin filaments of a betta fish. Every strand
+luminous and rim-lit, glowing in teal, cyan, and soft aqua gradients
+against a near-black charcoal background. Painterly, rich, warm glow, silky
+texture, high detail in the fur strands, no text, centered composition
+filling the frame, entire cat visible, subtle vignette."
+
+Direction 2: same prompt, but a calico cat with strands glowing in warm
+coral, soft gold, and cream gradients instead of teal.
+
+Show me all candidates at full size AND downscaled to ~64px, side by side.
+Then STOP and wait for my selection. If I say "smoother than I want," 
+regenerate with: "every strand of fur individually visible, flowing like 
+underwater silk."
+
+PHASE 2 — INSTALL + RENAME (only after I approve one candidate)
+Using the approved image:
+1. Save the master as assets/icon.png (1024×1024).
+2. app.json updates:
+   - name: "pshpsh", slug: "pshpsh", scheme: "pshpsh"
+   - icon: the new asset
+   - android adaptiveIcon: foregroundImage from the new asset,
+     backgroundColor matching the app's dark background color
+   - splash: image = the new icon centered, resizeMode "contain",
+     backgroundColor = the EXACT dark ground color the app's screens use
+     (read it from the app theme — the splash-to-app transition must be
+     seamless, no color pop)
+   - web: favicon generated from the new asset
+3. Web manifest: name and short_name "pshpsh", theme_color and
+   background_color = the same dark ground, icons at 192 and 512 from the
+   master. Ensure the web page <title> is "pshpsh".
+4. Keep the old Fish Book icon file in the repo (rename to
+   assets/fishbook-legacy.png) — do not delete it.
+
+DO NOT MODIFY: any application code, screens, components, API, database,
+or Secrets. This delivery touches app.json, manifest/web config, and
+asset files ONLY.
+
+ACCEPTANCE TEST (web + iOS):
+1. Expo Go: app appears as "pshpsh" with the new icon; launch shows the
+   dark splash with centered icon and transitions into the app with no
+   background color change.
+2. Web: browser tab shows the new favicon and the title "pshpsh";
+   "Add to Home Screen" on a phone offers "pshpsh" with the new icon.
+3. Golden path: sign in → Home loads → boop persists after refresh →
+   Nursery thumbnail opens the pager → post flow works → sign out.

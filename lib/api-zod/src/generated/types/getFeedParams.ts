@@ -5,10 +5,19 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { GetFeedSort } from './getFeedSort';
 
 export type GetFeedParams = {
 /**
  * When true, returns only nursery (is_nursery=true) posts. Omit or false for the full feed.
  */
 nursery?: boolean;
+/**
+ * When set, returns only posts from pets of this species (by catalogue species UUID). Combinable with nursery. Omit for all species.
+ */
+speciesId?: string;
+/**
+ * Sort order for the feed. "fresh" (default) returns posts newest-first (current behaviour — Home and Nursery always use this default). "popular" orders by a 7-day engagement score (boops_7d + 3 × treats_7d), descending, tiebroken by created_at desc so zero-score posts still read newest-first. Combinable with speciesId and nursery; archived exclusion unchanged.
+ */
+sort?: GetFeedSort;
 };

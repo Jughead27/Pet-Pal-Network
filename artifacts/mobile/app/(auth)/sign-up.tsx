@@ -123,7 +123,7 @@ export default function SignUpScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={s.wordmark}>Fish Book</Text>
+          <Text style={s.wordmark}>pshpsh</Text>
           <Text style={s.tagline}>Check your email</Text>
           <Text style={s.verifySubtitle}>
             We sent a verification code to{'\n'}
@@ -186,7 +186,7 @@ export default function SignUpScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Wordmark */}
-        <Text style={s.wordmark}>Fish Book</Text>
+        <Text style={s.wordmark}>pshpsh</Text>
         <Text style={s.tagline}>Create your account</Text>
 
         {/* Form card */}

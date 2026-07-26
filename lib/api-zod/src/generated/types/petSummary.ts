@@ -14,6 +14,8 @@ export interface PetSummary {
   name: string;
   species: string;
   breed?: string | null;
+  /** FK to the species catalogue; null if pet was created without catalogue selection. */
+  speciesId: string | null;
   /** Whether the authenticated viewer is in this pet's Pack */
   viewerInPack: boolean;
   /** Whether the authenticated viewer owns this pet */

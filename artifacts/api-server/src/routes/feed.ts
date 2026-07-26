@@ -28,6 +28,32 @@ router.get("/feed", async (req, res) => {
 
   // Optional nursery filter — when ?nursery=true only is_nursery posts are returned
   const nurseryOnly = req.query.nursery === "true";
+  // Optional species filter — when ?speciesId=<uuid> only posts from pets of that species are returned
+  const speciesId = typeof req.query.speciesId === "string" && req.query.speciesId.length > 0
+    ? req.query.speciesId
+    : undefined;
+
+  // Optional sort — "fresh" (default) = newest-first; "popular" = 7-day engagement score desc
+  const sortPopular = req.query.sort === "popular";
+
+  // Engagement score formula (tunable):
+  //   boops_7d + (3 × treats_7d)
+  //   Treat multiplier weighted higher to reward quality engagement over raw boop volume.
+  //   Tiebreaker: created_at desc so zero-score posts read newest-first.
+  const popularOrderBy = [
+    desc(sql<number>`(
+      select coalesce(count(*), 0)
+      from boops b7
+      where b7.post_id = ${postsTable.id}
+        and b7.created_at >= now() - interval '7 days'
+    ) + 3 * (
+      select coalesce(count(*), 0)
+      from treats t7
+      where t7.post_id = ${postsTable.id}
+        and t7.created_at >= now() - interval '7 days'
+    )`),
+    desc(postsTable.createdAt),
+  ] as const;
 
   const rows = await db
     .select({
@@ -39,10 +65,11 @@ router.get("/feed", async (req, res) => {
       isNursery:   postsTable.isNursery,
       archivedAt:  postsTable.archivedAt,
       createdAt:   postsTable.createdAt,
-      petId:       petsTable.id,
-      petName:     petsTable.name,
-      petSpecies:  petsTable.species,
-      petBreed:    petsTable.breed,
+      petId:        petsTable.id,
+      petName:      petsTable.name,
+      petSpecies:   petsTable.species,
+      petBreed:     petsTable.breed,
+      petSpeciesId: petsTable.speciesId,
       boopCount:    sql<number>`count(distinct ${boopsTable.id})::int`,
       treatCount:   sql<number>`count(distinct ${treatsTable.id})::int`,
       commentCount: sql<number>`count(distinct ${commentsTable.id})::int`,
@@ -63,9 +90,13 @@ router.get("/feed", async (req, res) => {
     .leftJoin(boopsTable,    eq(boopsTable.postId,    postsTable.id))
     .leftJoin(treatsTable,   eq(treatsTable.postId,   postsTable.id))
     .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
-    .where(and(isNull(postsTable.archivedAt), nurseryOnly ? eq(postsTable.isNursery, true) : undefined))
+    .where(and(
+      isNull(postsTable.archivedAt),
+      nurseryOnly ? eq(postsTable.isNursery, true) : undefined,
+      speciesId ? eq(petsTable.speciesId, speciesId) : undefined,
+    ))
     .groupBy(postsTable.id, petsTable.id)
-    .orderBy(desc(postsTable.createdAt));
+    .orderBy(...(sortPopular ? popularOrderBy : [desc(postsTable.createdAt)]));
 
   // Compute viewer's treats remaining today
   const [limitRow] = await db
@@ -98,6 +129,7 @@ router.get("/feed", async (req, res) => {
       name:          r.petName,
       species:       r.petSpecies,
       breed:         r.petBreed ?? null,
+      speciesId:     r.petSpeciesId ?? null,
       viewerInPack:  r.viewerInPack,
       viewerOwnsPet: r.viewerOwnsPet,
     },

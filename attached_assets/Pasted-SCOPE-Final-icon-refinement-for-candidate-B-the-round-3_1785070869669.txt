@@ -1,0 +1,47 @@
+SCOPE: Final icon refinement for candidate B (the round-3 slow-blink teal
+tabby, curled on dark ground — the file exists in the project from that
+round). GOAL: open the eyes ~10% further so the expression reads serene
+rather than sly, while keeping the curled-cat composition EXACTLY as it
+is. That is the only change wanted.
+
+STEP 0 — CAPABILITY CHECK (do this first, report before generating):
+Tell me which of these your image tooling supports:
+  (a) image-to-image editing — using B's existing PNG as the base image
+      and applying a described change to it
+  (b) text-to-image generation only
+Then proceed down the matching path. Do not pretend to do (a) with (b).
+
+PATH A — if image editing is supported:
+- Base image: candidate B's 1024×1024 master from round 3.
+- Edit instruction: "Open the cat's eyes approximately 10% further, from
+  heavy-lidded to softly half-open, so the expression reads serene and
+  gently content. Change absolutely nothing else — composition, curl,
+  fur, palette, lighting, background all remain identical."
+- Use low edit strength / high fidelity to the source so the composition
+  cannot drift. Produce 2 variants.
+
+PATH B — if text-to-image only:
+- Generate 3 candidates from this prompt, and treat the FIRST sentence
+  as the dominant instruction:
+  "A single long-haired teal cat CURLED INTO A CIRCLE, the complete curl
+  of its body and tail clearly visible, resting centered on a clean
+  near-black charcoal ground. Its frontal face looks out from the curl —
+  eyes softly half-open in a contented slow blink, serene and gentle,
+  not alert, not sly. The head occupies about HALF the frame, never
+  more; the curl of strand-like fur clearly wraps below the chin and
+  around the sides. Fur rendered as hundreds of fine individual flowing
+  strands with luminous teal, cyan, and aqua rim-lighting — silky,
+  painterly, like betta-fish fins. Soft outer glow fading into the dark
+  ground, no hard halo ring. No sparkles, no text. 1024×1024."
+- REJECT before showing me any result where the curl is not clearly
+  visible below the chin, or the head exceeds ~60% of the frame, or the
+  cat reads as a floating head or portrait. Those repeat a failed round.
+  Regenerate instead (up to 2 rejection rounds), then show me the best.
+
+DELIVERY (both paths):
+- Individual 1024×1024 master PNGs — no collage, no downscaled masters;
+  previews only as Lanczos/bicubic downscales of the masters.
+- Also re-deliver the ORIGINAL unmodified round-3 candidate B master
+  alongside the new variants — it is the incumbent and may still win.
+- Then STOP. No installation, no app.json changes, no Phase 2 until I
+  approve one final image.

@@ -1,0 +1,37 @@
+SCOPE: Final refinement round, two directions from candidate B's winning
+face. Direction 1 refines B itself; Direction 2 rebuilds the F wildcard
+as a CALM full-frame version wearing B's face. Then STOP for my approval.
+
+SHARED (all variants):
+- The face from candidate B: frontal slow-blink teal tabby — eyes opened
+  slightly more than B, from heavy-lidded to softly half-open, so the
+  expression reads serene and gently content rather than sly. Still
+  clearly a relaxed slow-blink, NOT fully open, NOT alert.
+- Head occupies roughly 55–60% of the frame; ears fully visible with a
+  small margin, nothing cropped.
+- Teal/cyan/aqua strand-fur with luminous rim-lighting, near-black
+  charcoal ground, no sparkles, no text, 1024×1024 PNG, no transparency.
+
+DIRECTION 1 — B refined (curl on dark ground), 2 variants:
+- Keep B's curled-cat-on-black composition: the fur curl reads as a soft
+  cradle wrapping the chin and framing the sides of the face — reduce
+  the current large mass of tail fur below the chin.
+- Outer glow soft, fading into the dark ground — no hard halo ring.
+
+DIRECTION 2 — Full-frame calm (the fixed wildcard), 2 variants:
+- Fur fills the ENTIRE 1024×1024 frame edge-to-edge — no dark border,
+  no contained circle silhouette.
+- CRITICAL: the flow must be CALM, not turbulent. All strands move in
+  one slow, unified, gently curving direction — like long fur drifting
+  in a soft underwater current, or slow water. NO storm, NO chaotic
+  swirls, NO strands crossing in conflicting directions.
+- The face emerges from this field of calm flow at 55–60% of frame,
+  softly brighter than the surrounding fur so it's the immediate focal
+  point; fur darkens gradually toward the corners so the face holds
+  the center of attention.
+
+DELIVERY:
+- Four 1024×1024 master PNG files, delivered individually — no collage,
+  no downscaled masters. Previews only as Lanczos/bicubic downscales.
+- Then STOP. No installation, no app.json changes, no Phase 2 until I
+  approve one final.

@@ -1,0 +1,62 @@
+APPROVED: candidate B·R2 (the top-down curled teal tabby with visible
+paws) is the final pshpsh app icon. Execute Phase 2 with the brand sweep
+below. BRAND RULE for every change you make: the app's name is "pshpsh"
+— ALWAYS all-lowercase, in every context, even at the start of a
+sentence or title. Never "Pshpsh", never "PSHPSH".
+
+1. ASSETS: save the R2 master as assets/icon.png (1024×1024). Preserve
+   legacy + runner-up art: old Fish Book icon → assets/fishbook-legacy.png;
+   unused round-5 masters (B·R3, full-frame wildcards) → assets/brand/.
+   Do not delete any art.
+
+2. app.json: name "pshpsh", slug "pshpsh", scheme "pshpsh"; icon = new
+   asset; android adaptiveIcon foregroundImage from the asset,
+   backgroundColor = the app's dark ground; splash = the icon centered,
+   resizeMode "contain", backgroundColor = the EXACT dark ground color
+   the app's screens use (seamless splash-to-app transition, no color
+   pop).
+
+3. WEB: manifest name + short_name "pshpsh", theme_color and
+   background_color = same dark ground, 192/512 icons Lanczos-downscaled
+   from the master (never nearest-neighbor); favicon from the master;
+   web page <title> "pshpsh".
+
+4. BRAND SWEEP — replace the old name everywhere it appears:
+   - Search the ENTIRE repo (case-insensitive) for: "Fish Book",
+     "FishBook", "fish-book", "fishbook", and any old-name usage in
+     titles, headers, or strings.
+   - Replace every USER-VISIBLE or CONFIG occurrence with "pshpsh"
+     (lowercase): app display name, loading/splash screen text, login
+     screen, web titles/meta, manifest, package.json display fields,
+     README, replit.md product references, code comments that name the
+     app, and any UI string constants.
+   - Where replit.md refers to the "Fish Book design system"
+     historically, rename it the "pshpsh design system" and add one
+     line noting Fish Book was the working title.
+   - Report the full list of files changed and every occurrence you
+     found, including any you deliberately left (see exclusions).
+   - EXCLUSIONS — do NOT touch: the assets/fishbook-legacy.png filename
+     you just created; the R2 bucket name petproject-media; any Secret
+     names or values; the Replit project name; the GitHub repo name;
+     Clerk instance names; any values stored in the database.
+   - Also verify no user-visible surface still says "Pet Pal Network"
+     or "Pet-Pal-Network"; replace those with "pshpsh" too (same
+     exclusions apply).
+
+DO NOT MODIFY: application logic, screens' behavior, components' logic,
+API, database schema or data, or Secrets. This delivery = strings,
+config, and asset files only.
+
+ACCEPTANCE TEST (web + iOS):
+1. Expo Go: force-quit and reload — the app lists and loads as "pshpsh"
+   (lowercase) with the new icon; the loading screen shows "pshpsh",
+   NOT "Fish Book"; dark splash with centered icon transitions
+   seamlessly into the app.
+2. Web: hard refresh — favicon is the new icon, tab title "pshpsh"
+   (lowercase); Add to Home Screen on a phone offers "pshpsh" with the
+   new icon.
+3. Repo-wide search for "Fish Book"/"fishbook" (case-insensitive)
+   returns ONLY assets/fishbook-legacy.png and the one historical note
+   in replit.md.
+4. Golden path: sign in → Home loads → boop persists after refresh →
+   Nursery thumbnail opens the pager → post flow works → sign out.
