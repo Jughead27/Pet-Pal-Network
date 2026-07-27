@@ -1,0 +1,32 @@
+SCOPE: Pet co-ownership — a pet can have multiple owners, all of whom can post as that pet. One delivery. This is the delivery that lets James's girlfriend post the shared cats.
+
+1. SCHEMA (state how each reaches PRODUCTION on deploy):
+   - pet_owners join table: id, pet_id FK, user_id FK, role enum ('primary','co') NOT NULL, added_at, invited_by FK NULL. UNIQUE (pet_id, user_id). Exactly one 'primary' per pet.
+   - MIGRATE existing data: for every current pets.owner_id, create a pet_owners row with role='primary'. Keep pets.owner_id for now as the primary pointer (do NOT drop it this delivery — read paths can transition incrementally), but all OWNERSHIP CHECKS must move to pet_owners membership.
+   - posts: add posted_by_user_id FK (which co-owner created the post). Backfill existing posts to the pet's primary owner. NEVER displayed in UI — moderation/audit only.
+
+2. OWNERSHIP CHECKS: every place that currently asks "is this user the owner of this pet?" (post create, edit pet, edit/archive/delete post, avatar, who-can-post) now asks "is this user a member of pet_owners for this pet?" Centralize in one helper (isPetOwner(userId, petId)) used everywhere — no scattered owner_id === userId checks left.
+
+3. CO-OWNER INVITE FLOW (consent-gated, mirrors the invite pattern):
+   - On the pet profile (primary owner only): "add a co-owner" quiet action → enter a username → creates a PENDING co-owner invite (new pet_owner_invites row, or reuse pet_owners with a pending status — your call, state which).
+   - The invited user sees a quiet pending prompt (on their profile or the pet): "[username] wants to share [petname] with you" → accept / decline. Accept → pet_owners row role='co'. Decline → invite removed. Audit both.
+   - No one becomes a co-owner without accepting.
+
+4. DECISIONS (build these as specified — do not choose differently):
+   - POST MANAGEMENT: any co-owner can create posts as the pet; a post can be edited/archived/deleted by the ORIGINAL poster OR the primary owner (not by other co-owners). 
+   - EDIT PET (name, breed, avatar): primary owner AND co-owners may edit; deleting the pet entirely = primary owner only.
+   - REMOVE CO-OWNER: primary can remove any co-owner; a co-owner can remove themselves ("leave"). Primary cannot be removed (must transfer primary first — transfer is OUT OF SCOPE this delivery, note as future).
+   - "ABOUT THE OWNER" DISPLAY: with multiple owners, the pet profile shows the PRIMARY owner's About only (co-owners are not displayed — humans stay out of the frame; this preserves the mission). 
+   - BLOCKING: if a viewer has blocked ANY co-owner of a pet, the entire pet and its posts are hidden from that viewer (safest; extend the existing centralized block helper to check pet_owners membership, not just a single owner_id).
+
+DO NOT MODIFY: reactions, feed ranking, auth, invite (member-signup) flow, trust surfaces except the block-helper extension. Raw SQL destructures { rows }. Every new screen/step has an exit. All in SOURCE.
+
+PRESERVATION CLAUSE: single-owner pets behave EXACTLY as today (the migration makes every existing pet a one-member pet_owners set); James's existing pets, posts, edit/delete, golden path — all identical. No post's authorship becomes visible in any UI.
+
+ACCEPTANCE — evidence pasted, dev:
+1. Migration: pet_owners populated from existing pets (paste rows showing each pet's primary).
+2. James adds a co-owner (second dev user) to Ripley → pending invite row → second user accepts → pet_owners co row + both audit rows.
+3. The co-owner creates a post as Ripley → post row with posted_by_user_id = co-owner, and the post displays with NO human attribution in the feed/detail (confirm UI shows only Ripley).
+4. Permission checks: co-owner can edit Ripley's name; co-owner CANNOT delete a post they didn't create; primary CAN. Paste the allowed + denied responses.
+5. Block: a viewer blocking the co-owner no longer sees Ripley's posts (before/after feed rows).
+6. tsc clean both; golden path; single-owner pets unchanged.

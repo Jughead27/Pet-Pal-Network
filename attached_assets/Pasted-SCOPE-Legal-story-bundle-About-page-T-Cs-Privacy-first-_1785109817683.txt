@@ -1,0 +1,23 @@
+SCOPE: Legal & story bundle — About page, T&Cs, Privacy, first-login acceptance gate, community guidelines, sign-up vision copy. One delivery. All member-facing copy in the portal visual system, lowercase register.
+
+1. PUBLIC PAGES (reachable signed-out, portal visual system, phone-column):
+   - /about — renders the About story (I will paste the exact final copy below; use verbatim, preserve line breaks and the three-line ending).
+   - /terms and /privacy — render the T&Cs and Privacy text (I will paste tester-draft copy below; use verbatim; include a visible "tester draft — pending legal review" line at top).
+   - Footer/quiet links to these from the portal sign-in screen ("about · terms · privacy" as whispers).
+
+2. FIRST-LOGIN ACCEPTANCE GATE:
+   - Schema: users.accepted_tos_at timestamp NULL, users.accepted_tos_version text NULL. Config: tos_current_version (start "2026-07-27"). State how migration reaches prod.
+   - After sign-in, if accepted_tos_at is null OR accepted_tos_version != current: show a one-time acceptance screen before the app — portal system, brief plain-language summary + links to full /terms and /privacy, single "agree & continue" bold action. Records accepted_tos_at=now, accepted_tos_version=current, in a transaction with writeAudit('tos.accepted', {version}).
+   - Existing accounts (you) hit this once on next load — expected.
+
+3. COMMUNITY GUIDELINES:
+   - /guidelines public page, portal system. Anchor line prominent: "humans may appear; animals must be the subject." I will paste the body.
+   - Linked from the acceptance screen and from the sign-up flow.
+
+4. SIGN-UP VISION COPY: on the account-creation screen (post-invite-gate, before/around the fields), the three vision lines (I will paste). Purpose stated at the moment of joining.
+
+DO NOT MODIFY: sign-IN logic, invite gate, trust surfaces, reactions. Raw SQL destructures { rows }. Every screen has an exit; the acceptance gate's only action is agree (no dismiss — but it must not trap: signing out from it is possible). All in SOURCE.
+
+PRESERVATION CLAUSE: existing sign-in, invite flow, feed, golden path — identical except the one-time acceptance interstitial.
+
+ACCEPTANCE — evidence pasted: /about, /terms, /privacy, /guidelines render signed-out (describe or screenshot); acceptance gate fires for a null-tos user, records timestamp+version+audit row (paste it), does NOT re-fire after acceptance; sign-up shows vision copy; tsc clean both; migration-to-prod statement.

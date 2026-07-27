@@ -416,8 +416,9 @@ export default function SignUpScreen() {
             <Image source={LOGO} style={s.logo} resizeMode="contain" />
             <Text style={s.wordmark}>pshpsh</Text>
             <View style={s.sloganWrap}>
-              <Text style={s.slogan1}>follow pets, not people.</Text>
-              <Text style={s.slogan2}>curl up, you're home.</Text>
+              <Text style={s.slogan1}>a quiet corner of the internet, run by the animals.</Text>
+              <Text style={s.slogan2}>no news, no noise, no metrics — just pets and the people who love them.</Text>
+              <Text style={s.slogan2}>humans may appear. animals are the subject.</Text>
             </View>
           </View>
 
@@ -486,6 +487,21 @@ export default function SignUpScreen() {
             <Text style={s.switchText}>already have an account? </Text>
             <Pressable onPress={() => router.push('/(auth)/sign-in')}>
               <Text style={s.switchLink}>sign in</Text>
+            </Pressable>
+          </View>
+
+          {/* ── Footer legal links ── */}
+          <View style={s.whisperRow}>
+            <Pressable onPress={() => router.push('/guidelines')} hitSlop={8}>
+              <Text style={s.whisper}>guidelines</Text>
+            </Pressable>
+            <Text style={s.whisperDot}> · </Text>
+            <Pressable onPress={() => router.push('/terms')} hitSlop={8}>
+              <Text style={s.whisper}>terms</Text>
+            </Pressable>
+            <Text style={s.whisperDot}> · </Text>
+            <Pressable onPress={() => router.push('/privacy')} hitSlop={8}>
+              <Text style={s.whisper}>privacy</Text>
             </Pressable>
           </View>
         </View>
@@ -655,6 +671,12 @@ const s = StyleSheet.create({
     fontSize: 12,
     color: MUTED,
     opacity: 0.7,
+  },
+  whisperDot: {
+    fontFamily: 'Inter_400Regular',
+    fontSize: 12,
+    color: MUTED,
+    opacity: 0.4,
   },
 
   // ── Switch row (bottom) ───────────────────────────────────────────────────

@@ -7,7 +7,7 @@
  * Boop/treat aggregate totals are summed across all posts from the server.
  */
 
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -100,6 +100,19 @@ export default function PetProfileScreen() {
   const [isEditMode,       setIsEditMode]       = useState(false);
   const [draftCaption,     setDraftCaption]     = useState("");
   const [draftIsNursery,   setDraftIsNursery]   = useState(false);
+
+  // ── Co-owner invite flow ───────────────────────────────────────────────────
+  type CoOwnerStep = "idle" | "input" | "sending" | "sent";
+  const [coOwnerStep,     setCoOwnerStep]     = useState<CoOwnerStep>("idle");
+  const [coOwnerUsername, setCoOwnerUsername] = useState("");
+  const [coOwnerError,    setCoOwnerError]    = useState<string | null>(null);
+  // Sent pending invites for this pet (primary owner view)
+  const [sentInvites,     setSentInvites]     = useState<Array<{ id: string; inviteeUsername: string }>>([]);
+  // Pending invite TO the viewer for this pet (invitee view)
+  const [myPendingInvite, setMyPendingInvite] = useState<{
+    id: string; inviterUsername: string; petName: string;
+  } | null>(null);
+  const [inviteActing, setInviteActing] = useState(false);
 
   // ── Avatar edit flow ───────────────────────────────────────────────────────
   // Multi-step: sheet → (postPicker | compressing) → framing → saving
@@ -344,6 +357,30 @@ export default function PetProfileScreen() {
   // Pack members — fetched when component mounts; React Query caches the result
   const { data: membersData, isLoading: membersLoading } = useGetPetPackMembers(petId ?? "");
 
+  // ── Co-owner data loading ──────────────────────────────────────────────────
+  // Check whether the viewer has a pending invite to co-own this pet.
+  useEffect(() => {
+    if (!petId) return;
+    customFetch<{ invites: Array<{ id: string; petId: string; petName: string; inviterUsername: string }> }>(
+      "/api/me/co-owner-invites",
+    )
+      .then((data) => {
+        const mine = data.invites.find((i: any) => i.petId === petId);
+        setMyPendingInvite(mine ?? null);
+      })
+      .catch(() => {});
+  }, [petId]);
+
+  // If the viewer is the primary owner, load the pending invites they've sent.
+  useEffect(() => {
+    if (!petId) return;
+    customFetch<{ invites: Array<{ id: string; inviteeUsername: string }> }>(
+      `/api/pets/${petId}/co-owner-invites`,
+    )
+      .then((data) => setSentInvites(data.invites))
+      .catch(() => {}); // 403 for non-primary owners → silently ignored
+  }, [petId]);
+
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
   // ── Interest follows ───────────────────────────────────────────────────────
@@ -558,7 +595,7 @@ export default function PetProfileScreen() {
             <Text style={[styles.petName, { color: colors.foreground }]}>
               {pet.name}
             </Text>
-            {/* Edit profile affordance — pencil, owner-only */}
+            {/* Edit profile affordance — pencil, any owner */}
             {pet.viewerOwnsPet && (
               <TouchableOpacity
                 onPress={() =>
@@ -571,6 +608,23 @@ export default function PetProfileScreen() {
                 activeOpacity={0.6}
               >
                 <Feather name="edit-2" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
+            {/* Add co-owner — primary owner only */}
+            {(pet as any).viewerIsPrimaryOwner && (
+              <TouchableOpacity
+                onPress={() => {
+                  setCoOwnerStep("input");
+                  setCoOwnerError(null);
+                  setCoOwnerUsername("");
+                }}
+                style={styles.editProfileBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Add a co-owner"
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                activeOpacity={0.6}
+              >
+                <Feather name="user-plus" size={16} color={colors.mutedForeground} />
               </TouchableOpacity>
             )}
             <AddToPackLink
@@ -661,6 +715,80 @@ export default function PetProfileScreen() {
             ownerId={(pet as unknown as { ownerId?: string }).ownerId}
             colors={colors}
           />
+        )}
+
+        {/* ── Pending co-owner invite banner — shown to the invitee ── */}
+        {myPendingInvite && (
+          <View style={[styles.coOwnerBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.coOwnerBannerText, { color: colors.foreground }]}>
+              {myPendingInvite.inviterUsername} wants to share {pet.name} with you.
+            </Text>
+            <View style={styles.coOwnerBannerActions}>
+              <TouchableOpacity
+                onPress={async () => {
+                  if (inviteActing) return;
+                  setInviteActing(true);
+                  try {
+                    await customFetch(`/api/co-owner-invites/${myPendingInvite.id}/decline`, { method: "POST" });
+                    setMyPendingInvite(null);
+                  } catch { } finally { setInviteActing(false); }
+                }}
+                disabled={inviteActing}
+                style={[styles.coOwnerBannerBtn, { borderColor: colors.border }]}
+                accessibilityRole="button"
+                accessibilityLabel="Decline co-owner invite"
+              >
+                <Text style={[styles.coOwnerBannerBtnText, { color: colors.mutedForeground }]}>decline</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => {
+                  if (inviteActing) return;
+                  setInviteActing(true);
+                  try {
+                    await customFetch(`/api/co-owner-invites/${myPendingInvite.id}/accept`, { method: "POST" });
+                    setMyPendingInvite(null);
+                    queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
+                    queryClient.invalidateQueries({ queryKey: getGetMyPetsQueryKey() });
+                  } catch { } finally { setInviteActing(false); }
+                }}
+                disabled={inviteActing}
+                style={[styles.coOwnerBannerBtn, { borderColor: colors.primary }]}
+                accessibilityRole="button"
+                accessibilityLabel="Accept co-owner invite"
+              >
+                <Text style={[styles.coOwnerBannerBtnText, { color: colors.primary }]}>accept</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* ── Pending outgoing invites — primary owner only ── */}
+        {sentInvites.length > 0 && (
+          <View style={[styles.coOwnerSentList, { borderColor: colors.border }]}>
+            <Text style={[styles.coOwnerSentHeader, { color: colors.mutedForeground }]}>
+              invite pending
+            </Text>
+            {sentInvites.map((inv) => (
+              <View key={inv.id} style={styles.coOwnerSentRow}>
+                <Text style={[styles.coOwnerSentUsername, { color: colors.foreground }]}>
+                  {inv.inviteeUsername}
+                </Text>
+                <TouchableOpacity
+                  onPress={async () => {
+                    try {
+                      await customFetch(`/api/co-owner-invites/${inv.id}/decline`, { method: "POST" });
+                      setSentInvites((prev) => prev.filter((i) => i.id !== inv.id));
+                    } catch { }
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Cancel invite to ${inv.inviteeUsername}`}
+                >
+                  <Text style={[styles.coOwnerSentRevoke, { color: colors.mutedForeground }]}>cancel</Text>
+                </TouchableOpacity>
+              </View>
+            ))}
+          </View>
         )}
 
         {/* ── Grid Divider ── */}
@@ -1026,8 +1154,8 @@ export default function PetProfileScreen() {
                   </Text>
                 </View>
 
-                {/* Edit & delete affordances — visible only to the pet's owner */}
-                {selectedPost.pet.viewerOwnsPet && (
+                {/* Edit & delete affordances — visible to the original poster or primary owner */}
+                {(selectedPost as any).viewerCanManagePost && (
                   isEditMode ? (
                     /* ── Edit form ──────────────────────────────────────────── */
                     <View
@@ -1299,6 +1427,131 @@ export default function PetProfileScreen() {
           </View>
         </Pressable>
         </KeyboardAvoidingView>
+      </Modal>
+      {/* ── Co-owner invite modal (add a co-owner) ── */}
+      <Modal
+        visible={coOwnerStep === "input" || coOwnerStep === "sending" || coOwnerStep === "sent"}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCoOwnerStep("idle")}
+      >
+        <View style={styles.modalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setCoOwnerStep("idle")} />
+          <View style={[styles.avatarSheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 16 }]}>
+            <Text style={[styles.avatarSheetTitle, { color: colors.foreground }]}>
+              add a co-owner
+            </Text>
+            {coOwnerStep === "sent" ? (
+              <View style={{ padding: 20, alignItems: "center", gap: 8 }}>
+                <Text style={{ color: colors.foreground, fontFamily: "Inter_500Medium", fontSize: 15 }}>
+                  invite sent.
+                </Text>
+                <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13, textAlign: "center" }}>
+                  they'll see a prompt the next time they visit {pet.name}'s profile.
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setCoOwnerStep("idle")}
+                  style={{ marginTop: 8 }}
+                  accessibilityRole="button"
+                >
+                  <Text style={{ color: colors.mutedForeground, fontFamily: "Inter_400Regular", fontSize: 13 }}>done</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ paddingHorizontal: 20, paddingBottom: 8, gap: 12 }}>
+                {coOwnerError && (
+                  <Text style={{ color: "#E55", fontFamily: "Inter_400Regular", fontSize: 13 }}>{coOwnerError}</Text>
+                )}
+                <TextInput
+                  style={[
+                    styles.modalEditInput,
+                    {
+                      backgroundColor: colors.secondary,
+                      borderColor: colors.border,
+                      color: colors.foreground,
+                      minHeight: 44,
+                      textAlignVertical: "center",
+                    },
+                  ]}
+                  value={coOwnerUsername}
+                  onChangeText={setCoOwnerUsername}
+                  placeholder="username"
+                  placeholderTextColor={colors.mutedForeground}
+                  selectionColor={colors.primary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="send"
+                  editable={coOwnerStep !== "sending"}
+                  onSubmitEditing={async () => {
+                    const uname = coOwnerUsername.trim();
+                    if (!uname || !petId) return;
+                    setCoOwnerStep("sending");
+                    setCoOwnerError(null);
+                    try {
+                      await customFetch(`/api/pets/${petId}/co-owner-invites`, {
+                        method: "POST",
+                        body: JSON.stringify({ username: uname }),
+                      });
+                      setCoOwnerStep("sent");
+                      // Refresh sent invites list
+                      const data = await customFetch<{ invites: Array<{ id: string; inviteeUsername: string }> }>(
+                        `/api/pets/${petId}/co-owner-invites`,
+                      );
+                      setSentInvites(data.invites);
+                    } catch (e: any) {
+                      const msg = typeof e?.message === "string" ? e.message : "Something went wrong.";
+                      setCoOwnerError(msg);
+                      setCoOwnerStep("input");
+                    }
+                  }}
+                />
+                <TouchableOpacity
+                  onPress={async () => {
+                    const uname = coOwnerUsername.trim();
+                    if (!uname || !petId || coOwnerStep === "sending") return;
+                    setCoOwnerStep("sending");
+                    setCoOwnerError(null);
+                    try {
+                      await customFetch(`/api/pets/${petId}/co-owner-invites`, {
+                        method: "POST",
+                        body: JSON.stringify({ username: uname }),
+                      });
+                      setCoOwnerStep("sent");
+                      const data = await customFetch<{ invites: Array<{ id: string; inviteeUsername: string }> }>(
+                        `/api/pets/${petId}/co-owner-invites`,
+                      );
+                      setSentInvites(data.invites);
+                    } catch (e: any) {
+                      const msg = typeof e?.message === "string" ? e.message : "Something went wrong.";
+                      setCoOwnerError(msg);
+                      setCoOwnerStep("input");
+                    }
+                  }}
+                  disabled={!coOwnerUsername.trim() || coOwnerStep === "sending"}
+                  style={[
+                    styles.modalDeleteBtn,
+                    { borderColor: colors.primary, marginTop: 4 },
+                  ]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send invite"
+                >
+                  {coOwnerStep === "sending" ? (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  ) : (
+                    <Text style={[styles.modalDeleteBtnText, { color: colors.primary }]}>send invite</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => { setCoOwnerStep("idle"); setCoOwnerError(null); }}
+                  style={[styles.avatarSheetOption, styles.avatarSheetCancel]}
+                  accessibilityRole="button"
+                >
+                  <Text style={[styles.avatarSheetOptionText, { color: colors.mutedForeground }]}>cancel</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
       </Modal>
     </View>
   );
@@ -1733,5 +1986,70 @@ const styles = StyleSheet.create({
   },
   modalThumbOn: {
     alignSelf: "flex-end",
+  },
+
+  // ── Co-owner invite banner (invitee view) ─────────────────────────────────
+  coOwnerBanner: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+    padding: 14,
+    gap: 10,
+  },
+  coOwnerBannerText: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  coOwnerBannerActions: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  coOwnerBannerBtn: {
+    flex: 1,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 8,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  coOwnerBannerBtnText: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+  },
+
+  // ── Sent pending invites (primary owner view) ─────────────────────────────
+  coOwnerSentList: {
+    marginHorizontal: 20,
+    marginBottom: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 10,
+    overflow: "hidden",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 6,
+  },
+  coOwnerSentHeader: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 11,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginBottom: 4,
+  },
+  coOwnerSentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 4,
+  },
+  coOwnerSentUsername: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+  },
+  coOwnerSentRevoke: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    opacity: 0.5,
   },
 });

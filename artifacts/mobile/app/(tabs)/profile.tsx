@@ -93,6 +93,45 @@ export default function ProfileScreen() {
   });
   const blockedList = blocksData?.blocks ?? [];
 
+  // Co-owner invite data — pending invites sent to the viewer by pet primary owners
+  const { data: coOwnerInviteData, refetch: refetchCoOwnerInvites } = useQuery({
+    queryKey: ['my-co-owner-invites'],
+    queryFn:  () => customFetch<{
+      invites: Array<{
+        id: string;
+        petId: string;
+        petName: string;
+        inviterUsername: string;
+        createdAt: string;
+      }>;
+    }>('/api/me/co-owner-invites'),
+  });
+  const [coOwnerActingIds, setCoOwnerActingIds] = useState<Set<string>>(new Set());
+  const coOwnerInvites = coOwnerInviteData?.invites ?? [];
+
+  const handleCoOwnerAccept = useCallback(async (inviteId: string, petId: string) => {
+    if (coOwnerActingIds.has(inviteId)) return;
+    setCoOwnerActingIds((s) => new Set(s).add(inviteId));
+    try {
+      await customFetch(`/api/co-owner-invites/${inviteId}/accept`, { method: 'POST' });
+      await refetchCoOwnerInvites();
+      qc.invalidateQueries({ queryKey: ['my-pets'] });
+    } catch { /* silent */ } finally {
+      setCoOwnerActingIds((s) => { const n = new Set(s); n.delete(inviteId); return n; });
+    }
+  }, [coOwnerActingIds, refetchCoOwnerInvites, qc]);
+
+  const handleCoOwnerDecline = useCallback(async (inviteId: string) => {
+    if (coOwnerActingIds.has(inviteId)) return;
+    setCoOwnerActingIds((s) => new Set(s).add(inviteId));
+    try {
+      await customFetch(`/api/co-owner-invites/${inviteId}/decline`, { method: 'POST' });
+      await refetchCoOwnerInvites();
+    } catch { /* silent */ } finally {
+      setCoOwnerActingIds((s) => { const n = new Set(s); n.delete(inviteId); return n; });
+    }
+  }, [coOwnerActingIds, refetchCoOwnerInvites]);
+
   // Invite data query
   const { data: inviteData, refetch: refetchInvites } = useQuery({
     queryKey: ['my-invites'],
@@ -366,6 +405,60 @@ export default function ProfileScreen() {
               <Feather name="plus" size={16} color={colors.foreground} />
               <Text style={[styles.addBtnText, { color: colors.foreground }]}>Add another pet</Text>
             </Pressable>
+          </>
+        )}
+
+        {/* ══════════════ CO-OWNER INVITES ══════════════ */}
+        {coOwnerInvites.length > 0 && (
+          <>
+            <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
+            <Text style={[styles.heading, { color: colors.foreground }]}>Co-owner invites</Text>
+            <View style={styles.listGap}>
+              {coOwnerInvites.map((inv) => (
+                <View
+                  key={inv.id}
+                  style={[styles.inviteCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                >
+                  <Text style={[styles.inviteCardText, { color: colors.foreground }]}>
+                    {inv.inviterUsername} wants to share {inv.petName} with you.
+                  </Text>
+                  <View style={styles.inviteCardActions}>
+                    <TouchableOpacity
+                      onPress={() => handleCoOwnerDecline(inv.id)}
+                      disabled={coOwnerActingIds.has(inv.id)}
+                      style={[styles.inviteCardBtn, { borderColor: colors.border }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Decline co-owner invite for ${inv.petName}`}
+                    >
+                      <Text style={[styles.inviteCardBtnText, { color: colors.mutedForeground }]}>decline</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => handleCoOwnerAccept(inv.id, inv.petId)}
+                      disabled={coOwnerActingIds.has(inv.id)}
+                      style={[styles.inviteCardBtn, { borderColor: colors.primary }]}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Accept co-owner invite for ${inv.petName}`}
+                    >
+                      {coOwnerActingIds.has(inv.id) ? (
+                        <ActivityIndicator size="small" color={colors.primary} />
+                      ) : (
+                        <Text style={[styles.inviteCardBtnText, { color: colors.primary }]}>accept</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => router.push(`/pet/${inv.petId}`)}
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                    accessibilityRole="link"
+                    accessibilityLabel={`View ${inv.petName}'s profile`}
+                  >
+                    <Text style={[styles.inviteCardPetLink, { color: colors.mutedForeground }]}>
+                      view {inv.petName}'s profile →
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
           </>
         )}
 
@@ -979,6 +1072,40 @@ const styles = StyleSheet.create({
   callInText: {
     fontFamily: 'Inter_700Bold',
     fontSize:   15,
+  },
+
+  // Co-owner invite card (in profile co-owner invites section)
+  inviteCard: {
+    borderRadius:  10,
+    borderWidth:   StyleSheet.hairlineWidth,
+    padding:       14,
+    gap:           10,
+  },
+  inviteCardText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   14,
+    lineHeight: 20,
+  },
+  inviteCardActions: {
+    flexDirection: 'row',
+    gap:           8,
+  },
+  inviteCardBtn: {
+    flex:          1,
+    borderWidth:   StyleSheet.hairlineWidth,
+    borderRadius:  8,
+    paddingVertical: 8,
+    alignItems:    'center',
+    justifyContent: 'center',
+  },
+  inviteCardBtnText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize:   13,
+  },
+  inviteCardPetLink: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   12,
+    opacity:    0.55,
   },
 
   // Send feedback — whisper weight, sits above sign-out

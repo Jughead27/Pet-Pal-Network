@@ -28,6 +28,9 @@ export const usersTable = pgTable(
     inviteQuota: integer("invite_quota"),
     // Permanent attribution — who invited this user (null = founding account)
     invitedBy:   text("invited_by").references((): AnyPgColumn => usersTable.id),
+    // ToS acceptance — null means never accepted (triggers gate on next load)
+    acceptedTosAt:      timestamp("accepted_tos_at"),
+    acceptedTosVersion: text("accepted_tos_version"),
   },
   (t) => ({
     // Case-insensitive unique index — only indexes non-null usernames.

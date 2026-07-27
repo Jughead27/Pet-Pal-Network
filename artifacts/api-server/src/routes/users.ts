@@ -7,7 +7,7 @@
  */
 
 import { Router } from "express";
-import { db, usersTable } from "@workspace/db";
+import { db, usersTable, configTable } from "@workspace/db";
 import { eq, sql, and, ne } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
@@ -56,32 +56,44 @@ function validateUsername(raw: string): string | null {
 router.get("/me", async (req, res) => {
   const { userId } = (req as Express.RequestWithAuth).auth!;
 
-  const [user] = await db
-    .select({
-      id:           usersTable.id,
-      username:     usersTable.username,
-      displayName:  usersTable.displayName,
-      locationCity: usersTable.locationCity,
-      about:        usersTable.about,
-      createdAt:    usersTable.createdAt,
-      role:         usersTable.role,
-    })
-    .from(usersTable)
-    .where(eq(usersTable.id, userId));
+  const [[user], [cfg]] = await Promise.all([
+    db
+      .select({
+        id:                 usersTable.id,
+        username:           usersTable.username,
+        displayName:        usersTable.displayName,
+        locationCity:       usersTable.locationCity,
+        about:              usersTable.about,
+        createdAt:          usersTable.createdAt,
+        role:               usersTable.role,
+        acceptedTosVersion: usersTable.acceptedTosVersion,
+      })
+      .from(usersTable)
+      .where(eq(usersTable.id, userId)),
+    db
+      .select({ value: configTable.value })
+      .from(configTable)
+      .where(eq(configTable.key, "tos_current_version"))
+      .limit(1),
+  ]);
 
   if (!user) {
     res.status(404).json({ error: "User not found" });
     return;
   }
 
+  const tosCurrentVersion = cfg?.value ?? "2026-07-27";
+
   res.json({
-    id:           user.id,
-    username:     user.username    ?? null,
-    displayName:  user.displayName ?? null,
-    locationCity: user.locationCity ?? null,
-    about:        user.about       ?? null,
-    createdAt:    user.createdAt.toISOString(),
-    role:         user.role,
+    id:                 user.id,
+    username:           user.username        ?? null,
+    displayName:        user.displayName     ?? null,
+    locationCity:       user.locationCity    ?? null,
+    about:              user.about           ?? null,
+    createdAt:          user.createdAt.toISOString(),
+    role:               user.role,
+    acceptedTosVersion: user.acceptedTosVersion ?? null,
+    tosCurrentVersion,
   });
 });
 

@@ -19,28 +19,22 @@ const router: IRouter = Router();
  * GET /feed
  *
  * Returns all posts in reverse-chronological order, each with embedded pet
- * info, aggregate reaction counts, and per-post viewer state (has_booped /
- * has_treated / viewer_in_pack).  Also returns viewer.treats_remaining_today.
+ * info, aggregate reaction counts, and per-post viewer state.
+ *
+ * viewerOwnsPet: true when the viewer is ANY member of pet_owners for that
+ * pet (primary or co).  Drives the "this is your pet" affordance in the feed.
  *
  * Requires a valid Clerk session token (enforced by requireClerkAuth).
  */
 router.get("/feed", async (req, res) => {
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
-  // Optional nursery filter — when ?nursery=true only is_nursery posts are returned
   const nurseryOnly = req.query.nursery === "true";
-  // Optional species filter — when ?speciesId=<uuid> only posts from pets of that species are returned
-  const speciesId = typeof req.query.speciesId === "string" && req.query.speciesId.length > 0
+  const speciesId   = typeof req.query.speciesId === "string" && req.query.speciesId.length > 0
     ? req.query.speciesId
     : undefined;
-
-  // Optional sort — "fresh" (default) = newest-first; "popular" = 7-day engagement score desc
   const sortPopular = req.query.sort === "popular";
 
-  // Engagement score formula (tunable):
-  //   boops_7d + (3 × treats_7d)
-  //   Treat multiplier weighted higher to reward quality engagement over raw boop volume.
-  //   Tiebreaker: created_at desc so zero-score posts read newest-first.
   const popularOrderBy = [
     desc(sql<number>`(
       select coalesce(count(*), 0)
@@ -74,18 +68,22 @@ router.get("/feed", async (req, res) => {
       boopCount:    sql<number>`count(distinct ${boopsTable.id})::int`,
       treatCount:   sql<number>`count(distinct ${treatsTable.id})::int`,
       commentCount: sql<number>`count(distinct ${commentsTable.id})::int`,
-      // bool_or across the LEFT-JOINed rows: true if any row belongs to the viewer
       viewerHasBooped:  sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
       viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
-      // Correlated EXISTS — whether the viewer follows this pet
+      // Correlated EXISTS — whether the viewer follows this pet's Pack
       viewerInPack: sql<boolean>`exists(
         select 1 from pack_follows pf
         where pf.user_id = ${userId}
           and pf.pet_id = ${petsTable.id}
       )`,
-      // Ownership flag — drives the delete affordance on the post-detail screen
-      viewerOwnsPet: sql<boolean>`${petsTable.ownerId} = ${userId}`,
-      // Raw owner ID — used by the mobile block affordance in ReportFlow / post-detail
+      // Ownership flag via pet_owners (primary or co) — drives delete/edit
+      // affordance in the feed card.
+      viewerOwnsPet: sql<boolean>`exists(
+        select 1 from pet_owners po
+        where po.pet_id = ${petsTable.id}
+          and po.user_id = ${userId}
+      )`,
+      // Raw owner ID — used by the mobile block affordance in ReportFlow
       petOwnerId: petsTable.ownerId,
     })
     .from(postsTable)
@@ -96,16 +94,13 @@ router.get("/feed", async (req, res) => {
     .where(and(
       isNull(postsTable.archivedAt),
       nurseryOnly ? eq(postsTable.isNursery, true) : undefined,
-      speciesId ? eq(petsTable.speciesId, speciesId) : undefined,
-      // Exclude posts whose pet owner has a block relationship with the viewer
+      speciesId   ? eq(petsTable.speciesId, speciesId)  : undefined,
       notBlockedPostOwner(userId),
-      // Exclude posts hidden by admins
       notHiddenByAdminPost(),
     ))
     .groupBy(postsTable.id, petsTable.id)
     .orderBy(...(sortPopular ? popularOrderBy : [desc(postsTable.createdAt)]));
 
-  // Compute viewer's treats remaining today
   const [limitRow] = await db
     .select()
     .from(configTable)
@@ -120,7 +115,6 @@ router.get("/feed", async (req, res) => {
     .where(and(eq(treatsTable.userId, userId), gte(treatsTable.createdAt, today)));
   const treatsRemainingToday = Math.max(0, dailyLimit - (countRow?.todayTreats ?? 0));
 
-  // mediaTokenUrl is synchronous — no Promise.all needed
   const posts = rows.map((r) => ({
     id:          r.id,
     caption:     r.caption ?? null,
@@ -139,7 +133,6 @@ router.get("/feed", async (req, res) => {
       speciesId:     r.petSpeciesId ?? null,
       viewerInPack:  r.viewerInPack,
       viewerOwnsPet: r.viewerOwnsPet,
-      // ownerId transmitted for the block affordance; not typed in api-zod (cast in mobile)
       ownerId:       r.petOwnerId,
     },
     boopCount:        r.boopCount,

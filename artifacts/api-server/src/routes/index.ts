@@ -14,6 +14,8 @@ import reportsRouter from "./reports";
 import blocksRouter from "./blocks";
 import feedbackRouter from "./feedback";
 import invitesMemberRouter from "./invites-member";
+import tosRouter from "./tos";
+import coOwnersRouter from "./co-owners";
 import { requireClerkAuth } from "../middlewares/requireClerkAuth";
 import invitesRouter from "./invites";
 
@@ -44,5 +46,7 @@ router.use(reportsRouter); // POST /reports
 router.use(blocksRouter);  // POST /blocks  DELETE /blocks/:id  GET /blocks
 router.use(feedbackRouter);      // POST /feedback
 router.use(invitesMemberRouter); // POST /invites/redeem  POST /invites  GET /invites/mine  POST /invites/:id/revoke
+router.use(tosRouter);           // POST /tos/accept
+router.use(coOwnersRouter);      // co-owner invite + management routes
 
 export default router;

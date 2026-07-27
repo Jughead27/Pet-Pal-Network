@@ -1,15 +1,21 @@
-import React, { useEffect } from 'react';
-import { Platform, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@clerk/clerk-expo';
 import { Feather } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
-import { Redirect, Tabs } from 'expo-router';
+import { Redirect, Tabs, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SniffIcon from '@/components/SniffIcon';
 import HatchlingIcon from '@/components/HatchlingIcon';
 import { useGetMe, customFetch } from '@workspace/api-client-react';
 import * as SecureStore from 'expo-secure-store';
+
+// ─── portal palette (TOS gate uses same visual system) ───────────────────────
+const TOS_BG    = '#060B10';
+const TOS_FG    = '#F0F4F8';
+const TOS_MUTED = '#6B7FA0';
+const TOS_BORDER = '#182030';
 
 // ─── TabLayout ────────────────────────────────────────────────────────────────
 //
@@ -29,17 +35,24 @@ function isSuspendedError(e: unknown): boolean {
 
 export default function TabLayout() {
   // All hooks must be called unconditionally before any early return.
-  const { isSignedIn, isLoaded } = useAuth();
+  const { isSignedIn, isLoaded, signOut } = useAuth();
   const colors = useColors();
   const colorScheme = useColorScheme();
   const safeAreaInsets = useSafeAreaInsets();
+  const router = useRouter();
+
+  // TOS gate local state — set to true after successful acceptance so the gate
+  // clears immediately without waiting for a /me refetch.
+  const [tosAccepted, setTosAccepted] = useState(false);
+  const [tosAccepting, setTosAccepting] = useState(false);
+
   // Guard: only fire GET /me once Clerk has confirmed a live session.
   // Without `enabled`, the query fires during the initial render while
   // ClerkTokenSync's useEffect hasn't yet called setAuthTokenGetter — so the
   // first request has no Authorization header and returns 401.  Gating on
   // isLoaded && isSignedIn ensures the token getter is in place first.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error: meError } = useGetMe({ query: { enabled: isLoaded && isSignedIn === true } as any });
+  const { data: meData, error: meError } = useGetMe({ query: { enabled: isLoaded && isSignedIn === true } as any });
 
   // Redeem any pending invite code that survived the OAuth round-trip.
   // This handles both: (a) password signup where code was set but session activated async,
@@ -82,7 +95,92 @@ export default function TabLayout() {
       </View>
     );
   }
-  // ────────────────────────────────────────────────────────────────────────
+
+  // ─── ToS acceptance gate ─────────────────────────────────────────────────
+  // Show once after sign-in when the user has not yet accepted the current
+  // version. tosAccepted is a local flag that clears the gate immediately
+  // after the API call succeeds, without waiting for a /me refetch.
+  // The user can always sign out — they are never trapped.
+  const me = meData as (typeof meData & { acceptedTosVersion?: string | null; tosCurrentVersion?: string }) | undefined;
+  // Gate disabled until reviewed legal copy is published — reactivate via version bump.
+  const tosRequired = false;
+
+  if (tosRequired) {
+    const pt = safeAreaInsets.top + (Platform.OS === 'web' ? 24 : 48);
+    const pb = safeAreaInsets.bottom + 40;
+
+    const handleAccept = async () => {
+      setTosAccepting(true);
+      try {
+        await customFetch('/api/tos/accept', { method: 'POST' });
+        setTosAccepted(true);
+      } catch {
+        // retry is safe — endpoint is idempotent
+      } finally {
+        setTosAccepting(false);
+      }
+    };
+
+    return (
+      <ScrollView
+        style={gt.root}
+        contentContainerStyle={[gt.scroll, { paddingTop: pt, paddingBottom: pb }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={gt.col}>
+          {/* wordmark */}
+          <Text style={gt.wordmark}>pshpsh</Text>
+
+          {/* headline */}
+          <Text style={gt.headline}>before you continue.</Text>
+
+          {/* plain-language summary */}
+          <Text style={gt.body}>
+            pshpsh is an invite-only test. by continuing, you agree to post animal content, treat members with kindness, and follow the community guidelines.
+          </Text>
+          <Text style={gt.body}>
+            we collect only what the app needs to work — your login, pets, posts, and basic activity. we don't sell your data or run ads.
+          </Text>
+
+          {/* links */}
+          <View style={gt.linkRow}>
+            <Pressable onPress={() => router.push('/terms')} hitSlop={8}>
+              <Text style={gt.link}>terms</Text>
+            </Pressable>
+            <Text style={gt.linkDot}> · </Text>
+            <Pressable onPress={() => router.push('/privacy')} hitSlop={8}>
+              <Text style={gt.link}>privacy</Text>
+            </Pressable>
+            <Text style={gt.linkDot}> · </Text>
+            <Pressable onPress={() => router.push('/guidelines')} hitSlop={8}>
+              <Text style={gt.link}>guidelines</Text>
+            </Pressable>
+          </View>
+
+          {/* agree & continue */}
+          <Pressable
+            style={({ pressed }) => [gt.agreeBtn, pressed && gt.dimmed, tosAccepting && gt.disabled]}
+            onPress={handleAccept}
+            disabled={tosAccepting}
+          >
+            {tosAccepting
+              ? <ActivityIndicator color={TOS_FG} size="small" />
+              : <Text style={gt.agreeTxt}>agree & continue</Text>}
+          </Pressable>
+
+          {/* sign-out escape hatch */}
+          <Pressable
+            style={gt.signOutBtn}
+            onPress={() => signOut()}
+            hitSlop={8}
+          >
+            <Text style={gt.signOutTxt}>sign out</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    );
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   const isDark = colorScheme === 'dark';
   const isIOS = Platform.OS === 'ios';
@@ -228,3 +326,85 @@ export default function TabLayout() {
     </Tabs>
   );
 }
+
+// ─── TOS gate styles (portal palette) ────────────────────────────────────────
+const gt = StyleSheet.create({
+  root:  { flex: 1, backgroundColor: TOS_BG },
+  scroll: { flexGrow: 1, alignItems: 'center' },
+  col: {
+    width: '100%',
+    maxWidth: 430,
+    paddingHorizontal: 32,
+    alignSelf: 'center',
+  },
+
+  wordmark: {
+    fontFamily:    'Inter_700Bold',
+    fontSize:      20,
+    color:         TOS_FG,
+    letterSpacing: -0.3,
+    marginBottom:  48,
+  },
+
+  headline: {
+    fontFamily:    'Inter_700Bold',
+    fontSize:      26,
+    color:         TOS_FG,
+    letterSpacing: -0.3,
+    marginBottom:  28,
+  },
+
+  body: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     15,
+    color:        TOS_FG,
+    lineHeight:   26,
+    opacity:      0.85,
+    marginBottom: 18,
+  },
+
+  linkRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    marginTop:      8,
+    marginBottom:   48,
+  },
+  link: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+    color:      TOS_MUTED,
+  },
+  linkDot: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+    color:      TOS_MUTED,
+    opacity:    0.4,
+  },
+
+  agreeBtn: {
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     TOS_FG,
+    paddingVertical: 16,
+    alignItems:      'center',
+    marginBottom:    16,
+  },
+  agreeTxt: {
+    fontFamily: 'Inter_700Bold',
+    fontSize:   17,
+    color:      TOS_FG,
+  },
+
+  signOutBtn: {
+    paddingVertical: 14,
+    alignItems:      'center',
+  },
+  signOutTxt: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+    color:      TOS_MUTED,
+    opacity:    0.6,
+  },
+
+  dimmed:   { opacity: 0.65 },
+  disabled: { opacity: 0.35 },
+});

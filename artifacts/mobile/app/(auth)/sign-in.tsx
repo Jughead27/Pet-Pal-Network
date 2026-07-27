@@ -687,6 +687,21 @@ export default function SignInScreen() {
               <Text style={s.inviteLink}>request an invite</Text>
             </Pressable>
           </View>
+
+          {/* ── Footer legal links ── */}
+          <View style={s.whisperRow}>
+            <Pressable onPress={() => router.push('/about')} hitSlop={8}>
+              <Text style={s.whisper}>about</Text>
+            </Pressable>
+            <Text style={s.whisperDot}> · </Text>
+            <Pressable onPress={() => router.push('/terms')} hitSlop={8}>
+              <Text style={s.whisper}>terms</Text>
+            </Pressable>
+            <Text style={s.whisperDot}> · </Text>
+            <Pressable onPress={() => router.push('/privacy')} hitSlop={8}>
+              <Text style={s.whisper}>privacy</Text>
+            </Pressable>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

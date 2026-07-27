@@ -21,3 +21,5 @@
 - [Audit Log Architecture](audit-log-architecture.md) — append-only audit_log table; writeAudit(tx,...) helper; all admin mutations in db.transaction; GET /admin/audit paginated.
 - [Feedback Architecture](feedback-architecture.md) — feedback table, POST /feedback (5/hr rate limit), admin inbox + feedback.reviewed audit action.
 - [Invites v2 Architecture](invites-v2-architecture.md) — invite codes, quota, gate, redeem flow, admin mgmt; SecureStore for OAuth round-trip survival.
+- [ToS & Legal Architecture](tos-legal-architecture.md) — public pages, first-login acceptance gate, config-driven version, inline TabLayout gate pattern.
+- [Co-ownership Architecture](co-ownership-architecture.md) — pet_owners join table, invite flow, permission model, viewerCanManagePost, mobile surface points.

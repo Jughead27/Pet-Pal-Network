@@ -14,17 +14,25 @@ import { petsTable, postsTable, commentsTable } from "@workspace/db";
 // ─── Block exclusion ─────────────────────────────────────────────────────────
 
 /**
- * Excludes posts whose pet's owner has blocked the viewer or been blocked by
- * the viewer.
+ * Excludes posts where the viewer has a block relationship with ANY co-owner
+ * of the post's pet.  If the viewer blocks even one owner, the entire pet and
+ * all its posts are hidden (safest per spec).
  *
  * REQUIRES: `petsTable` to be inner-joined in the calling query so that
- * `"pets"."owner_id"` is a valid correlated column reference.
+ * `"pets"."id"` is a valid correlated column reference.
+ *
+ * Implementation: correlated NOT EXISTS that joins pet_owners to find all
+ * owners of the pet, then checks blocks for any of them.
  */
 export function notBlockedPostOwner(viewerId: string) {
   return sql<boolean>`NOT EXISTS (
-    SELECT 1 FROM blocks b
-    WHERE (b.blocker_id = ${viewerId} AND b.blocked_id = ${petsTable.ownerId})
-       OR (b.blocker_id = ${petsTable.ownerId} AND b.blocked_id = ${viewerId})
+    SELECT 1
+    FROM   pet_owners po
+    JOIN   blocks b ON (
+             (b.blocker_id = ${viewerId}  AND b.blocked_id  = po.user_id)
+          OR (b.blocker_id = po.user_id   AND b.blocked_id  = ${viewerId})
+    )
+    WHERE  po.pet_id = ${petsTable.id}
   )`;
 }
 

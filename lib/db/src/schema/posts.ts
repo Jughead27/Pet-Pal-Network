@@ -2,6 +2,7 @@ import { pgTable, text, uuid, timestamp, boolean, index, real } from "drizzle-or
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { petsTable } from "./pets";
+import { usersTable } from "./users";
 
 export const postsTable = pgTable(
   "posts",
@@ -19,6 +20,9 @@ export const postsTable = pgTable(
     cropFocusY: real("crop_focus_y"),
     createdAt:  timestamp("created_at").defaultNow().notNull(),
     archivedAt:    timestamp("archived_at"),
+    // Which co-owner created this post — for moderation/audit only, NEVER displayed
+    // in any UI.  Null on existing rows (backfilled to primary owner at deploy time).
+    postedByUserId: text("posted_by_user_id").references(() => usersTable.id),
     // Set by admins during moderation. Distinct from owner-archive:
     // hidden posts are excluded from all public reads but remain visible to
     // the owner on their pet profile with a "hidden by moderation" note.
