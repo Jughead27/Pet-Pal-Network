@@ -321,6 +321,34 @@ async function main() {
 
   console.log(`Backfill complete — ${backfilledCount} pet(s) updated.`);
 
+  // ── Co-ownership backfill ──────────────────────────────────────────────────
+  // Runs on every deploy; ON CONFLICT DO NOTHING makes it a no-op after the
+  // first time.  Required so that existing pets (created before the pet_owners
+  // table existed) have their primary ownership rows on first production deploy.
+  // New pets get their row inserted atomically in POST /pets — this only covers
+  // the historical population.
+  console.log("Backfilling pet_owners primary rows from existing pets…");
+  const coOwnerResult = await db.execute(sql`
+    INSERT INTO pet_owners (pet_id, user_id, role)
+    SELECT id, owner_id, 'primary'
+    FROM   pets
+    ON CONFLICT DO NOTHING
+  `);
+  console.log(`  ✓ pet_owners backfill — ${coOwnerResult.rowCount ?? 0} new row(s) inserted`);
+
+  // Backfill posts.posted_by_user_id for all posts created before this column
+  // existed.  Uses the pet's primary owner_id as the historical actor.
+  // NULL rows are always from before co-ownership existed, so this is safe.
+  console.log("Backfilling posts.posted_by_user_id for pre-existing posts…");
+  const postsBackfillResult = await db.execute(sql`
+    UPDATE posts
+    SET    posted_by_user_id = pets.owner_id
+    FROM   pets
+    WHERE  posts.pet_id = pets.id
+      AND  posts.posted_by_user_id IS NULL
+  `);
+  console.log(`  ✓ posts.posted_by_user_id backfill — ${postsBackfillResult.rowCount ?? 0} row(s) updated`);
+
   // ── Auto-pack backfill: every owner gets pack_follows rows for their own pets ──
   console.log("Backfilling pack_follows for existing pet owners…");
   const allPets = await db.select({ id: schema.petsTable.id, ownerId: schema.petsTable.ownerId }).from(schema.petsTable);
