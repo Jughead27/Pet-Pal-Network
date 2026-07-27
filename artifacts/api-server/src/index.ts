@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { runStartupBackfill } from "./lib/startupBackfill.js";
 
 const rawPort = process.env["PORT"];
 
@@ -22,4 +23,8 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Run data backfills that depend on the schema migration already being
+  // applied.  Non-fatal: a failure is logged but won't take down the server.
+  runStartupBackfill();
 });
