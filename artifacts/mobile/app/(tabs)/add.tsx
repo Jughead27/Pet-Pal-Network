@@ -187,8 +187,8 @@ export default function AddScreen() {
     setStep('form');
   }, []);
 
-  // ── Compose cancel — resets the entire form to its initial empty state ────
-  // The Add tab has no back stack, so Cancel cannot router.back(); it resets.
+  // ── Compose cancel — discards draft and returns to Home ──────────────────
+  // The Add tab has no back stack, so we reset state AND navigate to '/'.
   const handleCancel = useCallback(() => {
     setStep('idle');
     setCompressedUri(null);
@@ -198,6 +198,7 @@ export default function AddScreen() {
     setCropFocusY(0.5);
     setError(null);
     if (pets.length !== 1) setSelectedPetId(null);
+    router.navigate('/');
   }, [pets.length]);
 
   // ── Submit ────────────────────────────────────────────────────────────────
