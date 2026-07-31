@@ -34,6 +34,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Feather } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import Button from '@/components/Button';
 import {
   useGetMyPets,
   usePresignUpload,
@@ -274,12 +275,11 @@ export default function AddScreen() {
         <Text style={[s.emptySub, { color: colors.mutedForeground }]}>
           Create a pet profile before posting.
         </Text>
-        <Pressable
-          style={({ pressed }) => [s.primaryBtn, { backgroundColor: colors.primary }, pressed && s.pressed]}
+        <Button
+          variant="primary"
+          label="Create a pet"
           onPress={() => router.push('/pet/create')}
-        >
-          <Text style={[s.primaryBtnText, { color: colors.primaryForeground }]}>Create a pet</Text>
-        </Pressable>
+        />
       </View>
     );
   }

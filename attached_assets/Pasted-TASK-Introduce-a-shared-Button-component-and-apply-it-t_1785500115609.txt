@@ -1,0 +1,68 @@
+TASK: Introduce a shared Button component and apply it to ONE screen
+only (pilot). Single scoped change.
+
+CONTEXT: Audit found no shared button component — each screen
+hand-rolls a filled-capsule primaryBtn from colors.primary, with
+drifting radius (10/12/14) and padding (12–16). We are replacing that
+filled-capsule pattern with a hairline-outline primary CTA, rolled out
+one screen at a time. This prompt builds the component and pilots it on
+the "Create a pet" EMPTY-STATE button in post/add.tsx ONLY.
+
+DO:
+1. Create components/Button.tsx — one shared, cross-platform
+   (web/iOS/Android identical) pressable:
+   - variant prop: "primary" | "quiet"  (default "primary")
+   - variant="primary" = HAIRLINE OUTLINE: transparent background,
+     1px border in the app's foreground color at ~55% opacity, label
+     in full foreground color, fontWeight 500. NO fill. NEVER
+     colors.primary (teal). borderRadius 10. paddingVertical 13,
+     paddingHorizontal 28, minHeight 44. Sizes to content by default.
+     Optional `fullWidth` boolean → alignSelf:'stretch' + width:'100%'
+     (NOT used in this pilot).
+   - variant="quiet" = TYPOGRAPHIC only: no bg, no border, label in
+     muted foreground, weight 500. (Defined for later; unused here.)
+   - Pressed state: calm — on pressIn brighten border to full-opacity
+     foreground + faint rgba(foreground,0.06) wash; revert on release.
+     No scale/spring; respect reduce-motion.
+   - disabled prop: border + label at ~35% opacity, ignore presses.
+   - Props: label (string) OR children, onPress, disabled, fullWidth,
+     style override.
+   - Foreground color: REUSE the existing foreground token the app
+     already uses for text on the #060B10 ground. Do NOT hardcode a
+     new hex.
+2. In post/add.tsx, replace ONLY the empty-state "Create a pet" button
+   with <Button variant="primary" label="Create a pet"
+   onPress={<its existing handler>} />. Preserve the existing
+   onPress/navigation exactly. Remove the now-dead local primaryBtn
+   style entry ONLY if nothing else in the file uses it.
+
+DO NOT:
+- Touch any other button/screen: profile.tsx, pet/create.tsx,
+  pet/edit.tsx, profile/edit.tsx, share/index.tsx, or the "Post"
+  submit button in post/add.tsx. Those convert in a later pass.
+- Touch ActionRail (boop/treat/comment/share), the tab bar,
+  auth/portal screens, reactions logic, feed queries, media routes,
+  or ANY layout/width code.
+- Change colors.primary or any shared token value.
+- Commit without my sync — commit locally; I will Sync. Report the
+  Review Changes count.
+
+PRESERVATION CLAUSE: before editing, note the empty state's existing
+behavior (icon + "No pets yet" + subtext + the CTA's navigation
+target) — all must survive identically; only the button's visual
+treatment changes.
+
+ACCEPTANCE (verify on https://pshpsh.net from a real phone AND a
+desktop browser, hard refresh after republish):
+1. The empty state renders the hairline-outline button — transparent,
+   thin foreground border, foreground label — NOT a teal capsule, with
+   generous padding (text not clamped to edges).
+2. Tapping it opens the create-pet flow exactly as before.
+3. Renders identically web/iOS/Android (report how verified).
+4. Golden path intact: sign in → Home → boop persists after refresh →
+   Nursery pager → post flow → sign out.
+5. Every OTHER button in the app is visually unchanged (still the old
+   capsules — expected this pass).
+
+OUTPUT: confirm the component API, the one screen changed, and the
+Review Changes count.
