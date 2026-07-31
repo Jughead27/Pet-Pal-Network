@@ -1,0 +1,47 @@
+TASK: Make Cancel work at EVERY stage of the new-post compose flow,
+including before a photo is chosen. Single scoped change. Do NOT alter
+the photo requirement for posting.
+
+CONTEXT: The compose flow has two states — (A) the initial
+"choose/pick a photo" state, and (B) the full compose state after a
+photo is selected. A prior fix wired Cancel to discard-and-go-Home,
+but only in state B. In state A, Cancel still no-ops (old
+router.back() on the Add tab, which has no back stack). Result: Cancel
+only works once a photo exists. It must work from the very first
+frame.
+
+DO:
+1. FIRST report how the compose screen is structured: what
+   distinguishes state A from state B, where Cancel is rendered in
+   each, and exactly why the state-A Cancel doesn't dismiss (still
+   router.back()? different component? tap intercepted by the picker
+   overlay / pointerEvents? disabled until hasPhoto?). State findings
+   before editing.
+2. Make Cancel use the SAME dismiss in BOTH states: discard the
+   in-progress post (clear any selected media, caption, chosen pet)
+   and navigate to Home. Its availability and its onPress must NOT
+   depend on whether a photo has been chosen — Cancel is live from the
+   moment the compose screen opens.
+
+DO NOT:
+- Change the POST requirement in any way. Posting MUST still require a
+  chosen photo — do not make the photo optional, do not weaken or
+  remove that gate. Only Cancel's availability changes.
+- Touch the new-pet / pet-edit / profile-edit Cancels (they work).
+- Touch media-upload logic, the Post submit handler's validation, any
+  other button, layout/width, or auth.
+
+PRESERVATION CLAUSE: the Post flow (photo required -> post) is
+unchanged; the only change is that Cancel now dismisses from any
+compose state.
+
+ACCEPTANCE (live on pshpsh.net, phone + desktop):
+1. Open new post and immediately tap Cancel with NO photo chosen ->
+   draft discarded, lands on Home.
+2. Choose a photo, then Cancel -> still discards and lands on Home.
+3. With no photo, Post is still blocked (cannot post without a photo).
+4. With a photo, posting still works normally.
+5. New-pet Cancel still works. Golden path intact.
+
+OUTPUT: the state-A vs state-B Cancel wiring before/after, files
+changed, and the Review Changes count. Commit locally; I will Sync.

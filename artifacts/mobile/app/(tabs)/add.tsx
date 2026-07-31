@@ -330,7 +330,15 @@ export default function AddScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <Text style={[s.heading, { color: colors.foreground }]}>New Post</Text>
+        <View style={s.headingRow}>
+          <Text style={[s.heading, { color: colors.foreground }]}>New Post</Text>
+          <Button
+            variant="quiet"
+            label="Cancel"
+            onPress={handleCancel}
+            disabled={isUploading}
+          />
+        </View>
 
         {/* ── Image area ── */}
         {step === 'compressing' ? (
@@ -489,12 +497,6 @@ export default function AddScreen() {
             </Text>
           )}
         </Button>
-        <Button
-          variant="quiet"
-          label="Cancel"
-          onPress={handleCancel}
-          disabled={isUploading}
-        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -570,11 +572,16 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
     centered: { alignItems: 'center', justifyContent: 'center' },
     scroll:   { flexGrow: 1, paddingHorizontal: 20 },
 
+    headingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 20,
+    },
     heading: {
       fontFamily: 'Inter_700Bold',
       fontSize: 26,
       letterSpacing: -0.3,
-      marginBottom: 20,
     },
 
     // Empty / no-pets state
