@@ -22,7 +22,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -35,6 +34,7 @@ import { router } from 'expo-router';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import Button from '@/components/Button';
 import { useQuery } from '@tanstack/react-query';
 import {
   useCreatePet,
@@ -400,22 +400,26 @@ export default function CreatePetScreen() {
         {/* ── Error + submit ── */}
         {error ? <Text style={[s.error, { color: colors.destructive }]}>{error}</Text> : null}
 
-        <Pressable
-          style={({ pressed }) => [
-            s.primaryBtn,
-            { backgroundColor: colors.primary },
-            !canSubmit && s.disabled,
-            pressed && canSubmit && s.pressed,
-          ]}
+        <Button
+          variant="primary"
+          fullWidth
           onPress={handleSubmit}
           disabled={!canSubmit}
+          style={{ marginTop: 4 }}
         >
           {isPending ? (
-            <ActivityIndicator color={colors.primaryForeground} />
+            <ActivityIndicator color={colors.foreground} />
           ) : (
-            <Text style={[s.primaryBtnText, { color: colors.primaryForeground }]}>Create pet</Text>
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 16, color: colors.foreground }}>
+              Create pet
+            </Text>
           )}
-        </Pressable>
+        </Button>
+        <Button
+          variant="quiet"
+          label="Cancel"
+          onPress={() => router.back()}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -555,17 +559,5 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       textAlign: 'center',
       marginBottom: 12,
     },
-    primaryBtn: {
-      borderRadius: c.radius - 4,
-      paddingVertical: 14,
-      alignItems: 'center',
-      marginTop: 4,
-    },
-    primaryBtnText: {
-      fontFamily: 'Inter_600SemiBold',
-      fontSize: 15,
-    },
-    disabled: { opacity: 0.45 },
-    pressed:  { opacity: 0.75 },
   });
 }

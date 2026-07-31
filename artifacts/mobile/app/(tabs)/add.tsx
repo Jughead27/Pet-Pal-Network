@@ -187,6 +187,19 @@ export default function AddScreen() {
     setStep('form');
   }, []);
 
+  // ── Compose cancel — resets the entire form to its initial empty state ────
+  // The Add tab has no back stack, so Cancel cannot router.back(); it resets.
+  const handleCancel = useCallback(() => {
+    setStep('idle');
+    setCompressedUri(null);
+    setCaption('');
+    setIsNursery(false);
+    setCropFocusX(0.5);
+    setCropFocusY(0.5);
+    setError(null);
+    if (pets.length !== 1) setSelectedPetId(null);
+  }, [pets.length]);
+
   // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
     if (!compressedUri || !selectedPetId || isUploading) return;
@@ -460,22 +473,27 @@ export default function AddScreen() {
         ) : null}
 
         {/* Submit */}
-        <Pressable
-          style={({ pressed }) => [
-            s.primaryBtn,
-            { backgroundColor: colors.primary, marginTop: 4 },
-            !canSubmit && s.disabled,
-            pressed && canSubmit && s.pressed,
-          ]}
+        <Button
+          variant="primary"
+          fullWidth
           onPress={handleSubmit}
           disabled={!canSubmit}
+          style={{ marginTop: 4 }}
         >
           {isUploading ? (
-            <ActivityIndicator color={colors.primaryForeground} />
+            <ActivityIndicator color={colors.foreground} />
           ) : (
-            <Text style={[s.primaryBtnText, { color: colors.primaryForeground }]}>Post</Text>
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 16, color: colors.foreground }}>
+              Post
+            </Text>
           )}
-        </Pressable>
+        </Button>
+        <Button
+          variant="quiet"
+          label="Cancel"
+          onPress={handleCancel}
+          disabled={isUploading}
+        />
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -731,17 +749,5 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       marginBottom: 12,
     },
 
-    // Buttons
-    primaryBtn: {
-      borderRadius: 12,
-      paddingVertical: 15,
-      alignItems: 'center',
-    },
-    primaryBtnText: {
-      fontFamily: 'Inter_600SemiBold',
-      fontSize: 16,
-    },
-    disabled: { opacity: 0.45 },
-    pressed:  { opacity: 0.75 },
   });
 }

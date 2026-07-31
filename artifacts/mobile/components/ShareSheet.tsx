@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather, Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import Button from '@/components/Button';
 
 interface Props {
   visible: boolean;
@@ -111,20 +112,12 @@ export default function ShareSheet({ visible, onClose }: Props) {
         </View>
 
         {/* Cancel */}
-        <TouchableOpacity
+        <Button
+          variant="quiet"
+          label="Cancel"
           onPress={onClose}
-          activeOpacity={0.7}
-          style={[
-            styles.cancelBtn,
-            {
-              backgroundColor: colors.muted,
-              marginBottom: insets.bottom + 16,
-            },
-          ]}
-          accessibilityRole="button"
-        >
-          <Text style={[styles.cancelText, { color: colors.foreground }]}>Cancel</Text>
-        </TouchableOpacity>
+          style={{ marginTop: 12, marginBottom: insets.bottom + 16 }}
+        />
       </View>
     </Modal>
   );
@@ -180,16 +173,5 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     fontWeight: '500' as const,
-  },
-  cancelBtn: {
-    marginHorizontal: 16,
-    marginTop: 12,
-    borderRadius: 14,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  cancelText: {
-    fontSize: 16,
-    fontWeight: '600' as const,
   },
 });

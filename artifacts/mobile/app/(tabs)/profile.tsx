@@ -24,7 +24,6 @@ import FeedbackFlow from '@/components/FeedbackFlow';
 import {
   ActivityIndicator,
   Platform,
-  Pressable,
   ScrollView,
   Share,
   StyleSheet,
@@ -38,6 +37,7 @@ import { Feather, Ionicons } from '@expo/vector-icons';
 import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import Button from '@/components/Button';
 import MediaImage from '@/components/MediaImage';
 import {
   useGetMyPets,
@@ -369,18 +369,12 @@ export default function ProfileScreen() {
             <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
               Add your first pet and start sharing their story.
             </Text>
-            <Pressable
-              style={({ pressed }) => [
-                styles.primaryBtn,
-                { backgroundColor: colors.primary },
-                pressed && styles.pressed,
-              ]}
+            <Button
+              variant="primary"
+              label="Create a pet"
+              fullWidth
               onPress={() => router.push('/pet/create')}
-            >
-              <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>
-                Create a pet
-              </Text>
-            </Pressable>
+            />
           </View>
         ) : (
           <>
@@ -394,17 +388,13 @@ export default function ProfileScreen() {
                 />
               ))}
             </View>
-            <Pressable
-              style={({ pressed }) => [
-                styles.addBtn,
-                { borderColor: colors.border, backgroundColor: colors.card },
-                pressed && styles.pressed,
-              ]}
+            <Button
+              variant="primary"
+              label="Add another pet"
+              fullWidth
               onPress={() => router.push('/pet/create')}
-            >
-              <Feather name="plus" size={16} color={colors.foreground} />
-              <Text style={[styles.addBtnText, { color: colors.foreground }]}>Add another pet</Text>
-            </Pressable>
+              style={{ marginTop: 12 }}
+            />
           </>
         )}
 
@@ -972,27 +962,6 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
 
-  // Buttons
-  primaryBtn: {
-    borderRadius:      10,
-    paddingVertical:   13,
-    paddingHorizontal: 28,
-    alignItems:        'center',
-    alignSelf:         'stretch',
-  },
-  primaryBtnText: { fontFamily: 'Inter_600SemiBold', fontSize: 15 },
-  addBtn: {
-    flexDirection:   'row',
-    alignItems:      'center',
-    justifyContent:  'center',
-    gap:             8,
-    borderWidth:     StyleSheet.hairlineWidth,
-    borderRadius:    10,
-    paddingVertical: 13,
-    marginTop:       12,
-  },
-  addBtnText: { fontFamily: 'Inter_500Medium', fontSize: 15 },
-  pressed: { opacity: 0.75 },
 
   // Pet row
   listGap: { gap: 8 },

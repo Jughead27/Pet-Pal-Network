@@ -1,0 +1,63 @@
+TASK: Roll out the shared Button across the remaining primary buttons,
+add Cancel escape hatches to setup/edit/compose screens, and move
+ShareSheet Cancel to the quiet register. Reuse the EXISTING
+components/Button.tsx from the pilot — do not redefine it.
+
+CONTEXT: Audit found 5 screens hand-rolling teal filled capsules from
+colors.primary. The empty-state CTA in add.tsx was already converted
+(Phase A). This pass converts the rest and adds cancel affordances.
+
+DO — PRIMARY CONVERSIONS (filled capsule -> <Button variant="primary">):
+  - app/(tabs)/profile.tsx : "Create a pet" AND "Add another pet"
+  - app/(tabs)/add.tsx     : the "Post" submit button
+  - pet/create.tsx         : "Create pet"
+  - pet/edit.tsx           : "Save"
+  - profile/edit.tsx       : "Save"
+  For EACH: preserve the existing onPress/handler EXACTLY. PRESERVE
+  EXISTING WIDTH — if the old capsule was full-width (width:'100%' or
+  alignSelf:'stretch'), pass fullWidth on the Button; if it was
+  content-width, leave default. Do not change any button's footprint.
+  After converting, remove the now-dead local primaryBtn/style entry
+  ONLY if nothing else in that file still uses it (in add.tsx,
+  primaryBtn is freed only once "Post" is converted).
+
+DO — SHARESHEET:
+  - share/index.tsx : replace the muted filled-capsule "Cancel" with
+    <Button variant="quiet" label="Cancel" ...>, same handler.
+
+DO — CANCEL ESCAPE HATCHES (new quiet Cancel so no setup is forced):
+  Add <Button variant="quiet" label="Cancel" ...> to:
+  pet/create.tsx, pet/edit.tsx, profile/edit.tsx, and the add.tsx
+  compose flow.
+  Behavior: dismiss WITHOUT saving and return to the previous screen
+  via router.back() where a back stack exists. For the Add-tab compose
+  (no back stack), Cancel resets the compose form to its initial empty
+  state. NO discard-confirmation dialog this pass (deferred).
+  If the correct dismiss target is ambiguous on ANY screen, STOP and
+  report rather than guess.
+
+DO NOT touch: ActionRail (boop/treat/comment/share), the tab bar,
+auth/portal screens, invite/[code].tsx (already typographic),
+reactions logic, feed queries, media routes, ANY layout/width code, or
+colors token values.
+
+PRESERVATION CLAUSE: every converted button's action and footprint
+survive identically; only visual treatment changes. Adding Cancel must
+not alter any existing save/submit path.
+
+ACCEPTANCE (verify on https://pshpsh.net, phone AND desktop, hard
+refresh after republish):
+  1. No teal/filled capsules remain anywhere in the app — every
+     primary button is hairline outline, un-clamped, at its prior
+     width.
+  2. ShareSheet Cancel is typographic quiet, no fill.
+  3. Each setup/edit/compose screen has a working Cancel that leaves
+     without saving; compose Cancel resets the form.
+  4. Every primary handler still works: create pet, add another pet,
+     save profile, save pet, post.
+  5. Golden path: sign in -> Home -> boop persists on refresh ->
+     Nursery pager -> post -> sign out.
+  6. Renders identically web/iOS/Android (state how verified).
+
+OUTPUT: files changed, the dismiss target chosen for each Cancel, and
+the Review Changes count. Commit locally; I will Sync.

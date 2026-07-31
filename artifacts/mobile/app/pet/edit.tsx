@@ -22,7 +22,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -35,6 +34,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import Button from '@/components/Button';
 import {
   useGetPet,
   usePatchPet,
@@ -482,34 +482,27 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
 
         {/* ── Actions — Cancel + Save ── */}
         <View style={s.actions}>
-          <Pressable
-            style={({ pressed }) => [
-              s.cancelBtn,
-              { borderColor: colors.border, backgroundColor: colors.card },
-              pressed && s.pressed,
-            ]}
+          <Button
+            variant="quiet"
+            label="Cancel"
             onPress={() => router.back()}
             disabled={isPending}
-          >
-            <Text style={[s.cancelBtnText, { color: colors.foreground }]}>Cancel</Text>
-          </Pressable>
-
-          <Pressable
-            style={({ pressed }) => [
-              s.saveBtn,
-              { backgroundColor: colors.primary },
-              !canSave && s.disabled,
-              pressed && canSave && s.pressed,
-            ]}
+            style={{ flex: 1 }}
+          />
+          <Button
+            variant="primary"
             onPress={handleSave}
             disabled={!canSave}
+            style={{ flex: 2 }}
           >
             {isPending ? (
-              <ActivityIndicator color={colors.primaryForeground} />
+              <ActivityIndicator color={colors.foreground} />
             ) : (
-              <Text style={[s.saveBtnText, { color: colors.primaryForeground }]}>Save</Text>
+              <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 16, color: colors.foreground }}>
+                Save
+              </Text>
             )}
-          </Pressable>
+          </Button>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -645,27 +638,4 @@ const s = StyleSheet.create({
     gap:           10,
     marginTop:     4,
   },
-  cancelBtn: {
-    flex:          1,
-    borderWidth:   StyleSheet.hairlineWidth,
-    borderRadius:  12,
-    paddingVertical: 14,
-    alignItems:    'center',
-  },
-  cancelBtnText: {
-    fontFamily: 'Inter_500Medium',
-    fontSize:   15,
-  },
-  saveBtn: {
-    flex:            2,
-    borderRadius:    12,
-    paddingVertical: 14,
-    alignItems:      'center',
-  },
-  saveBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize:   15,
-  },
-  disabled: { opacity: 0.45 },
-  pressed:  { opacity: 0.75 },
 });

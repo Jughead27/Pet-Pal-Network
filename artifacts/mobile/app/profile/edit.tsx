@@ -16,7 +16,6 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -29,6 +28,7 @@ import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import Button from '@/components/Button';
 import {
   useGetMe,
   usePatchMe,
@@ -246,23 +246,24 @@ export default function EditProfileScreen() {
         ) : null}
 
         {/* ── Save button ── */}
-        <Pressable
+        <Button
+          variant="primary"
+          fullWidth
           onPress={handleSave}
           disabled={isSaving}
-          style={({ pressed }) => [
-            styles.saveBtn,
-            { backgroundColor: colors.primary },
-            (pressed || isSaving) && { opacity: 0.7 },
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Save profile"
+          style={{ marginTop: 8 }}
         >
           {isSaving ? (
-            <ActivityIndicator color={colors.primaryForeground} size="small" />
+            <ActivityIndicator color={colors.foreground} size="small" />
           ) : (
-            <Text style={[styles.saveBtnText, { color: colors.primaryForeground }]}>Save</Text>
+            <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 16, color: colors.foreground }}>Save</Text>
           )}
-        </Pressable>
+        </Button>
+        <Button
+          variant="quiet"
+          label="Cancel"
+          onPress={() => router.back()}
+        />
 
       </ScrollView>
     </KeyboardAvoidingView>
@@ -412,14 +413,4 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
 
-  saveBtn: {
-    borderRadius:    10,
-    paddingVertical: 14,
-    alignItems:      'center',
-    marginTop:       8,
-  },
-  saveBtnText: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize:   15,
-  },
 });
