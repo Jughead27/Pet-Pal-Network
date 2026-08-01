@@ -1,0 +1,55 @@
+PROMPT B — Auto-frame UX at compose (smartcrop + top-weighted floor → refine → show-whole-photo; store crop/mode)
+
+SCOPE (this delivery only):
+Add content-aware auto-framing to the compose screen so posting is zero-touch by default, with optional refinement and a "show whole photo" escape hatch. Store the chosen crop/mode as post metadata; the full 2048px original stays in R2 untouched. Layer the engine floor → smartcrop; NO pet detection in this delivery (next one). BUILDS images only, but the crop/framing model must be media-agnostic (video-ready) — see clause 6.
+
+1) AUTO-FRAME SUGGESTER (compose only, lazy-loaded):
+   - On photo select, compute a suggested crop for the feed's display aspect ratio, applied AUTOMATICALLY (zero taps).
+   - Layered engine: (a) FLOOR = top-weighted center crop (bias the crop window toward the top third so subject heads aren't cut off). (b) WEB: run smartcrop.js against the selected image via browser canvas, use its top-scoring crop; on error/low-confidence, fall back to the floor. (c) NATIVE (iOS/Android): smartcrop.js has no canvas → use the floor directly (must not crash; valid crop either way).
+   - Import smartcrop.js ONLY inside the compose module (lazy) — never on app load or feed load.
+   - Result stored as a normalized crop rect {x,y,w,h} in 0–1 fractions of the ORIGINAL image, with mode = 'cover'.
+
+2) OPTIONAL REFINE (opt-in, never required):
+   - A quiet "adjust framing" affordance opens a light drag/zoom refiner over the photo with a LIVE preview of the resulting cover crop.
+   - Drag repositions; pinch/zoom scales the crop rect. Built-in Animated / PanResponder ONLY — NO Reanimated. overflow:'visible' on every ancestor of out-of-bounds drawing. RN longhand styles only.
+   - ZOOM CAP: bound maximum zoom so the selected crop region never contains fewer source pixels than the display frame renders (never upscales past ~1:1 against the original) — the user cannot pinch past the source resolution, so a crop can't be zoomed into softness. Never blocks posting; it just stops the zoom at "still sharp."
+   - The auto crop posts fine untouched; refine must feel like satisfying curation, not a chore.
+
+3) "SHOW WHOLE PHOTO" ESCAPE HATCH:
+   - A quiet toggle sets mode = 'contain': the whole image shows uncropped, letterbox filled with a blurred copy of the same image (contain + blurred-fill). Toggling back restores the cover crop.
+
+4) STORE WITH THE POST — follow the migration flow EXACTLY:
+   - Add NULLABLE columns to the posts table: crop_mode text default 'cover'; crop_x, crop_y, crop_w, crop_h real (nullable). Leave any existing focal/poster field intact.
+   - MIGRATION: make the change in the Drizzle schema and apply to the DEV database via the standard dev path. Do NOT add any schema mutation to prod-post-build.sh (it stays seed + store-prune only). Do NOT use drizzle-kit push --force anywhere. Rely on Replit's built-in dev→prod schema migration at publish; confirm the new columns appear on PROD in the deployment PREVIEW before promoting.
+   - UPLOAD PIPELINE UNCHANGED: keep uploading the full 2048px original to R2. crop/mode are metadata applied at RENDER, never baked into the file. Do not touch the presign / PUT / bucket CORS path.
+
+5) DISPLAY CONSUMPTION (minimal; cover-fit behavior UNCHANGED):
+   - Feed + detail read the post's stored crop/mode. mode='cover' → render cover-fit using the stored crop region (this changes only WHICH region shows — not the cover-fit behavior, frame size, or aspect ratio). mode='contain' → whole image with blurred-fill.
+   - Posts with NO stored crop (every existing post) render EXACTLY as today. Backward-compatible, graceful default.
+
+6) MEDIA-AGNOSTIC / VIDEO-READY DESIGN (design constraint, not added build):
+   - Do NOT build video capture, upload, or playback in this delivery. But the crop/mode schema and the render-consumption path must be media-type-agnostic: a normalized crop region + fit mode applies to a video's display frame identically to a photo's.
+   - Do not name columns, types, or render code in an image-only way, and do not hardcode image-only assumptions, so that when video ships the same crop_mode + crop_x/y/w/h, the same refine UX, the same "show whole photo" hatch, and the same zoom cap all apply unchanged (the suggester will then run on the video's poster/first frame).
+
+DO NOT MODIFY:
+- Auth/portal, Clerk flows, the golden-path plumbing.
+- Feed reactions (boop/treat), the boop interaction, the right rail.
+- Trust layer (roles/reports/blocks/admin/audit/feedback), invites, delete-pet, co-owner scaffolding, the 4 write-path guards, the getActivePets/activePets accessor.
+- The R2 upload / presign / PUT path and the bucket CORS (just stabilized — leave it).
+- CropFramer's cover-fit VISUAL behavior, frame dimensions, aspect ratio (you may only source its crop region from the stored value).
+- The detail screen's existing contain-fit + ↗ glyph (contain mode may reuse it; do not regress it).
+- The A-fix (pinned Post button placement) and its WEB_TAB_BAR_HEIGHT offset.
+- All other screens.
+
+PRESERVATION CLAUSE:
+Preserve every current behavior not named in SCOPE — the photo-required gate, the Cancel/escape hatch on compose, native paths, existing posts' appearance, and the compose layout except where refine/toggle UI is added. If any refine control or the "show whole photo" toggle is pinned to the screen bottom, it MUST offset for the tab bar + safe-area on web (mirror the A-fix: WEB_TAB_BAR_HEIGHT + env(safe-area-inset-bottom)) or it will hide behind the nav.
+
+ACCEPTANCE TEST (all live on pshpsh.net — the Replit sim can't render this app):
+1. Compose a photo → a sensible crop applies automatically with ZERO taps; preview looks good.
+2. Open "adjust framing" → drag + zoom update a LIVE preview; zoom stops before the image goes soft; close without changing → the auto crop still posts.
+3. Toggle "show whole photo" → whole image with blurred-fill; toggle back → cover crop returns.
+4. Post it → feed shows the chosen crop region cover-fit; detail is consistent; the 2048px original is intact in R2.
+5. An EXISTING post (no stored crop) renders exactly as before.
+6. Refine controls + toggle fully clear the bottom tab bar on mobile Safari (idle + photo-selected states).
+7. Schema: the new crop columns are present on PROD via the deployment preview before promote; prod-post-build.sh unchanged.
+8. Golden path holds, identically web/iOS/Android (native uses the floor suggester — no crash): sign in → Home loads → boop persists → Nursery pager → post flow (now auto-framed) → sign out.
