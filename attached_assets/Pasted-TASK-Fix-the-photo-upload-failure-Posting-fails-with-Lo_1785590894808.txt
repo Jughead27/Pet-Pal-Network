@@ -1,0 +1,45 @@
+TASK: Fix the photo-upload failure. Posting fails with "Load failed" —
+the browser's direct PUT to Cloudflare R2 (presigned upload) fails at
+the network layer BEFORE POST /api/posts. Persists after a hard
+refresh. Diagnose, then fix.
+
+CONTEXT: On the WEB app (pshpsh.net): the server's presign returns 200,
+but the browser PUT of the image to R2 fails as a network-level
+TypeError ("Load failed") with NO HTTP response reaching JS. That
+signature strongly implies the R2 bucket rejects the cross-origin
+upload at the CORS layer. Prime suspect: the R2 bucket has no CORS
+policy allowing PUT + OPTIONS (preflight) from https://pshpsh.net.
+
+STEP 1 — DIAGNOSE, REPORT:
+  a. Is an R2 bucket CORS policy configured anywhere we control
+     (wrangler, an S3 PutBucketCors call, a setup script)? If so, what
+     origins/methods/headers does it allow? If not, say so plainly.
+  b. Inspect the client upload: presign generation (method, signed
+     headers, content-type) and the browser PUT (method, headers,
+     body). Is the PUT sending an unsigned header or a content-type
+     mismatch R2 would reject? (Signed-header mismatch = 403 WITH a
+     response; CORS block = "Load failed" with NO response — matches
+     what we see.)
+  c. Conclusion: CORS-missing vs request-shape vs both.
+
+STEP 2 — FIX from the finding:
+  - If R2 CORS is missing/too narrow: set a bucket CORS policy allowing
+    GET + PUT + OPTIONS from https://pshpsh.net (plus the dev origin if
+    used), AllowedHeaders including Content-Type. If you can apply it
+    via the S3-compatible PutBucketCors API using the existing R2
+    credentials, do so and confirm. If it MUST be set in the Cloudflare
+    dashboard, OUTPUT THE EXACT CORS JSON for James to paste, and say
+    where in the dashboard it goes.
+  - If it's a request-shape bug in the PUT, fix that instead.
+
+DO NOT: change the write-guards, delete-pet, or unrelated code. Don't
+widen CORS beyond the origins actually needed.
+
+ACCEPTANCE (live on pshpsh.net):
+1. Posting a photo to an active pet SUCCEEDS end-to-end (image
+   uploads, POST /api/posts records it, post appears).
+2. Golden path intact.
+
+OUTPUT: Step 1 findings (CORS state + request shape + conclusion), the
+fix applied OR the exact CORS rule for James, and the Review Changes
+count.

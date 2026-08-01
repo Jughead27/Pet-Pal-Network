@@ -325,7 +325,7 @@ export default function AddScreen() {
         style={s.fill}
         contentContainerStyle={[
           s.scroll,
-          { paddingTop: topInset + 16, paddingBottom: insets.bottom + 100 },
+          { paddingTop: topInset + 16, paddingBottom: 24 },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -481,13 +481,24 @@ export default function AddScreen() {
           <Text style={[s.error, { color: colors.destructive }]}>{error}</Text>
         ) : null}
 
-        {/* Submit */}
+      </ScrollView>
+
+      {/* ── Pinned post button — always visible above tab bar ── */}
+      <View
+        style={[
+          s.stickyFooter,
+          {
+            paddingBottom: Math.max(insets.bottom, 8) + 8,
+            borderTopColor: colors.border,
+            backgroundColor: colors.background,
+          },
+        ]}
+      >
         <Button
           variant="primary"
           fullWidth
           onPress={handleSubmit}
           disabled={!canSubmit}
-          style={{ marginTop: 4 }}
         >
           {isUploading ? (
             <ActivityIndicator color={colors.foreground} />
@@ -497,7 +508,7 @@ export default function AddScreen() {
             </Text>
           )}
         </Button>
-      </ScrollView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -755,6 +766,13 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       fontSize: 13,
       textAlign: 'center',
       marginBottom: 12,
+    },
+
+    // Pinned footer that holds the Post button
+    stickyFooter: {
+      paddingHorizontal: 20,
+      paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
     },
 
   });
