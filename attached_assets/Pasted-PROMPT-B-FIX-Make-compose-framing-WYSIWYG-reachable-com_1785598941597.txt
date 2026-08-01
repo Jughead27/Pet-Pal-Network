@@ -1,0 +1,39 @@
+PROMPT B-FIX — Make compose framing WYSIWYG + reachable (compose-side only; no schema change)
+
+CONTEXT: B (task #8) shipped but the compose experience is broken. Evidence from live pshpsh.net: the compose preview renders ~landscape 1.6:1 while the feed cell is ~portrait 0.62:1, so the preview shows a DIFFERENT crop than what posts (preview showed the cat's headless back; the feed post showed a head-included portrait crop). The "show whole photo" toggle was below the fold. Fix the compose side only — the feed's cover-fit render is CORRECT, do not touch it.
+
+SCOPE (this fix only):
+1) WYSIWYG PREVIEW — the fix that matters most:
+   - The compose photo preview must render at the FEED CELL's EXACT aspect ratio (the tall portrait shape), NOT a landscape box. Same shape as the feed.
+   - It must show the EXACT stored crop rect, cover-fit, identically to how the feed renders it. What the user sees in compose = what posts. No divergence.
+   - computeAutoFrame() must compute the suggested crop against the FEED's aspect ratio (the portrait target), so the stored rect matches the feed. If it currently targets any other aspect (landscape), that is the bug — fix it to the feed aspect.
+   - Keep the preview scaled DOWN to fit the compose screen (same aspect, smaller size) so it doesn't eat the whole screen — WYSIWYG requires same SHAPE + same crop region, not same size.
+
+2) TOP-WEIGHTED FLOOR IN THE CORRECT ASPECT (stopgap quality — real fix is detection later):
+   - With the target aspect corrected to the feed's portrait shape, ensure the floor is genuinely top-weighted so a head-up pet photo keeps the head (bias the crop window toward the top).
+   - If smartcrop's chosen crop excludes the top third of the image (likely cutting a head), reject it and fall back to the top-weighted floor. Better a safe top-weighted crop than a decapitation.
+
+3) REACHABLE CONTROLS:
+   - Move "show whole photo" into the image control cluster overlaid on the preview, alongside "Adjust framing" and "Change" — always visible above the fold, never buried in the form below.
+   - "Adjust framing" opens the refiner as an OVERLAY over the preview (not a below-the-fold expansion). The refiner operates in the SAME portrait frame as the preview, with live cover-preview and the existing zoom cap.
+
+DO NOT MODIFY:
+- The feed + detail cover-fit RENDER — it is correct. The entire fix is compose-side (preview aspect, control placement, auto-frame target aspect).
+- The posts schema / crop columns (crop_mode, crop_x/y/w/h) — they exist and are correct; store into them unchanged. No migration.
+- The R2 upload / presign / PUT / CORS path.
+- Auth, feed reactions/boop, trust layer, invites, delete-pet, the write-guards, the activePets accessor.
+- The A-fix (pinned Post button + WEB_TAB_BAR_HEIGHT offset) — preserve it.
+- Backward-compat: existing posts with no rect still fall through to the focal-point path unchanged.
+- All other screens.
+
+PRESERVATION CLAUSE:
+Preserve every current B behavior not named above — auto-frame on select, contain/blurred-fill for whole-photo, Animated + PanResponder (NO Reanimated), overflow:'visible' on ancestors, RN longhand styles, the photo-required gate, Cancel. Any bottom-pinned control must clear the tab bar + safe-area on web (WEB_TAB_BAR_HEIGHT + env(safe-area-inset-bottom)).
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari — Replit sim can't render this app):
+1. WYSIWYG (the headline): compose a photo → the preview is the SAME tall portrait shape as the feed cell and shows the exact crop. Post it → the feed shows an IDENTICAL crop. Preview == output. Test specifically with a Newt photo like the one that failed.
+2. No decapitation: on a head-up pet photo, the auto default keeps the pet's head — no more headless-back crop.
+3. "Show whole photo" is visible WITHOUT scrolling, toggles contain + blurred-fill, and the preview reflects the change.
+4. "Adjust framing" opens over the preview; drag + pinch-zoom update a live preview in the portrait frame; zoom stops before softness.
+5. An existing pre-B post renders exactly as before.
+6. Controls fully clear the bottom tab bar (idle + photo-selected).
+7. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow (auto-framed, WYSIWYG) → sign out.

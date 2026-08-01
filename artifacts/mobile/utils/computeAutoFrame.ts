@@ -83,8 +83,21 @@ export async function computeAutoFrame(
 
     // Load the image into a canvas element so smartcrop can analyse it.
     const img = await loadImage(uri);
-    const cropW = Math.round(img.naturalWidth * (targetAspect >= 1 ? 1 : targetAspect));
-    const cropH = Math.round(img.naturalHeight * (targetAspect <= 1 ? 1 : 1 / targetAspect));
+    const iw = img.naturalWidth  || naturalWidth;
+    const ih = img.naturalHeight || naturalHeight;
+
+    // Compute the largest crop region that exactly matches targetAspect.
+    // Previous formula was wrong for portrait targets on non-square sources
+    // (e.g. targetAspect=0.46 on a 2048×1536 landscape image gave 942×1536
+    // whose actual ratio is 0.61, not 0.46).  Fixed: drive both dims from the
+    // shorter axis so w/h == targetAspect exactly.
+    const srcAsp = iw / ih;
+    const cropH = srcAsp > targetAspect
+      ? ih                              // source is wider → use full height
+      : Math.round(iw / targetAspect);  // source is taller/equal → derive from width
+    const cropW = srcAsp > targetAspect
+      ? Math.round(ih * targetAspect)   // source is wider → derive from height
+      : iw;                             // source is taller/equal → use full width
 
     const result = await smartcrop.crop(img, { width: cropW, height: cropH });
     const tc = result?.topCrop;
@@ -96,10 +109,12 @@ export async function computeAutoFrame(
       typeof tc.width === 'number' &&
       typeof tc.height === 'number' &&
       tc.width > 0 &&
-      tc.height > 0
+      tc.height > 0 &&
+      // Decapitation guard: if the suggested crop starts below the top third of
+      // the image it almost certainly cuts the subject's head off.  The
+      // top-weighted floor is always safer for head-up pet photos.
+      tc.y / ih <= 1 / 3
     ) {
-      const iw = img.naturalWidth || naturalWidth;
-      const ih = img.naturalHeight || naturalHeight;
       return {
         x: tc.x / iw,
         y: tc.y / ih,

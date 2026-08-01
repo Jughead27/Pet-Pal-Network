@@ -64,6 +64,13 @@ export default function AddScreen() {
   // Target aspect ratio for auto-frame: the feed hero is full-screen portrait.
   const feedAspect   = screenW / screenH;
 
+  // Compose preview dimensions — same aspect ratio as the feed cell so the
+  // preview is a true WYSIWYG crop preview.  Width fills the content area
+  // (minus the 20 px padding on each side); height is derived from feedAspect
+  // so the shape is identical to what the feed will render.
+  const contentW  = screenW - 40;
+  const previewH  = Math.round(contentW / feedAspect);
+
   // The web tab bar is position:absolute with minHeight:84 (set in _layout.tsx).
   const WEB_TAB_BAR_HEIGHT = 84;
 
@@ -372,16 +379,18 @@ export default function AddScreen() {
 
         {/* ── Image area ── */}
         {step === 'compressing' ? (
-          <View style={[s.imagePlaceholder, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={[s.imagePlaceholder, { backgroundColor: colors.card, borderColor: colors.border, height: previewH }]}>
             <ActivityIndicator color={colors.primary} />
             <Text style={[s.processingText, { color: colors.mutedForeground }]}>Processing…</Text>
           </View>
         ) : compressedUri ? (
-          // Form step: show crop-aware preview matching feed rendering.
+          // Form step: WYSIWYG preview — same aspect ratio as the feed cell.
+          // previewH = contentW / feedAspect so the shape is identical to what
+          // the feed will render; FocalImage applies the same cover-rect logic.
           <View style={s.previewWrapper}>
             <FocalImage
               source={{ uri: compressedUri }}
-              style={s.preview}
+              style={[s.preview, { height: previewH }]}
               focusX={cropFocusX}
               focusY={cropFocusY}
               cropX={cropRect?.x ?? null}
@@ -390,7 +399,32 @@ export default function AddScreen() {
               cropH={cropRect?.h ?? null}
               mode={cropMode}
             />
-            {/* Overlay buttons */}
+
+            {/* ── Left overlay: "Whole photo" toggle — always above the fold ── */}
+            <TouchableOpacity
+              style={[
+                s.previewBtn,
+                s.previewBtnLeft,
+                {
+                  backgroundColor: cropMode === 'contain'
+                    ? 'rgba(46,191,165,0.85)'   // teal tint when active
+                    : 'rgba(6,11,16,0.6)',
+                },
+              ]}
+              onPress={() => setCropMode((m) => m === 'contain' ? 'cover' : 'contain')}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: cropMode === 'contain' }}
+              accessibilityLabel="Show whole photo"
+            >
+              <Feather
+                name={cropMode === 'contain' ? 'minimize' : 'maximize'}
+                size={14}
+                color="#F0F4F8"
+              />
+              <Text style={s.previewBtnText}>Whole photo</Text>
+            </TouchableOpacity>
+
+            {/* ── Right overlay: "Adjust framing" + "Change" ── */}
             <View style={s.previewBtnRow}>
               <TouchableOpacity
                 style={[s.previewBtn, { backgroundColor: 'rgba(6,11,16,0.6)' }]}
@@ -507,26 +541,6 @@ export default function AddScreen() {
             </View>
           </Pressable>
 
-          {/* Show whole photo toggle — only shown when an image is selected */}
-          {compressedUri ? (
-            <Pressable
-              style={[s.toggleRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
-              onPress={() => setCropMode((m) => m === 'contain' ? 'cover' : 'contain')}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: cropMode === 'contain' }}
-              accessibilityLabel="Show whole photo"
-            >
-              <View style={s.toggleInfo}>
-                <Text style={[s.toggleLabel, { color: colors.foreground }]}>Show whole photo</Text>
-                <Text style={[s.toggleSub, { color: colors.mutedForeground }]}>
-                  Fit the full image with blurred background
-                </Text>
-              </View>
-              <View style={[s.track, { backgroundColor: cropMode === 'contain' ? colors.primary : colors.border }]}>
-                <View style={[s.thumb, cropMode === 'contain' && s.thumbOn]} />
-              </View>
-            </Pressable>
-          ) : null}
         </View>
 
         {/* Error */}
@@ -714,6 +728,13 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       right: 10,
       flexDirection: 'row',
       gap: 8,
+    },
+    // "Whole photo" toggle — pinned to bottom-left of the preview so it's
+    // always visible above the fold, opposite the framing/change buttons.
+    previewBtnLeft: {
+      position: 'absolute',
+      bottom: 10,
+      left: 10,
     },
     previewBtn: {
       flexDirection: 'row',
