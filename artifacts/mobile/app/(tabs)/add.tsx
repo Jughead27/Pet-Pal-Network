@@ -110,7 +110,7 @@ export default function AddScreen() {
 
   // New crop rect + mode.
   const [cropRect,      setCropRect]      = useState<CropRect | null>(null);
-  const [cropMode,      setCropMode]      = useState<'cover' | 'contain'>('cover');
+  const [cropMode,      setCropMode]      = useState<'cover' | 'contain'>('contain');
 
   // Refiner modal visibility.
   const [refinerOpen,   setRefinerOpen]   = useState(false);
@@ -145,7 +145,7 @@ export default function AddScreen() {
       // Derive focal point from rect center for backward compat.
       setCropFocusX(rect.x + rect.w / 2);
       setCropFocusY(rect.y + rect.h / 2);
-      setCropMode('cover');
+      setCropMode('contain');
       setStep('form');
     } catch {
       setError('Failed to process image. Please try another photo.');
@@ -237,7 +237,7 @@ export default function AddScreen() {
     setCropFocusX(0.5);
     setCropFocusY(0.5);
     setCropRect(null);
-    setCropMode('cover');
+    setCropMode('contain');
     setRefinerOpen(false);
     setError(null);
     if (pets.length !== 1) setSelectedPetId(null);
@@ -299,7 +299,7 @@ export default function AddScreen() {
       setCropFocusX(0.5);
       setCropFocusY(0.5);
       setCropRect(null);
-      setCropMode('cover');
+      setCropMode('contain');
       setStep('idle');
       if (pets.length !== 1) setSelectedPetId(null);
 
@@ -459,7 +459,7 @@ export default function AddScreen() {
                 accessibilityLabel="Adjust framing"
               >
                 <Feather name="crop" size={13} color={colors.mutedForeground} />
-                <Text style={[s.previewControlText, { color: colors.mutedForeground }]}>Adjust framing</Text>
+                <Text style={[s.previewControlText, { color: colors.mutedForeground }]}>Adjust</Text>
               </TouchableOpacity>
               <View style={[s.previewControlDivider, { backgroundColor: colors.border }]} />
               <TouchableOpacity

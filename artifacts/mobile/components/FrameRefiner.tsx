@@ -201,89 +201,9 @@ export default function FrameRefiner({
     }),
   ).current;
 
-  // ── Corner resize responders ──────────────────────────────────────────────
-  // Each corner stores its own base rect and reads from imgGeom for dimensions.
-  type Corner = 'tl' | 'tr' | 'bl' | 'br';
-
-  const makeCornerBase = () => ({ rect: { ...initialRect } });
-
-  const tlBase = useRef(makeCornerBase());
-  const trBase = useRef(makeCornerBase());
-  const blBase = useRef(makeCornerBase());
-  const brBase = useRef(makeCornerBase());
-
+  // minRef is read by the pinch handler inside panResponder at event-fire time.
   const minRef = useRef({ minCropW, lockedRatio });
   minRef.current = { minCropW, lockedRatio };
-
-  const makeCornerResponder = useCallback((corner: Corner, base: React.MutableRefObject<{ rect: CropRect }>) => {
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder:  () => true,
-      onPanResponderGrant: () => {
-        base.current.rect = { ...rectRef.current };
-      },
-      onPanResponderMove: (_, gs) => {
-        // With a locked aspect ratio each corner is a zoom handle only —
-        // dragging it horizontally changes width; height is always derived
-        // from width via lockedRatio. The OPPOSITE corner stays anchored.
-        const { imgW: iw } = imgGeom.current;
-        const { minCropW: mcw, lockedRatio: lr } = minRef.current;
-        const dxFrac = gs.dx / iw;
-        const r = base.current.rect;
-        const minH = mcw / lr;
-
-        const fixedRx = r.x + r.w; // right x (anchor for tl / bl)
-        const fixedBy = r.y + r.h; // bottom y (anchor for tl / tr)
-
-        let x = r.x, y = r.y, w = r.w, h = r.h;
-
-        if (corner === 'br') {
-          // Anchor: tl. Drag right expands.
-          w = clamp(r.w + dxFrac, mcw, 1 - r.x);
-          h = w / lr;
-          if (r.y + h > 1) { h = 1 - r.y; w = h * lr; }
-          x = r.x; y = r.y;
-        } else if (corner === 'bl') {
-          // Anchor: tr. Drag left expands.
-          w = clamp(r.w - dxFrac, mcw, fixedRx);
-          h = w / lr;
-          if (r.y + h > 1) { h = 1 - r.y; w = h * lr; }
-          x = fixedRx - w; y = r.y;
-        } else if (corner === 'tr') {
-          // Anchor: bl. Drag right expands; top moves up.
-          w = clamp(r.w + dxFrac, mcw, 1 - r.x);
-          h = w / lr;
-          y = fixedBy - h;
-          if (y < 0) { h = fixedBy; w = h * lr; y = 0; }
-          x = r.x;
-        } else { // tl
-          // Anchor: br. Drag left expands; top-left moves up-left.
-          w = clamp(r.w - dxFrac, mcw, fixedRx);
-          h = w / lr;
-          x = fixedRx - w;
-          y = fixedBy - h;
-          if (x < 0) { w = fixedRx; h = w / lr; x = 0; y = fixedBy - h; }
-          if (y < 0) { h = fixedBy; w = h * lr; y = 0; x = fixedRx - w; }
-        }
-
-        const next = {
-          x: clamp(x, 0, Math.max(0, 1 - w)),
-          y: clamp(y, 0, Math.max(0, 1 - h)),
-          w: clamp(w, mcw, 1),
-          h: clamp(h, minH, 1),
-        };
-        rectRef.current = next;
-        setRect({ ...next });
-      },
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Create corner responders once on mount.
-  const tlResponder = useRef(makeCornerResponder('tl', tlBase)).current;
-  const trResponder = useRef(makeCornerResponder('tr', trBase)).current;
-  const blResponder = useRef(makeCornerResponder('bl', blBase)).current;
-  const brResponder = useRef(makeCornerResponder('br', brBase)).current;
 
   // ── Confirm ───────────────────────────────────────────────────────────────
   const handleConfirm = useCallback(() => {
@@ -292,8 +212,6 @@ export default function FrameRefiner({
 
   // ── Rendered crop rect in display coordinates ─────────────────────────────
   const displayRect = useMemo(() => toDisplay(rect), [rect, toDisplay]);
-
-  const HANDLE = 22;
 
   return (
     <View style={styles.root}>
@@ -318,22 +236,16 @@ export default function FrameRefiner({
       {/* Crop window border */}
       <View pointerEvents="none" style={[styles.cropBorder, { left: displayRect.left, top: displayRect.top, width: displayRect.width, height: displayRect.height }]} />
 
-      {/* Pan target (move the window) */}
+      {/* Pan + pinch target — covers the full crop window */}
       <View
         style={[styles.panTarget, {
-          left:   displayRect.left + HANDLE,
-          top:    displayRect.top  + HANDLE,
-          width:  Math.max(0, displayRect.width  - HANDLE * 2),
-          height: Math.max(0, displayRect.height - HANDLE * 2),
+          left:   displayRect.left,
+          top:    displayRect.top,
+          width:  displayRect.width,
+          height: displayRect.height,
         }]}
         {...panResponder.panHandlers}
       />
-
-      {/* Corner resize handles */}
-      <View style={[styles.handle, { left: displayRect.left - HANDLE / 2, top: displayRect.top - HANDLE / 2 }]} {...tlResponder.panHandlers} />
-      <View style={[styles.handle, { left: displayRect.left + displayRect.width - HANDLE / 2, top: displayRect.top - HANDLE / 2 }]} {...trResponder.panHandlers} />
-      <View style={[styles.handle, { left: displayRect.left - HANDLE / 2, top: displayRect.top + displayRect.height - HANDLE / 2 }]} {...blResponder.panHandlers} />
-      <View style={[styles.handle, { left: displayRect.left + displayRect.width - HANDLE / 2, top: displayRect.top + displayRect.height - HANDLE / 2 }]} {...brResponder.panHandlers} />
 
       {/* Live preview inset — reflects the current Crop/Fit mode */}
       <PreviewInset uri={uri} rect={rect} naturalWidth={naturalWidth} naturalHeight={naturalHeight} top={insets.top + 60} mode={mode} />
@@ -455,13 +367,6 @@ const styles = StyleSheet.create({
   },
   panTarget: {
     position: 'absolute',
-  },
-  handle: {
-    position: 'absolute',
-    width: 22,
-    height: 22,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderRadius: 4,
   },
   previewBox: {
     position: 'absolute',

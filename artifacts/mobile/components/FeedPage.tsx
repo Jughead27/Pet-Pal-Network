@@ -153,10 +153,19 @@ export default function FeedPage({
   // callback before any user interaction can spawn a pop).
   const pageWidthRef = useRef(COLUMN_MAX_WIDTH);
   const bottomOffset = insets.bottom + 110;
+
+  // In Fit (contain) mode the photo tucks just above the name/caption overlay.
+  // Lift the rail so all four icons sit on the photo, not straddling the blur.
+  // 120 = nominal petInfo height, 16 = containAlignBottom gap, 8 = margin.
+  const FIT_RAIL_LIFT = 144;
+  const railBottom = post.cropMode === 'contain'
+    ? bottomOffset + FIT_RAIL_LIFT
+    : bottomOffset;
+
   // Pops spawn to the left of the rail column and transient label.
   // Boop icon is item 1 in the rail (higher up); treat is item 2.
-  const BOOP_BOTTOM  = bottomOffset + 210;
-  const TREAT_BOTTOM = bottomOffset + 143;
+  const BOOP_BOTTOM  = railBottom + 210;
+  const TREAT_BOTTOM = railBottom + 143;
 
   // Tracks whether ActionRail has a transient label visible right now.
   // Stored in a ref (not state) so spawnPop's useCallback never needs to
@@ -353,7 +362,7 @@ export default function FeedPage({
       <Animated.View
         style={[
           styles.railContainer,
-          { bottom: bottomOffset, opacity: chromeOpacity },
+          { bottom: railBottom, opacity: chromeOpacity },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           { pointerEvents: (chromeVisible ? 'box-none' : 'none') as any },
         ]}

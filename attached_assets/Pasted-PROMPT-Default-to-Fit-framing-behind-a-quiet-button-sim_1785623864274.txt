@@ -1,0 +1,34 @@
+PROMPT — Default to Fit (framing behind a quiet button) + simplify the crop refiner (pinch+pan) + lift the right rail. Compose + feed. NO schema change.
+
+CONTEXT: Fit composition looks good and is liked. Pivot: a guaranteed-good whole photo beats a sometimes-bad crop (until pet-detection lands), so FIT becomes the default and cover-crop becomes OPT-IN — and the framing UI must stay hidden until explicitly requested, so the default path has zero framing friction. Also the crop gestures are broken (only pan works) and the right rail straddles the photo/blur edge in Fit.
+
+SCOPE:
+1) DEFAULT TO FIT, FRAMING BEHIND A QUIET BUTTON:
+   - New posts default to mode='contain' (whole photo + full-bleed blur) — the shipped composition (photo tucked just above the name).
+   - The default compose path is photo → pet → post with ZERO framing step. Do NOT show any crop/adjust interface inline by default.
+   - Provide ONE quiet "Adjust" affordance near the preview. The crop/adjust UI (the refiner) appears ONLY when the user taps it. If they never tap it, the post is Fit and they never see crop controls.
+   - Keep "Change" (swap photo) available but quiet. Keep storing crop_mode + rect (Fit=contain, Crop=cover). No schema change.
+
+2) SIMPLIFY THE CROP REFINER (only shown after "Adjust" is tapped):
+   - The current refiner only responds to horizontal pan; pinch-zoom and the corner handles don't work.
+   - REPLACE the corner-handle model with standard PINCH-TO-ZOOM + DRAG-TO-PAN within the locked feed aspect. Remove the corner handles entirely.
+   - Keep the zoom cap (can't zoom past source resolution) and the locked feed-cell aspect (the measured value from the last fix).
+   - Built-in Animated / PanResponder only — NO Reanimated.
+
+3) LIFT THE RIGHT RAIL (Fit posts):
+   - In Fit mode the rail straddles the photo/blur edge (boop+bone on the image, comment+share in the blur) — reads as a bug. Move the rail UP so all four icons sit consistently on the PHOTO area, not in the blur/caption zone.
+   - Reposition ONLY — do NOT restyle the icons (that's the separate icon-family project).
+
+DO NOT MODIFY:
+- The Fit composition (containAlignBottom tuck) — correct.
+- The measured feed-cell aspect fix — keep it.
+- crop columns (NO schema change), follow-paw placement, SVG paw chip, field order, the "choose a pet" hint, cover-mode rendering.
+- The rail ICONS themselves (separate project) — reposition only.
+- R2/auth/A-fix offset/other screens.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari):
+1. Post a photo without touching anything → it defaults to Fit (whole photo + blur, photo just above the name); NO crop/adjust UI is visible anywhere; the path is photo → pet → post.
+2. Tap "Adjust" → the crop refiner appears; switch to Crop → pinch-zoom AND drag-pan both work; no corner handles; can't zoom past source; a deliberate off-center crop matches the feed.
+3. In a Fit post, all four rail icons sit on the photo, not straddling the blur edge.
+4. Cover-mode (opt-in crop) still renders correctly.
+5. Golden path.
