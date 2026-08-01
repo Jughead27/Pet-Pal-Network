@@ -1,0 +1,67 @@
+TASK: Redesign the Profile "Your Invites" section. Diagnosis-first —
+report Step 1 before changing UI. Single scoped feature.
+
+CONTEXT: The section currently lists every REVOKED invite as a
+persistent row (screen noise). Redesign into three blocks — remaining
+count, pending invites, and "friends who joined" — and drop terminal
+(revoked/expired) invites from view entirely. Monochrome/typographic
+per the app's design system; use the shared components/Button.tsx (NO
+filled pills, NO red).
+
+STEP 1 — DIAGNOSE + REPORT, CHANGE NOTHING YET:
+  a. The invite data model + all states (available / pending /
+     accepted / revoked / expired — whatever exists). What EVENT flips
+     an invite to "revoked"? (Four are showing at once — is it an
+     expiry rule, the Invites V2 migration, a manual action?)
+  b. Does revoking a pending invite currently RETURN the slot to the
+     user's quota, or consume it permanently? Report which.
+  c. "Friends who joined" data: can we identify the HUMANS who redeemed
+     THIS user's invites, and fetch each redeemer's pets (for avatar +
+     name, and the multi-pet cluster)? Report exactly what's available
+     — if this join data isn't tracked, say so; do NOT fabricate it.
+  Present a-c before editing.
+
+STEP 2 — RESTRUCTURE the section into three blocks, top to bottom:
+  (a) COUNT (hero): "you can call in {N} friends" + the primary "call
+      in a friend" action rendered with the shared Button HAIRLINE
+      primary variant (no pill).
+  (b) PENDING: list ONLY outstanding, still-valid invites — each with a
+      quiet "revoke" action (and "resend" if the model supports it).
+  (c) FRIENDS WHO JOINED — PERSON-CENTRIC: ONE row per friend who
+      redeemed one of this user's invites, showing that friend's
+      PRIMARY pet's avatar + name. If a friend has MULTIPLE pets, show
+      a small avatar CLUSTER within their single row (still one row per
+      friend — do not split into multiple rows). If Step 1(c) found the
+      join data is unavailable, BUILD (a)+(b) only and REPORT what's
+      needed for (c) — do not fake it.
+  DROP revoked / expired / terminal invites from the visible list
+  entirely.
+
+STEP 3 — REVOKE behavior:
+  Revoking a pending invite must RETURN the slot to the quota (count
+  goes back up), remove the row immediately, and show a brief
+  confirmation toast. If it already does this, confirm; if not,
+  implement it.
+
+DO NOT: change invite gate/redemption logic beyond slot-return on
+revoke; touch pet-delete, the soft-delete accessor work, auth, or
+unrelated screens. No filled pills, no red, no new capsule buttons.
+
+PRESERVATION CLAUSE: sending and redeeming invites work exactly as
+before (only revoke gains slot-return); the remaining count stays
+accurate.
+
+ACCEPTANCE (live on pshpsh.net):
+1. Section shows count + pending + friends-who-joined; NO "revoked"
+   rows anywhere.
+2. Revoke a pending invite → slot returns (count +1), row disappears,
+   toast shown.
+3. Friends-who-joined shows ONE row per friend, pet-faced; a multi-pet
+   friend shows an avatar cluster in that one row (OR the block is
+   omitted with a clear report if data was unavailable).
+4. "call in a friend" is a hairline action — no pill.
+5. Golden path intact.
+
+OUTPUT: Step 1 findings (states, what triggers "revoked", slot-return
+behavior, joined-data availability), what changed, and the Review
+Changes count. Commit locally; I will Sync.

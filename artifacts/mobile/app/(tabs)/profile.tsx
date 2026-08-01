@@ -19,7 +19,7 @@
  * a server mutation runs and cache is invalidated on settle.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import FeedbackFlow from '@/components/FeedbackFlow';
 import {
   ActivityIndicator,
@@ -143,10 +143,16 @@ export default function ProfileScreen() {
         id: string; code: string; status: 'active' | 'used' | 'revoked';
         createdAt: string; usedByUsername: string | null;
       }[];
+      friendsWhoJoined: {
+        userId: string; username: string | null;
+        pets: { id: string; name: string; thumbnailUrl: string | null }[];
+      }[];
     }>('/api/invites/mine'),
   });
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [revokingIds, setRevokingIds]       = useState<Set<string>>(new Set());
+  const [revokeToast, setRevokeToast]       = useState(false);
+  const revokeToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleUnblock = useCallback(async (userId: string) => {
     if (pendingBlockIds.has(userId)) return;
@@ -242,6 +248,10 @@ export default function ProfileScreen() {
     try {
       await customFetch(`/api/invites/${inviteId}/revoke`, { method: 'POST' });
       await refetchInvites();
+      // Brief confirmation toast — slot is now freed, count updates via refetch
+      if (revokeToastTimer.current) clearTimeout(revokeToastTimer.current);
+      setRevokeToast(true);
+      revokeToastTimer.current = setTimeout(() => setRevokeToast(false), 2500);
     } catch { /* silent */ } finally {
       setRevokingIds((prev) => { const s = new Set(prev); s.delete(inviteId); return s; });
     }
@@ -272,9 +282,11 @@ export default function ProfileScreen() {
   const hasFollows      = packedPets.length > 0 || followedSpecies.length > 0 || followedBreeds.length > 0;
 
   // Invite derived values
-  const effectiveQuota  = inviteData?.effectiveQuota ?? 0;
-  const nonRevokedCount = inviteData?.nonRevokedCount ?? 0;
-  const remaining       = effectiveQuota - nonRevokedCount;
+  const effectiveQuota   = inviteData?.effectiveQuota ?? 0;
+  const nonRevokedCount  = inviteData?.nonRevokedCount ?? 0;
+  const remaining        = effectiveQuota - nonRevokedCount;
+  const pendingInvites   = (inviteData?.invites ?? []).filter((i) => i.status === 'active');
+  const friendsWhoJoined = inviteData?.friendsWhoJoined ?? [];
 
   // Owner header visibility helpers
   const hasDisplayName  = Boolean(meData?.displayName);
@@ -569,71 +581,55 @@ export default function ProfileScreen() {
         <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
         <Text style={[styles.heading, { color: colors.foreground }]}>Your Invites</Text>
 
-        {/* Header copy — exact per spec, warm never scarcity-framed */}
-        <Text style={[styles.inviteIntro, { color: colors.mutedForeground }]}>
-          {inviteData?.invitedByUsername
-            ? `someone called you in. now you can call in ${effectiveQuota}.`
-            : `you can call in ${effectiveQuota} friends.`}
-        </Text>
-
-        {/* Progress text — only when some invites created */}
-        {nonRevokedCount > 0 && remaining > 0 && (
-          <Text style={[styles.inviteProgress, { color: colors.mutedForeground }]}>
-            {`you've called in ${nonRevokedCount}. ${remaining} more can join.`}
-          </Text>
-        )}
-        {remaining <= 0 && effectiveQuota > 0 && (
-          <Text style={[styles.inviteProgress, { color: colors.mutedForeground }]}>
-            {`your ${effectiveQuota} friends are in.`}
-          </Text>
-        )}
-
-        {/* "call in a friend" bold action — hidden when at quota */}
-        {effectiveQuota > 0 && remaining > 0 && (
-          <TouchableOpacity
-            onPress={handleCallInFriend}
-            disabled={creatingInvite}
-            activeOpacity={0.7}
-            style={styles.callInRow}
-            accessibilityRole="button"
-            accessibilityLabel="Call in a friend"
-          >
-            {creatingInvite
-              ? <ActivityIndicator size={14} color={colors.foreground} />
-              : <Text style={[styles.callInText, { color: colors.foreground }]}>call in a friend</Text>}
-          </TouchableOpacity>
-        )}
-
-        {/* Invite list — active, used, revoked */}
-        {(inviteData?.invites ?? []).length > 0 && (
-          <View style={[styles.listGap, { marginTop: 14 }]}>
-            {(inviteData?.invites ?? []).map((invite) => (
-              <View
-                key={invite.id}
-                style={[
-                  styles.followRow,
-                  {
-                    borderColor:     colors.border,
-                    backgroundColor: colors.card,
-                    opacity:         invite.status === 'revoked' ? 0.4 : 1,
-                  },
-                ]}
+        {/* (a) COUNT — hero: remaining slots + hairline CTA */}
+        {effectiveQuota > 0 && (
+          <>
+            <Text style={[styles.inviteHeroText, { color: colors.foreground }]}>
+              {remaining > 0
+                ? `you can call in ${remaining} ${remaining === 1 ? 'friend' : 'friends'}`
+                : 'all your friends are in'}
+            </Text>
+            {remaining > 0 && (
+              <Button
+                variant="primary"
+                label={creatingInvite ? undefined : 'call in a friend'}
+                onPress={handleCallInFriend}
+                disabled={creatingInvite}
+                style={{ alignSelf: 'flex-start', marginTop: 14, marginBottom: 4 }}
               >
-                <View style={styles.followRowContent}>
-                  <View style={styles.petInfo}>
-                    <Text style={[styles.petName, { color: colors.foreground }]}>
-                      {invite.status === 'active'  ? 'shared'
-                        : invite.status === 'used'   ? `joined — ${invite.usedByUsername ?? '?'}`
-                        : 'revoked'}
-                    </Text>
-                    {invite.status === 'active' && (
+                {creatingInvite && <ActivityIndicator size={14} color={colors.foreground} />}
+              </Button>
+            )}
+          </>
+        )}
+
+        {/* Brief revoke confirmation toast */}
+        {revokeToast && (
+          <Text style={[styles.revokeToast, { color: colors.mutedForeground }]}>
+            invite cancelled
+          </Text>
+        )}
+
+        {/* (b) PENDING — only outstanding active invites; revoked/used hidden */}
+        {pendingInvites.length > 0 && (
+          <>
+            <Text style={[styles.subheading, { color: colors.mutedForeground, marginTop: 22 }]}>
+              Pending
+            </Text>
+            <View style={styles.listGap}>
+              {pendingInvites.map((invite) => (
+                <View
+                  key={invite.id}
+                  style={[styles.followRow, { borderColor: colors.border, backgroundColor: colors.card }]}
+                >
+                  <View style={styles.followRowContent}>
+                    <View style={styles.petInfo}>
+                      <Text style={[styles.petName, { color: colors.foreground }]}>pending</Text>
                       <Text style={[styles.petSubtitle, { color: colors.mutedForeground }]}>
                         {invite.code}
                       </Text>
-                    )}
+                    </View>
                   </View>
-                </View>
-                {invite.status === 'active' && (
                   <TouchableOpacity
                     onPress={() => handleRevoke(invite.id)}
                     disabled={revokingIds.has(invite.id)}
@@ -645,10 +641,49 @@ export default function ProfileScreen() {
                       ? <ActivityIndicator size={12} color={colors.mutedForeground} />
                       : <Text style={[styles.quietActionText, { color: colors.mutedForeground }]}>revoke</Text>}
                   </TouchableOpacity>
-                )}
-              </View>
-            ))}
-          </View>
+                </View>
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* (c) FRIENDS WHO JOINED — one row per redeemer, pet-avatar faced */}
+        {friendsWhoJoined.length > 0 && (
+          <>
+            <Text style={[styles.subheading, { color: colors.mutedForeground, marginTop: 22 }]}>
+              Friends who joined
+            </Text>
+            <View style={styles.listGap}>
+              {friendsWhoJoined.map((friend) => (
+                <View
+                  key={friend.userId}
+                  style={[styles.followRow, { borderColor: colors.border, backgroundColor: colors.card }]}
+                >
+                  <View style={styles.followRowContent}>
+                    <FriendAvatarCluster pets={friend.pets} colors={colors} />
+                    <View style={styles.petInfo}>
+                      <Text style={[styles.petName, { color: colors.foreground }]}>
+                        {friend.username ?? 'your friend'}
+                      </Text>
+                      {friend.pets.length === 1 && (
+                        <Text style={[styles.petSubtitle, { color: colors.mutedForeground }]}>
+                          {friend.pets[0].name}
+                        </Text>
+                      )}
+                      {friend.pets.length > 1 && (
+                        <Text
+                          style={[styles.petSubtitle, { color: colors.mutedForeground }]}
+                          numberOfLines={1}
+                        >
+                          {friend.pets.map((p) => p.name).join(', ')}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </>
         )}
 
         {/* ══════════════ SIGN OUT ══════════════ */}
@@ -871,6 +906,77 @@ function FollowRow({
   );
 }
 
+// ── FriendAvatarCluster ───────────────────────────────────────────────────────
+
+interface FriendPet {
+  id:           string;
+  name:         string;
+  thumbnailUrl: string | null;
+}
+
+interface FriendAvatarClusterProps {
+  pets:   FriendPet[];
+  colors: ReturnType<typeof useColors>;
+}
+
+/**
+ * Pet-avatar cluster for a "friends who joined" row.
+ *   0 pets  → paw-outline placeholder (40 px)
+ *   1 pet   → single avatar (40 px)
+ *   2+ pets → overlapping 32 px circles, max 3 shown; "+N" badge for extras
+ */
+function FriendAvatarCluster({ pets, colors }: FriendAvatarClusterProps) {
+  if (pets.length === 0) {
+    return (
+      <View
+        style={{
+          width: 40, height: 40, borderRadius: 20,
+          backgroundColor: colors.secondary,
+          alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <Ionicons name="paw-outline" size={18} color={colors.mutedForeground} />
+      </View>
+    );
+  }
+
+  if (pets.length === 1) {
+    return <PetThumbnail thumbnailUrl={pets[0].thumbnailUrl} size={40} colors={colors} />;
+  }
+
+  const CHIP    = 32;
+  const STEP    = CHIP - 10; // 10 px overlap between each avatar
+  const visible = pets.slice(0, 3);
+  const extra   = pets.length - 3;
+
+  return (
+    <View style={{ width: CHIP + (visible.length - 1) * STEP, height: CHIP }}>
+      {visible.map((pet, i) => (
+        <View
+          key={pet.id}
+          style={{ position: 'absolute', left: i * STEP, zIndex: visible.length - i }}
+        >
+          <PetThumbnail thumbnailUrl={pet.thumbnailUrl} size={CHIP} colors={colors} />
+        </View>
+      ))}
+      {extra > 0 && (
+        <View
+          style={{
+            position: 'absolute', left: 3 * STEP, zIndex: 0,
+            width: CHIP, height: CHIP, borderRadius: CHIP / 2,
+            backgroundColor: colors.secondary,
+            alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <Text style={{ fontFamily: 'Inter_500Medium', fontSize: 11, color: colors.mutedForeground }}>
+            +{extra}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -1020,6 +1126,21 @@ const styles = StyleSheet.create({
   },
 
   // Invite section
+  // Hero count: "you can call in N friends"
+  inviteHeroText: {
+    fontFamily:    'Inter_400Regular',
+    fontSize:      17,
+    lineHeight:    24,
+    letterSpacing: -0.1,
+  },
+  // Brief revoke confirmation — shown for 2.5 s then hides
+  revokeToast: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     13,
+    lineHeight:   20,
+    marginTop:    12,
+    opacity:      0.75,
+  },
   inviteIntro: {
     fontFamily:   'Inter_400Regular',
     fontSize:     15,

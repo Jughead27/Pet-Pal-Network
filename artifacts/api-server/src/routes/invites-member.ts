@@ -9,11 +9,13 @@
 
 import { Router, type IRouter } from "express";
 import { randomBytes } from "crypto";
-import { db, invitesTable, usersTable, configTable, auditLogTable } from "@workspace/db";
-import { eq, and, ne, sql, desc } from "drizzle-orm";
+import { db, invitesTable, usersTable, configTable, auditLogTable, petsTable, petOwnersTable, postsTable } from "@workspace/db";
+import { eq, and, ne, sql, desc, inArray } from "drizzle-orm";
 import { aliasedTable } from "drizzle-orm";
 import { writeAudit } from "../lib/writeAudit.js";
 import { logger } from "../lib/logger";
+import { mediaTokenUrl } from "../lib/r2.js";
+import { activePets } from "../lib/petQueries.js";
 
 const router: IRouter = Router();
 
@@ -207,6 +209,7 @@ router.get("/invites/mine", async (req, res) => {
       code:           invitesTable.code,
       status:         invitesTable.status,
       createdAt:      invitesTable.createdAt,
+      usedBy:         invitesTable.usedBy,
       usedByUsername: usedByAlias.username,
     })
     .from(invitesTable)
@@ -216,11 +219,57 @@ router.get("/invites/mine", async (req, res) => {
 
   const nonRevokedCount = myInvites.filter((i) => i.status !== "revoked").length;
 
+  // Batch-fetch pets for all "used" invite redeemers so the client can show
+  // a "friends who joined" block with pet avatars.
+  const usedInvites = myInvites.filter((i) => i.status === "used" && i.usedBy);
+  const redeemerIds = [...new Set(usedInvites.map((i) => i.usedBy!))];
+
+  const friendsMap: Record<string, { id: string; name: string; thumbnailUrl: string | null }[]> = {};
+
+  if (redeemerIds.length > 0) {
+    const redeemerPets = await db
+      .select({
+        ownerId:        petOwnersTable.userId,
+        id:             petsTable.id,
+        name:           petsTable.name,
+        avatarKey:      petsTable.avatarKey,
+        recentMediaKey: sql<string | null>`(
+          SELECT ${postsTable.mediaKey}
+          FROM   ${postsTable}
+          WHERE  ${postsTable.petId} = ${petsTable.id}
+            AND  ${postsTable.archivedAt} IS NULL
+          ORDER  BY ${postsTable.createdAt} DESC
+          LIMIT  1
+        )`,
+      })
+      .from(petsTable)
+      .innerJoin(petOwnersTable, eq(petOwnersTable.petId, petsTable.id))
+      .where(and(inArray(petOwnersTable.userId, redeemerIds), activePets));
+
+    for (const p of redeemerPets) {
+      const thumbnailUrl = p.avatarKey
+        ? mediaTokenUrl(p.avatarKey)
+        : p.recentMediaKey
+          ? mediaTokenUrl(p.recentMediaKey)
+          : null;
+      if (!friendsMap[p.ownerId]) friendsMap[p.ownerId] = [];
+      friendsMap[p.ownerId].push({ id: p.id, name: p.name, thumbnailUrl });
+    }
+  }
+
+  // One entry per used invite (= one per friend who joined via this user's link).
+  const friendsWhoJoined = usedInvites.map((i) => ({
+    userId:   i.usedBy!,
+    username: i.usedByUsername,
+    pets:     friendsMap[i.usedBy!] ?? [],
+  }));
+
   res.json({
     effectiveQuota,
     invitedByUsername,
     nonRevokedCount,
     invites: myInvites,
+    friendsWhoJoined,
   });
 });
 
