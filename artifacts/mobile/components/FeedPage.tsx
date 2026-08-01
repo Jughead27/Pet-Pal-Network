@@ -138,6 +138,19 @@ export default function FeedPage({
   const [chromeVisible, setChromeVisible] = useState(true);
   const chromeOpacity = useRef(new Animated.Value(1)).current;
 
+  // ── Out-of-treats toast ───────────────────────────────────────────────────
+  // Surfaces as a centered banner rather than the narrow in-rail transient,
+  // so the warm copy is fully readable on any viewport.
+  const outOfTreatsOpacity = useRef(new Animated.Value(0)).current;
+  const showOutOfTreatsToast = useCallback(() => {
+    outOfTreatsOpacity.setValue(0);
+    Animated.sequence([
+      Animated.timing(outOfTreatsOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.timing(outOfTreatsOpacity, { toValue: 1, duration: 2200, useNativeDriver: true }),
+      Animated.timing(outOfTreatsOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+    ]).start();
+  }, [outOfTreatsOpacity]);
+
   // ── Caption ───────────────────────────────────────────────────────────────
   // Always truncated to 2 lines in the feed; full caption lives on the detail screen.
   const petInfoHeightRef = useRef(120);
@@ -381,6 +394,7 @@ export default function FeedPage({
           onSharePress={onOpenShareSheet}
           onBoopFired={spawnBoopPop}
           onTreatFired={spawnTreatPop}
+          onOutOfTreats={showOutOfTreatsToast}
           onTransientChange={handleTransientChange}
           onBoopTeaching={spawnBoopTeachingPop}
           onTreatTeaching={spawnTreatTeachingPop}
@@ -453,6 +467,20 @@ export default function FeedPage({
           onDone={() => removePop(pop.id)}
         />
       ))}
+
+      {/* Out-of-treats toast — centered banner, wide enough for the full copy */}
+      <Animated.View
+        style={[
+          styles.outOfTreatsToast,
+          { bottom: bottomOffset + 80, opacity: outOfTreatsOpacity },
+        ]}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        pointerEvents={'none' as any}
+      >
+        <Text style={styles.outOfTreatsText}>
+          You're all out of treats for today 🐾
+        </Text>
+      </Animated.View>
     </View>
   );
 }
@@ -525,6 +553,27 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 2,
     fontStyle: 'italic',
+    ...TEXT_SHADOW,
+  },
+  // Out-of-treats toast — centered, wide, sits just above the rail.
+  // Warm copy, no harsh error styling. pointerEvents:none so it never
+  // intercepts taps on the content beneath.
+  outOfTreatsToast: {
+    position: 'absolute',
+    left: 24,
+    right: 24,
+    backgroundColor: 'rgba(16,20,28,0.88)',
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    alignItems: 'center',
+  },
+  outOfTreatsText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: 'rgba(240,244,248,0.95)',
+    textAlign: 'center',
+    letterSpacing: 0.1,
     ...TEXT_SHADOW,
   },
   // Expand glyph — inline hint that the text block is tappable.

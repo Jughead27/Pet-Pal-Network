@@ -284,6 +284,11 @@ interface ActionRailProps {
    */
   onTreatFired?: () => void;
   /**
+   * Called when the user hits the daily treat limit (429). Caller renders a
+   * full-width readable toast — the narrow in-rail transient can't fit the copy.
+   */
+  onOutOfTreats?: () => void;
+  /**
    * Fired with true when a transient label becomes visible, false when it fades
    * out. Lets FeedPage shift pop spawn points away from the label area.
    */
@@ -319,6 +324,7 @@ export default function ActionRail({
   onSharePress,
   onBoopFired,
   onTreatFired,
+  onOutOfTreats,
   onTransientChange,
   onBoopTeaching,
   onTreatTeaching,
@@ -423,15 +429,17 @@ export default function ActionRail({
           onTreatSuccess(data.treatCount, data.treatsRemainingToday);
           const remaining = data.treatsRemainingToday;
           // showTransient FIRST so isTransientVisibleRef is true before any pop
-          // callbacks run — both Yum! and teaching pops will use the extra offset.
+          // callbacks run — the pop will use the extra right offset.
           showTransient(remaining === 0 ? 'Last one!' : `${remaining} left`, 1500);
-          onTreatFired?.();
           // Teaching pop — first successful treat ever on this device.
-          // onError never reaches here, so this is success-gated by construction.
+          // Exclusive: either the teaching pop ("Treat") OR the regular pop ("Yum!")
+          // fires, never both simultaneously. Matches the boop pattern exactly.
           if (!hasTreatTeachingRef.current) {
             hasTreatTeachingRef.current = true;
             AsyncStorage.setItem(TEACHING_KEY_TREAT, 'true').catch(() => {});
             onTreatTeaching?.();
+          } else {
+            onTreatFired?.();
           }
         },
         onError: (error) => {
@@ -439,7 +447,8 @@ export default function ActionRail({
           const status = (error as { status?: number }).status;
           if (status === 429) {
             shakeAnimation();
-            showTransient('Out of treats until tomorrow', 2500);
+            // Delegate to caller — the narrow in-rail transient clips long copy.
+            onOutOfTreats?.();
           } else if (status === 403) {
             // Shake on self-treat too — same shake+message pattern, no pop.
             shakeAnimation();
