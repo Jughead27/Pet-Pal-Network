@@ -15,6 +15,7 @@ import {
   petOwnersTable,
 } from "@workspace/db";
 import { eq, desc, sql, and, or, isNull, isNotNull } from "drizzle-orm";
+import { activePets } from "../lib/petQueries.js";
 import { CreatePetBody, PatchPetBody } from "@workspace/api-zod";
 import { mediaTokenUrl, copyObject } from "../lib/r2.js";
 import { notHiddenByAdminPost } from "../lib/excludeBlocked.js";
@@ -57,7 +58,7 @@ router.get("/pets/:id", async (req, res) => {
       avatarFocusY: petsTable.avatarFocusY,
     })
     .from(petsTable)
-    .where(and(eq(petsTable.id, id), isNull(petsTable.deletedAt)));
+    .where(and(eq(petsTable.id, id), activePets));
 
   if (!pet) {
     res.status(404).json({ error: "Not found" });
@@ -409,7 +410,7 @@ router.get("/pets/:id/pack-members", async (req, res) => {
   const [pet] = await db
     .select({ id: petsTable.id })
     .from(petsTable)
-    .where(and(eq(petsTable.id, id), isNull(petsTable.deletedAt)))
+    .where(and(eq(petsTable.id, id), activePets))
     .limit(1);
 
   if (!pet) {
@@ -465,7 +466,7 @@ router.get("/me/pets", async (req, res) => {
     })
     .from(petOwnersTable)
     .innerJoin(petsTable, eq(petsTable.id, petOwnersTable.petId))
-    .where(and(eq(petOwnersTable.userId, userId), isNull(petsTable.deletedAt)))
+    .where(and(eq(petOwnersTable.userId, userId), activePets))
     .orderBy(desc(petOwnersTable.addedAt));
 
   res.json({
@@ -505,7 +506,7 @@ router.patch("/pets/:id", async (req, res) => {
   const [existing] = await db
     .select({ id: petsTable.id })
     .from(petsTable)
-    .where(and(eq(petsTable.id, id), isNull(petsTable.deletedAt)))
+    .where(and(eq(petsTable.id, id), activePets))
     .limit(1);
 
   if (!existing) {
@@ -618,7 +619,7 @@ router.patch("/pets/:id/avatar", async (req, res) => {
   const [pet] = await db
     .select({ id: petsTable.id, ownerId: petsTable.ownerId })
     .from(petsTable)
-    .where(and(eq(petsTable.id, id), isNull(petsTable.deletedAt)))
+    .where(and(eq(petsTable.id, id), activePets))
     .limit(1);
 
   if (!pet) {
@@ -686,7 +687,7 @@ router.delete("/pets/:id", async (req, res) => {
   const [petRow] = await db
     .select({ id: petsTable.id, name: petsTable.name })
     .from(petsTable)
-    .where(and(eq(petsTable.id, id), isNull(petsTable.deletedAt)))
+    .where(and(eq(petsTable.id, id), activePets))
     .limit(1);
 
   if (!petRow) {

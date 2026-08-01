@@ -1,12 +1,9 @@
 #!/bin/bash
 set -e
 
-# Apply any pending schema changes to the database (idempotent — drizzle-kit
-# compares the live schema to the Drizzle definitions and only runs DDL for
-# columns/tables that are missing).  Must run BEFORE the seed so the seed's
-# SELECT/UPDATE queries can reference every column in the current schema.
-echo "Pushing schema to database..."
-pnpm --filter @workspace/db run push-force
+# Schema changes are applied by the Replit Publish flow (diffs dev vs prod,
+# surfaces renames for confirmation, applies only the delta).  This script
+# must NOT run any schema mutations — DATABASE_URL points to production here.
 
 # Seed production database with reference data (idempotent — ON CONFLICT DO NOTHING).
 # Safe to run on every deploy. Only inserts species, breeds, config, and backfills

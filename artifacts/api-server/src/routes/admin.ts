@@ -39,6 +39,7 @@ import {
   configTable,
 } from "@workspace/db";
 import { eq, asc, desc, sql, and, isNull } from "drizzle-orm";
+import { PETS_INCLUDING_DELETED } from "../lib/petQueries.js";
 import { requireRole } from "../middlewares/requireRole";
 import { mediaTokenUrl } from "../lib/r2.js";
 import { writeAudit } from "../lib/writeAudit.js";
@@ -257,7 +258,7 @@ adminRouter.post("/admin/reports/:id/suspend", async (req, res) => {
     const [row] = await db
       .select({ ownerId: petsTable.ownerId })
       .from(postsTable)
-      .innerJoin(petsTable, eq(petsTable.id, postsTable.petId))
+      .innerJoin(petsTable, and(eq(petsTable.id, postsTable.petId), PETS_INCLUDING_DELETED))
       .where(sql`${postsTable.id}::text = ${report.targetId}`)
       .limit(1);
     ownerUserId = row?.ownerId ?? null;

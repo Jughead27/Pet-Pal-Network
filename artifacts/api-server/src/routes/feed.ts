@@ -10,6 +10,7 @@ import {
   packFollowsTable,
 } from "@workspace/db";
 import { and, eq, gte, desc, sql, isNull } from "drizzle-orm";
+import { activePets } from "../lib/petQueries.js";
 import { mediaTokenUrl } from "../lib/r2.js";
 import { notBlockedPostOwner, notHiddenByAdminPost } from "../lib/excludeBlocked.js";
 
@@ -93,7 +94,7 @@ router.get("/feed", async (req, res) => {
     .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
     .where(and(
       isNull(postsTable.archivedAt),
-      isNull(petsTable.deletedAt),
+      activePets,
       nurseryOnly ? eq(postsTable.isNursery, true) : undefined,
       speciesId   ? eq(petsTable.speciesId, speciesId)  : undefined,
       notBlockedPostOwner(userId),

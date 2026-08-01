@@ -1,0 +1,55 @@
+TASK: Replace the risky `drizzle-kit push --force` deploy step with
+proper generated, versioned migrations. This touches PRODUCTION schema
+tooling — diagnosis-first, and NEVER drop, recreate, or alter an
+existing populated table/column. Report before executing.
+
+CONTEXT: scripts/prod-post-build.sh runs `drizzle-kit push --force` on
+every deploy. That's a data-loss footgun (a future rename/type change
+can diff as drop+recreate and --force runs it with no confirmation, no
+history, no rollback). Move to: generated versioned migration files,
+committed, applied with `drizzle-kit migrate`. The prod DB is POPULATED
+(real pets/users) — the migration system must treat the CURRENT schema
+as already-applied, not recreate it.
+
+STEP 1 — DIAGNOSE, REPORT, CHANGE NOTHING:
+  a. Is there a drizzle migrations folder/journal already? Does prod
+     have a __drizzle_migrations (or equivalent) table?
+  b. Confirm push --force is the only schema-application step, and
+     where it sits in prod-post-build.sh (relative to the seed).
+  c. Lay out the exact plan to: (i) generate a BASELINE migration
+     representing the current schema, (ii) mark that baseline ALREADY
+     APPLIED on the populated prod DB so `migrate` does NOT re-run its
+     DDL, (iii) swap `migrate` in for `push --force`. Explain how (ii)
+     avoids touching existing tables.
+  STOP and present this plan. Do NOT execute yet.
+
+STEP 2 — EXECUTE (only after the plan is sound):
+  - Generate the baseline migration from current schema; commit the SQL.
+  - Baseline/resolve the prod DB so current state is recorded as applied
+    (no DDL re-run on existing tables).
+  - Replace `push --force` in prod-post-build.sh with `drizzle-kit
+    migrate` (applies pending only; no-op when none). Keep it BEFORE the
+    seed, as today.
+
+DO NOT: drop, recreate, truncate, or ALTER any existing table/column;
+wipe or reset data; change app code, the accessor work, delete-pet, or
+the seed beyond the push-force→migrate swap.
+
+PRESERVATION CLAUSE: all production data and the current schema survive
+untouched. A deploy with no schema changes runs migrate as a clean
+no-op; existing tables are never recreated.
+
+ACCEPTANCE:
+1. STEP 1 findings + baseline plan reported BEFORE executing.
+2. push --force gone from prod-post-build.sh; `drizzle-kit migrate` in
+   its place, before the seed.
+3. Republish succeeds through Promote (green); migrate is a no-op;
+   seed fast-path runs; server starts.
+4. pshpsh.net works; ALL existing pets/posts/users present (nothing
+   recreated/lost).
+5. A committed baseline migration file exists in the repo.
+6. Golden path intact.
+
+OUTPUT: STEP 1 findings, the baseline approach used, the diff to
+prod-post-build.sh, and the Review Changes count. Commit locally; I
+will Sync.

@@ -1,0 +1,54 @@
+TASK: Centralize soft-delete gating for pet reads behind ONE shared
+accessor so the deleted_at filter can't be forgotten at new call sites.
+Pure refactor — behavior must be IDENTICAL. Single scoped change.
+
+CONTEXT: Pets use soft-delete (deleted_at). Today each read path filters
+deleted_at IS NULL individually; three were recently found missing and
+patched (follows, co-owner-invites, co-owner list). To stop this class
+of bug recurring as co-ownership adds more reads, route all pet reads
+through one accessor that filters deleted pets BY DEFAULT, with an
+explicit opt-out for admin only.
+
+DO:
+1. Create a shared accessor in the pets query layer — e.g.
+   getActivePets() (or a base "active pets" query builder) — that
+   ALWAYS applies isNull(pets.deletedAt). Provide an explicit,
+   obviously-named escape hatch for the one legitimate exception:
+   admin (e.g. getPetsIncludingDeleted() or getPets({ includeDeleted:
+   true })). The opt-out must be greppable.
+2. Migrate these existing pet-read paths to route through the ACTIVE
+   accessor (they already filter today — this just centralizes it, NO
+   behavior change):
+     pets.ts:  GET /pets/:id, GET /pets/:id/pack-members, GET /me/pets,
+               PATCH /pets/:id, PATCH /pets/:id/avatar
+     feed.ts:  GET /feed
+     follows.ts: GET /me/follows
+     co-owners.ts: GET /me/co-owner-invites, GET /pets/:petId/co-owners
+3. admin.ts: switch to the EXPLICIT include-deleted accessor so admins
+   keep full visibility — now an intentional, visible opt-out rather
+   than an unfiltered query.
+4. Report any pet-read call site NOT listed above that you find, and
+   route it through the active accessor too.
+
+DO NOT: change delete/write logic, the confirm dialog, breed picker,
+migrations, the seed, or ANY user-visible behavior. Read-path
+centralization only. Do not change what any endpoint returns for
+non-deleted pets.
+
+PRESERVATION CLAUSE: every surface behaves EXACTLY as now — deleted pets
+hidden everywhere they're currently hidden (feed, Pack, co-owner
+surfaces, profile...), admin still sees everything. Only HOW the filter
+is applied changes (one accessor vs per-site).
+
+ACCEPTANCE (live on pshpsh.net):
+1. Deleted pets still absent from Pack, feed, Sniff, Nursery, co-owner
+   surfaces.
+2. Non-deleted pets appear normally everywhere.
+3. Admin queue still shows deleted pets (opt-out intact).
+4. Golden path intact.
+5. grep confirms pet reads go through the accessor; admin is the ONLY
+   include-deleted caller.
+
+OUTPUT: the accessor API, every call site migrated (plus any extras
+found), confirmation admin is the sole include-deleted caller, and the
+Review Changes count. Commit locally; I will Sync.
