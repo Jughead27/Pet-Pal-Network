@@ -239,6 +239,7 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
       { id: petId },
       {
         onSuccess: () => {
+          setDeleteConfirmVisible(false);
           queryClient.invalidateQueries({ queryKey: getGetMyPetsQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
           queryClient.invalidateQueries({ queryKey: getGetMyFollowsQueryKey() });
@@ -548,24 +549,20 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
       </ScrollView>
 
       {/* ── Delete confirm modal ── */}
+      {/* Outer View (not Pressable) so no touch events propagate through the
+          backdrop to buttons behind the modal, eliminating the double-dialog. */}
       <Modal
         visible={deleteConfirmVisible}
         transparent
         animationType="fade"
         onRequestClose={() => { if (!isDeleting) setDeleteConfirmVisible(false); }}
       >
-        <Pressable
-          style={s.deleteOverlay}
-          onPress={() => { if (!isDeleting) setDeleteConfirmVisible(false); }}
-        >
-          <Pressable
+        <View style={s.deleteOverlay}>
+          <View
             style={[s.deleteCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={(e) => e.stopPropagation()}
           >
             <Text style={[s.deleteCardTitle, { color: colors.foreground }]}>
-              {totalPosts > 0
-                ? `delete ${pet.name}?`
-                : `delete ${pet.name}?`}
+              {`delete ${pet.name}?`}
             </Text>
             <Text style={[s.deleteCardBody, { color: colors.mutedForeground }]}>
               {totalPosts > 0
@@ -596,8 +593,8 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
                 )}
               </Button>
             </View>
-          </Pressable>
-        </Pressable>
+          </View>
+        </View>
       </Modal>
     </KeyboardAvoidingView>
   );
