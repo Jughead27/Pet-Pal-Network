@@ -21,7 +21,9 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -38,11 +40,13 @@ import Button from '@/components/Button';
 import {
   useGetPet,
   usePatchPet,
+  useDeletePet,
   useGetSpecies,
   getGetSpeciesByIdBreedsQueryOptions,
   getGetPetQueryKey,
   getGetMyPetsQueryKey,
   getGetMyFollowsQueryKey,
+  getGetFeedQueryKey,
 } from '@workspace/api-client-react';
 import type { BreedItem, PetProfile } from '@workspace/api-client-react';
 
@@ -142,8 +146,14 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
     return allBreeds.filter((b) => b.name.toLowerCase().includes(q));
   }, [allBreeds, breedSearch]);
 
-  // ── Mutation ───────────────────────────────────────────────────────────────
+  // ── Mutations ─────────────────────────────────────────────────────────────
   const { mutate: patchPet, isPending } = usePatchPet();
+  const { mutate: deletePet, isPending: isDeleting } = useDeletePet();
+
+  // ── Delete state ───────────────────────────────────────────────────────────
+  const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
+
+  const totalPosts = (pet.posts?.length ?? 0) + (pet.archivedPosts?.length ?? 0);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -223,6 +233,26 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
   ]);
 
   const canSave = name.trim().length > 0 && !!selectedSpeciesId && !isPending;
+
+  const handleConfirmDelete = useCallback(() => {
+    deletePet(
+      { id: petId },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetMyPetsQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
+          queryClient.invalidateQueries({ queryKey: getGetMyFollowsQueryKey() });
+          router.navigate('/(tabs)/profile');
+        },
+        onError: (err) => {
+          setDeleteConfirmVisible(false);
+          setError(
+            (err as { message?: string }).message ?? 'Failed to delete. Please try again.',
+          );
+        },
+      },
+    );
+  }, [petId, deletePet, queryClient]);
 
   // Selected species label — used as the breed section header
   const selectedSpeciesName = speciesList.find((sp) => sp.id === selectedSpeciesId)?.name ?? '';
@@ -504,7 +534,71 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
             )}
           </Button>
         </View>
+
+        {/* ── Delete zone — visually separated from Save/Cancel ── */}
+        <View style={[s.deleteDivider, { borderTopColor: colors.border }]} />
+        <View style={s.deleteZone}>
+          <Button
+            variant="quiet"
+            label="delete this pet"
+            onPress={() => setDeleteConfirmVisible(true)}
+            disabled={isPending || isDeleting}
+          />
+        </View>
       </ScrollView>
+
+      {/* ── Delete confirm modal ── */}
+      <Modal
+        visible={deleteConfirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!isDeleting) setDeleteConfirmVisible(false); }}
+      >
+        <Pressable
+          style={s.deleteOverlay}
+          onPress={() => { if (!isDeleting) setDeleteConfirmVisible(false); }}
+        >
+          <Pressable
+            style={[s.deleteCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <Text style={[s.deleteCardTitle, { color: colors.foreground }]}>
+              {totalPosts > 0
+                ? `delete ${pet.name}?`
+                : `delete ${pet.name}?`}
+            </Text>
+            <Text style={[s.deleteCardBody, { color: colors.mutedForeground }]}>
+              {totalPosts > 0
+                ? `this removes their profile and all ${totalPosts} post${totalPosts === 1 ? '' : 's'}. this can't be undone.`
+                : `this removes their profile. this can't be undone.`}
+            </Text>
+            <View style={s.deleteCardActions}>
+              <Button
+                variant="quiet"
+                label="cancel"
+                onPress={() => setDeleteConfirmVisible(false)}
+                disabled={isDeleting}
+                style={{ flex: 1 }}
+              />
+              <Button
+                variant="primary"
+                onPress={handleConfirmDelete}
+                disabled={isDeleting}
+                style={{ flex: 2 }}
+              >
+                {isDeleting ? (
+                  <ActivityIndicator color={colors.foreground} />
+                ) : (
+                  <Text style={{ fontSize: 16, color: colors.foreground }}>
+                    <Text style={{ fontFamily: 'Inter_600SemiBold' }}>delete</Text>
+                    <Text style={{ fontFamily: 'Inter_500Medium' }}>{` ${pet.name}`}</Text>
+                  </Text>
+                )}
+              </Button>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -637,5 +731,46 @@ const s = StyleSheet.create({
     flexDirection: 'row',
     gap:           10,
     marginTop:     4,
+  },
+
+  // Delete zone
+  deleteDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop:      28,
+    marginBottom:   12,
+  },
+  deleteZone: {
+    alignItems:    'center',
+    marginBottom:  32,
+  },
+
+  // Delete confirm modal
+  deleteOverlay: {
+    flex:            1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    alignItems:      'center',
+    justifyContent:  'center',
+    padding:         32,
+  },
+  deleteCard: {
+    width:        '100%',
+    borderRadius: 16,
+    borderWidth:  StyleSheet.hairlineWidth,
+    padding:      24,
+  },
+  deleteCardTitle: {
+    fontFamily:   'Inter_600SemiBold',
+    fontSize:     18,
+    marginBottom: 10,
+  },
+  deleteCardBody: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     14,
+    lineHeight:   20,
+    marginBottom: 24,
+  },
+  deleteCardActions: {
+    flexDirection: 'row',
+    gap:           10,
   },
 });

@@ -1,0 +1,51 @@
+TASK: Fix the failed publish — the pets table is missing the
+`deleted_at` column that the schema and queries now reference. Single
+scoped change: create and apply the migration. Do NOT alter delete-pet
+logic, seed logic, or anything else.
+
+CONTEXT: Publish failed at Build. Root cause (from the log): the seed's
+"Backfilling existing pets" step ran
+  select ... "deleted_at" ... from "pets"
+and Postgres returned: column "deleted_at" does not exist (code 42703,
+errorMissingColumn). The `deleted_at` column was added to the Drizzle
+pets SCHEMA but no migration was generated/applied, so the real table
+lacks it. Everything else in the build (api compile, web bundle,
+species/breed seed) succeeded.
+
+DO:
+1. Confirm the pets schema defines `deleted_at` (nullable timestamp)
+   and report the exact column definition.
+2. Generate a Drizzle migration for this schema change using the
+   project's normal migration workflow (the same drizzle-kit /
+   generate + migrate scripts this repo already uses — find and use
+   them; do NOT hand-write raw SQL outside that workflow, and do NOT
+   push schema changes by any ad-hoc path).
+3. Ensure the migration ADDS `deleted_at` as a nullable column with no
+   NOT NULL constraint and no default beyond NULL, so existing pet
+   rows backfill cleanly as "not deleted."
+4. Confirm the migration is wired to run in the build/deploy sequence
+   BEFORE the seed's backfill step (that ordering is what failed).
+
+DO NOT:
+- Change any delete-pet application logic, the query-layer gating, the
+  purge function, the seed contents, or any button/UI code — this is
+  purely the missing migration.
+- Modify or drop any other column or table.
+- Hand-edit the database outside the migration workflow.
+
+PRESERVATION CLAUSE: existing pets and all their data must survive the
+migration untouched; the only change is a new nullable `deleted_at`
+column, NULL for all existing rows.
+
+ACCEPTANCE:
+1. Report the generated migration file + its SQL (should be a single
+   ADD COLUMN ... deleted_at ... nullable).
+2. Republish succeeds through Build → Bundle → Promote (no 42703, seed
+   backfill completes).
+3. Then on pshpsh.net: existing pets and their posts all still appear
+   (nothing read as deleted); the delete-pet flow from the prior
+   delivery works end to end; deleted_at is NULL for all pre-existing
+   pets.
+
+OUTPUT: the migration file/SQL, confirmation it runs before the seed
+backfill, and the Review Changes count. Commit locally; I will Sync.

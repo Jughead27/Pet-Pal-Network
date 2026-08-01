@@ -93,6 +93,7 @@ router.get("/feed", async (req, res) => {
     .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
     .where(and(
       isNull(postsTable.archivedAt),
+      isNull(petsTable.deletedAt),
       nurseryOnly ? eq(postsTable.isNursery, true) : undefined,
       speciesId   ? eq(petsTable.speciesId, speciesId)  : undefined,
       notBlockedPostOwner(userId),

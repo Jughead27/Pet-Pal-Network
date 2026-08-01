@@ -1,0 +1,59 @@
+TASK: Add the ability to delete a pet. Soft-delete shown as permanent,
+with a naming confirmation. Its own scoped delivery.
+
+MODEL / BACKEND:
+  - Add a nullable deleted_at timestamp to the pets table.
+  - Delete = a single server-side update setting deleted_at = now().
+    NO destructive cascade in the request path. Enforce ownership
+    server-side: only the pet's owner may delete (reject otherwise).
+  - Gate pet reads to exclude deleted_at IS NOT NULL, centralized at
+    the pet query layer so the pet's posts fall out via their join —
+    mirror the existing archived-posts filtering pattern.
+  - Write an audit-log entry for the delete (existing audit system).
+  - PURGE JOB: a cron-ready function that hard-deletes pets whose
+    deleted_at is older than 30 days, cascading their posts, R2 media
+    objects, boops/treats, comments, Pack follows, and Nursery flags.
+    If no job runner exists, implement the callable function and
+    REPORT how it should be triggered — do not silently skip it.
+
+UI (pet/edit.tsx):
+  - At the BOTTOM of the screen, in its OWN zone clearly separated
+    from Save and from the existing Cancel (a divider / spacing gap so
+    it can't be mistaken for a dismiss action): a quiet typographic
+    "delete this pet" action. Understated by design; never adjacent to
+    Save.
+  - Tapping it opens a confirm that NAMES the pet and QUANTIFIES the
+    loss: "delete {petName}? this removes their profile and all {N}
+    posts. this can't be undone." Cancel = quiet whisper; the delete
+    action = hairline where the word "delete" carries a slightly
+    heavier weight (NO fill, NO color, NO red anywhere).
+  - Friction to stakes: a pet with 0 posts gets a single-tap confirm;
+    a pet with posts gets the quantified confirm above. (type-to-
+    confirm is NOT in this pass.)
+  - On confirm: call delete, then navigate the user off the now-gone
+    pet to a safe parent (their profile / pet list), and ensure the
+    pet disappears from every surface immediately.
+
+DO NOT: import a red/destructive color; hard-delete in the request
+path; touch other pets' data, reactions logic beyond the purge
+cascade, the compose/Cancel work just landed, or any button/layout
+unrelated to this; touch auth.
+
+PRESERVATION CLAUSE: existing pet-edit behavior (fields + Save +
+Cancel) must survive untouched; only the delete affordance is added.
+Non-deleted pets and their content behave exactly as before.
+
+ACCEPTANCE (verify on https://pshpsh.net, phone AND desktop):
+  1. Owner sees "delete this pet"; a non-owner request is rejected
+     server-side.
+  2. Confirm names the pet and shows the correct post count.
+  3. After delete: the pet AND its posts vanish from profile, feed,
+     Pack, and Nursery — verified by visiting each surface.
+  4. deleted_at is set; the rows still EXIST in the DB (soft delete,
+     not hard) — verify directly.
+  5. The pet's media is gone from feeds but NOT yet purged from R2
+     (within the window).
+  6. Golden path intact.
+
+OUTPUT: the purge-job trigger mechanism, files changed, and the Review
+Changes count. Commit locally; I will Sync.

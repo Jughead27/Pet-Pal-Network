@@ -22,6 +22,9 @@ export const petsTable = pgTable(
     breedId:   uuid("breed_id").references(() => breedsTable.id),
     bio: text("bio"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
+    // Soft-delete timestamp. When set, the pet is hidden from all public reads
+    // and a background purge job hard-deletes everything after 30 days.
+    deletedAt: timestamp("deleted_at"),
     // Avatar — owner-chosen profile photo with WYSIWYG focal-point framing.
     // Key is always stored under the avatars/ R2 prefix (server copies from
     // posts/ on selection so deleting a source post never orphans the avatar).

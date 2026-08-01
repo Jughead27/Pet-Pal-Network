@@ -1,0 +1,66 @@
+TASK: Diagnose and fix a deploy that builds and bundles successfully
+but fails at the START / healthcheck stage. Do NOT run "Fix with
+Agent"-style broad changes. Work scoped, and REPORT before altering
+behavior.
+
+CONTEXT: Production is healthy on the PRIOR build; two recent
+republishes of the delete-pet delivery failed at start. Build and
+bundle succeed (the deleted_at migration works — no more 42703).
+Replit healthchecks on / and /api return 500 during startup, then the
+app later serves 200s. No application-level exception appears in the
+logs — only Replit's own healthcheck-500 lines. Suspicion: startup is
+too SLOW, not broken — scripts/prod-post-build.sh (or the deploy/start
+sequence) runs the full species/breed seed AND a pet backfill on EVERY
+deploy, delaying the health endpoint past Replit's timeout.
+
+STEP 1 — DIAGNOSE, REPORT, CHANGE NOTHING YET:
+  a. Show exactly what runs between build and the server accepting
+     traffic — prod-post-build.sh and any start/postbuild hooks.
+     Identify every seed/backfill/migration step and whether each runs
+     on EVERY deploy.
+  b. Confirm or deny: does the seed re-run the full species/breed
+     seed and iterate all pets on each deploy? Roughly how long does
+     that take, and does it block the server from listening / the
+     health route from returning 200?
+  c. Check whether the health endpoint (/ and/or /api) only becomes
+     healthy AFTER seeding finishes. If so, that's the timeout cause.
+  d. If instead you find a real thrown error at startup (not a
+     timeout), STOP and report that error verbatim — do not "fix" it
+     blind. We'll scope a fix to the actual exception.
+
+STEP 2 — FIX (only after reporting Step 1 findings):
+  If the cause is slow startup from re-seeding:
+  - Make seeding NOT run on every deploy. The server must start and
+    answer the health check WITHOUT waiting on a full seed/backfill.
+  - The one-time deleted_at backfill (existing pets → deleted_at NULL)
+    is already satisfied by the nullable column default; it does NOT
+    need to run on boot. Remove/guard it so it isn't re-run every
+    deploy.
+  - Keep the schema migration step (it must run), but it should be a
+    fast no-op when there's nothing to apply.
+  - Species/breed seed: guard it to run only if missing / only once —
+    never as a blocking step on every publish.
+  - Net effect: server boots and passes healthcheck quickly; no data
+    is re-seeded or wiped.
+
+DO NOT: delete or stub delete-pet functionality to make the build
+pass; wipe or reset any production data; change delete-pet UI or
+logic; touch the button/cancel work; touch auth.
+
+PRESERVATION CLAUSE: all existing production data (pets, posts,
+species/breeds already seeded) must remain untouched. The only change
+is making startup fast by not re-running one-time setup on every
+deploy.
+
+ACCEPTANCE:
+1. Report Step 1 findings BEFORE any change (what runs at boot, and
+   whether it's a timeout or a real error).
+2. After the fix, republish succeeds through Promote (green).
+3. pshpsh.net still works; all existing pets/posts still present
+   (nothing re-seeded or lost).
+4. delete-pet now live: "delete this pet" appears in pet-edit; the
+   naming confirm works; deleting sets deleted_at (row still exists).
+5. Golden path intact.
+
+OUTPUT: Step 1 findings, exactly what changed in the deploy/seed
+sequence, and the Review Changes count. Commit locally; I will Sync.

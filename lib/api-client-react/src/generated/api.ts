@@ -1132,6 +1132,78 @@ export function useGetPet<TData = Awaited<ReturnType<typeof getPet>>, TError = E
 
 
 
+export const getDeletePetUrl = (id: string,) => {
+
+
+
+
+  return `/api/pets/${id}`
+}
+
+/**
+ * Soft-deletes a pet by setting deleted_at = now(). Primary owner only. All posts, pack follows, and other pet data become invisible immediately; a background purge job hard-deletes everything after 30 days. Audit-logged. Returns 204 on success.
+ * @summary Soft-delete a pet
+ */
+export const deletePet = async (id: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeletePetUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeletePetMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePet>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deletePet>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deletePet'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deletePet>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deletePet(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeletePetMutationResult = NonNullable<Awaited<ReturnType<typeof deletePet>>>
+
+    export type DeletePetMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Soft-delete a pet
+ */
+export const useDeletePet = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deletePet>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deletePet>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeletePetMutationOptions(options));
+    }
+
 export const getGetPetPackMembersUrl = (id: string,) => {
 
 

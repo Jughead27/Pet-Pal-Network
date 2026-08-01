@@ -341,6 +341,17 @@ export const GetPetResponse = zod.object({
 
 
 /**
+ * Soft-deletes a pet by setting deleted_at = now(). Primary owner only. All posts, pack follows, and other pet data become invisible immediately; a background purge job hard-deletes everything after 30 days. Audit-logged. Returns 204 on success.
+ * @summary Soft-delete a pet
+ */
+export const DeletePetParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeletePetResponse = zod.void()
+
+
+/**
  * Returns the list of users who follow this pet, ordered by join date (oldest first).
  * @summary Get a pet's Pack members
  */

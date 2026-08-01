@@ -509,6 +509,44 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: deletePet
+      tags: [pets]
+      summary: Soft-delete a pet
+      description: >
+        Soft-deletes a pet by setting deleted_at = now(). Primary owner only.
+        All posts, pack follows, and other pet data become invisible immediately;
+        a background purge job hard-deletes everything after 30 days.
+        Audit-logged. Returns 204 on success.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the primary owner
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Pet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 
   /pets/{id}/pack-members:
     get:

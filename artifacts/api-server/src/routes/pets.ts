@@ -18,6 +18,7 @@ import { eq, desc, sql, and, or, isNull, isNotNull } from "drizzle-orm";
 import { CreatePetBody, PatchPetBody } from "@workspace/api-zod";
 import { mediaTokenUrl, copyObject } from "../lib/r2.js";
 import { notHiddenByAdminPost } from "../lib/excludeBlocked.js";
+import { writeAudit } from "../lib/writeAudit.js";
 import { isPetOwner, isPetPrimaryOwner, getPetOwnerRow } from "../lib/isPetOwner.js";
 
 const router: IRouter = Router();
@@ -56,7 +57,7 @@ router.get("/pets/:id", async (req, res) => {
       avatarFocusY: petsTable.avatarFocusY,
     })
     .from(petsTable)
-    .where(eq(petsTable.id, id));
+    .where(and(eq(petsTable.id, id), isNull(petsTable.deletedAt)));
 
   if (!pet) {
     res.status(404).json({ error: "Not found" });
@@ -408,7 +409,7 @@ router.get("/pets/:id/pack-members", async (req, res) => {
   const [pet] = await db
     .select({ id: petsTable.id })
     .from(petsTable)
-    .where(eq(petsTable.id, id))
+    .where(and(eq(petsTable.id, id), isNull(petsTable.deletedAt)))
     .limit(1);
 
   if (!pet) {
@@ -464,7 +465,7 @@ router.get("/me/pets", async (req, res) => {
     })
     .from(petOwnersTable)
     .innerJoin(petsTable, eq(petsTable.id, petOwnersTable.petId))
-    .where(eq(petOwnersTable.userId, userId))
+    .where(and(eq(petOwnersTable.userId, userId), isNull(petsTable.deletedAt)))
     .orderBy(desc(petOwnersTable.addedAt));
 
   res.json({
@@ -504,7 +505,7 @@ router.patch("/pets/:id", async (req, res) => {
   const [existing] = await db
     .select({ id: petsTable.id })
     .from(petsTable)
-    .where(eq(petsTable.id, id))
+    .where(and(eq(petsTable.id, id), isNull(petsTable.deletedAt)))
     .limit(1);
 
   if (!existing) {
@@ -617,7 +618,7 @@ router.patch("/pets/:id/avatar", async (req, res) => {
   const [pet] = await db
     .select({ id: petsTable.id, ownerId: petsTable.ownerId })
     .from(petsTable)
-    .where(eq(petsTable.id, id))
+    .where(and(eq(petsTable.id, id), isNull(petsTable.deletedAt)))
     .limit(1);
 
   if (!pet) {
@@ -666,6 +667,47 @@ router.patch("/pets/:id/avatar", async (req, res) => {
     avatarFocusX: storedKey !== null ? (focusX ?? null) : null,
     avatarFocusY: storedKey !== null ? (focusY ?? null) : null,
   });
+});
+
+/**
+ * DELETE /pets/:id
+ *
+ * Soft-deletes a pet by setting deleted_at = now(). Primary owner only.
+ * Posts fall out of all public reads immediately via the isNull(deletedAt)
+ * guards on pet joins. A background purge job handles hard-deletion after
+ * 30 days (see lib/purgePets.ts).
+ *
+ * Returns 204 on success.
+ */
+router.delete("/pets/:id", async (req, res) => {
+  const { id }  = req.params;
+  const userId  = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  const [petRow] = await db
+    .select({ id: petsTable.id, name: petsTable.name })
+    .from(petsTable)
+    .where(and(eq(petsTable.id, id), isNull(petsTable.deletedAt)))
+    .limit(1);
+
+  if (!petRow) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+
+  if (!(await isPetPrimaryOwner(userId, id))) {
+    res.status(403).json({ error: "Forbidden — only the primary owner may delete a pet" });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(petsTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(petsTable.id, id));
+    await writeAudit(tx, userId, "pet.delete", "pet", id, { petName: petRow.name });
+  });
+
+  res.status(204).send();
 });
 
 export default router;

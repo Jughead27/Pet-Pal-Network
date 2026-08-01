@@ -11,7 +11,7 @@
 
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 import * as schema from "./schema/index.js";
 
 const { Pool } = pg;
@@ -212,42 +212,59 @@ const SEED_DATA: { name: string; sortOrder: number; breeds: string[] }[] = [
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log("Seeding species and breeds…");
+  // ── Species / breeds — one-time setup, skip when already present ─────────
+  // On every deploy after the first, the species table is already populated
+  // and every INSERT below would be an ON CONFLICT DO NOTHING no-op.  The
+  // no-ops are still hundreds of individual DB round-trips, so we skip the
+  // entire block when any species row exists.
+  const [speciesCountRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(schema.speciesTable);
 
-  for (const { name, sortOrder, breeds } of SEED_DATA) {
-    // Insert species (idempotent)
-    await db
-      .insert(schema.speciesTable)
-      .values({ name, sortOrder })
-      .onConflictDoNothing();
+  if ((speciesCountRow?.count ?? 0) === 0) {
+    console.log("Seeding species and breeds…");
 
-    const [species] = await db
-      .select()
-      .from(schema.speciesTable)
-      .where(eq(schema.speciesTable.name, name))
-      .limit(1);
-
-    if (!species) throw new Error(`Failed to upsert species: ${name}`);
-
-    // Insert breeds (idempotent)
-    for (const breedName of breeds) {
+    for (const { name, sortOrder, breeds } of SEED_DATA) {
+      // Insert species (idempotent)
       await db
-        .insert(schema.breedsTable)
-        .values({ speciesId: species.id, name: breedName })
+        .insert(schema.speciesTable)
+        .values({ name, sortOrder })
         .onConflictDoNothing();
-    }
 
-    console.log(`  ✓ ${name} (${breeds.length} breeds)`);
+      const [species] = await db
+        .select()
+        .from(schema.speciesTable)
+        .where(eq(schema.speciesTable.name, name))
+        .limit(1);
+
+      if (!species) throw new Error(`Failed to upsert species: ${name}`);
+
+      // Insert breeds (idempotent)
+      for (const breedName of breeds) {
+        await db
+          .insert(schema.breedsTable)
+          .values({ speciesId: species.id, name: breedName })
+          .onConflictDoNothing();
+      }
+
+      console.log(`  ✓ ${name} (${breeds.length} breeds)`);
+    }
+  } else {
+    console.log(`Species/breeds already present (${speciesCountRow?.count} species) — skipping.`);
   }
 
   // ── Backfill existing pets ──────────────────────────────────────────────
   console.log("Backfilling existing pets…");
 
-  const pets = await db.select().from(schema.petsTable);
+  // Only fetch pets that still need backfilling — zero rows returned (and zero
+  // loop iterations) once every pet has a speciesId set.
+  const pets = await db
+    .select()
+    .from(schema.petsTable)
+    .where(isNull(schema.petsTable.speciesId));
   let backfilledCount = 0;
 
   for (const pet of pets) {
-    if (pet.speciesId) continue; // already backfilled
 
     // Pass 1: match the free-text species column against a catalogue species name (case-insensitive).
     let matchedSpecies = await db
@@ -362,18 +379,15 @@ async function main() {
   }
 
   // ── Auto-pack backfill: every owner gets pack_follows rows for their own pets ──
+  // Single INSERT … SELECT instead of N individual round-trips.  ON CONFLICT DO
+  // NOTHING makes this a sub-millisecond no-op once all rows already exist.
   console.log("Backfilling pack_follows for existing pet owners…");
-  const allPets = await db.select({ id: schema.petsTable.id, ownerId: schema.petsTable.ownerId }).from(schema.petsTable);
-  let packCount = 0;
-  for (const pet of allPets) {
-    const result = await db
-      .insert(schema.packFollowsTable)
-      .values({ userId: pet.ownerId, petId: pet.id })
-      .onConflictDoNothing();
-    // onConflictDoNothing returns rowCount 0 if already existed
-    packCount++;
-  }
-  console.log(`  ✓ Processed ${packCount} pet(s) — owners now in their own Pack.`);
+  const packResult = await db.execute(sql`
+    INSERT INTO pack_follows (user_id, pet_id)
+    SELECT owner_id, id FROM pets
+    ON CONFLICT DO NOTHING
+  `);
+  console.log(`  ✓ pack_follows backfill — ${packResult.rowCount ?? 0} new row(s) inserted.`);
 
   await pool.end();
 }
