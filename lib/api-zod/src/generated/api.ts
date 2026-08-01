@@ -35,6 +35,11 @@ export const GetFeedResponse = zod.object({
   "mediaUrl": zod.string().nullable().describe('Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client).'),
   "cropFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for cover-crop rendering. null = center.'),
   "cropFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for cover-crop rendering. null = center.'),
+  "cropMode": zod.string().nullish().describe('\'cover\' or \'contain\'. null = legacy cover behavior.'),
+  "cropX": zod.number().nullish().describe('Crop rect left edge as fraction of original width.'),
+  "cropY": zod.number().nullish().describe('Crop rect top edge as fraction of original height.'),
+  "cropW": zod.number().nullish().describe('Crop rect width as fraction of original width.'),
+  "cropH": zod.number().nullish().describe('Crop rect height as fraction of original height.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -290,6 +295,11 @@ export const GetPetResponse = zod.object({
   "mediaUrl": zod.string().nullable().describe('Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client).'),
   "cropFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for cover-crop rendering. null = center.'),
   "cropFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for cover-crop rendering. null = center.'),
+  "cropMode": zod.string().nullish().describe('\'cover\' or \'contain\'. null = legacy cover behavior.'),
+  "cropX": zod.number().nullish().describe('Crop rect left edge as fraction of original width.'),
+  "cropY": zod.number().nullish().describe('Crop rect top edge as fraction of original height.'),
+  "cropW": zod.number().nullish().describe('Crop rect width as fraction of original width.'),
+  "cropH": zod.number().nullish().describe('Crop rect height as fraction of original height.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -315,6 +325,11 @@ export const GetPetResponse = zod.object({
   "mediaUrl": zod.string().nullable().describe('Presigned GET URL for R2 keys; null for seed keys (resolved locally by the client).'),
   "cropFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for cover-crop rendering. null = center.'),
   "cropFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for cover-crop rendering. null = center.'),
+  "cropMode": zod.string().nullish().describe('\'cover\' or \'contain\'. null = legacy cover behavior.'),
+  "cropX": zod.number().nullish().describe('Crop rect left edge as fraction of original width.'),
+  "cropY": zod.number().nullish().describe('Crop rect top edge as fraction of original height.'),
+  "cropW": zod.number().nullish().describe('Crop rect width as fraction of original width.'),
+  "cropH": zod.number().nullish().describe('Crop rect height as fraction of original height.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -444,6 +459,18 @@ export const createPostBodyCropFocusXMax = 1;
 export const createPostBodyCropFocusYMin = 0;
 export const createPostBodyCropFocusYMax = 1;
 
+export const createPostBodyCropXMin = 0;
+export const createPostBodyCropXMax = 1;
+
+export const createPostBodyCropYMin = 0;
+export const createPostBodyCropYMax = 1;
+
+export const createPostBodyCropWMin = 0;
+export const createPostBodyCropWMax = 1;
+
+export const createPostBodyCropHMin = 0;
+export const createPostBodyCropHMax = 1;
+
 
 
 export const CreatePostBody = zod.object({
@@ -452,7 +479,12 @@ export const CreatePostBody = zod.object({
   "caption": zod.string().max(createPostBodyCaptionMax).optional(),
   "isNursery": zod.boolean().optional(),
   "cropFocusX": zod.number().min(createPostBodyCropFocusXMin).max(createPostBodyCropFocusXMax).nullish().describe('Horizontal focal point (0–1). null or omitted = center.'),
-  "cropFocusY": zod.number().min(createPostBodyCropFocusYMin).max(createPostBodyCropFocusYMax).nullish().describe('Vertical focal point (0–1). null or omitted = center.')
+  "cropFocusY": zod.number().min(createPostBodyCropFocusYMin).max(createPostBodyCropFocusYMax).nullish().describe('Vertical focal point (0–1). null or omitted = center.'),
+  "cropMode": zod.string().nullish().describe('\'cover\' (default) or \'contain\'. null = default cover.'),
+  "cropX": zod.number().min(createPostBodyCropXMin).max(createPostBodyCropXMax).nullish().describe('Crop rect left edge as fraction of original width.'),
+  "cropY": zod.number().min(createPostBodyCropYMin).max(createPostBodyCropYMax).nullish().describe('Crop rect top edge as fraction of original height.'),
+  "cropW": zod.number().min(createPostBodyCropWMin).max(createPostBodyCropWMax).nullish().describe('Crop rect width as fraction of original width.'),
+  "cropH": zod.number().min(createPostBodyCropHMin).max(createPostBodyCropHMax).nullish().describe('Crop rect height as fraction of original height.')
 }).describe('Request body for creating a post')
 
 export const CreatePostResponse = zod.object({

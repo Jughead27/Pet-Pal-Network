@@ -34,7 +34,7 @@ router.post("/posts", async (req, res) => {
     return;
   }
 
-  const { petId, mediaKey, caption, isNursery, cropFocusX, cropFocusY } = parsed.data;
+  const { petId, mediaKey, caption, isNursery, cropFocusX, cropFocusY, cropMode, cropX, cropY, cropW, cropH } = parsed.data;
 
   // Verify pet exists, is not soft-deleted, and caller is any owner (primary or co)
   const [pet] = await db
@@ -62,6 +62,11 @@ router.post("/posts", async (req, res) => {
       isNursery:      isNursery ?? false,
       cropFocusX:     cropFocusX ?? null,
       cropFocusY:     cropFocusY ?? null,
+      cropMode:       cropMode  ?? null,
+      cropX:          cropX     ?? null,
+      cropY:          cropY     ?? null,
+      cropW:          cropW     ?? null,
+      cropH:          cropH     ?? null,
       // Audit field — never returned to clients
       postedByUserId: userId,
     })

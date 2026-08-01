@@ -27,6 +27,13 @@ export const postsTable = pgTable(
     // hidden posts are excluded from all public reads but remain visible to
     // the owner on their pet profile with a "hidden by moderation" note.
     hiddenByAdmin: boolean("hidden_by_admin").notNull().default(false),
+    // Auto-frame crop rect (0–1 fractions of original image dimensions).
+    // null = not set; rendering falls back to cropFocusX/Y legacy behavior.
+    cropMode: text("crop_mode"),       // 'cover' | 'contain' | null
+    cropX: real("crop_x"),             // left edge
+    cropY: real("crop_y"),             // top edge
+    cropW: real("crop_w"),             // width
+    cropH: real("crop_h"),             // height
   },
   (table) => [
     index("posts_pet_id_idx").on(table.petId),

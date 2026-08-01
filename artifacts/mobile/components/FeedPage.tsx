@@ -303,12 +303,17 @@ export default function FeedPage({
       style={[styles.page, { height }]}
       onLayout={(e) => { pageWidthRef.current = e.nativeEvent.layout.width; }}
     >
-      {/* Full-bleed hero image — respects poster's focal point */}
+      {/* Full-bleed hero image — respects poster's crop rect/mode or focal point */}
       <FocalImage
         source={heroImage}
         style={styles.heroImage}
         focusX={post.cropFocusX}
         focusY={post.cropFocusY}
+        cropX={post.cropX ?? null}
+        cropY={post.cropY ?? null}
+        cropW={post.cropW ?? null}
+        cropH={post.cropH ?? null}
+        mode={post.cropMode ?? null}
       />
 
       {/* Media tap target (sits below all interactive overlays) */}

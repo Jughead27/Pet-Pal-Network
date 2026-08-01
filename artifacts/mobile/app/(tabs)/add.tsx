@@ -5,9 +5,9 @@
  *   1. If the user owns no pets → prompt linking to pet creation.
  *   2. Pick a photo from the camera roll (expo-image-picker).
  *   3. Compress to max 2048 px longest edge as JPEG (compressImage util).
- *   4. WYSIWYG framing step — CropFramer lets the poster choose what will
- *      be visible in the feed cover-crop. Stores focusX / focusY (0–1).
- *   5. Form: caption + pet selector + nursery toggle.
+ *   4. Auto-frame: compute a suggested crop rect automatically, jump to form.
+ *   5. Form: caption + pet selector + nursery toggle + "show whole photo" toggle.
+ *      - "Adjust framing" tappable opens FrameRefiner modal for manual refinement.
  *   6. Submit: presign → PUT to R2 → POST /posts → invalidate feed → Home.
  *
  * No react-native-reanimated. Works on web, iOS, and Android.
@@ -16,7 +16,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -27,6 +26,7 @@ import {
   TextInput,
   TouchableOpacity,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -43,27 +43,29 @@ import {
 } from '@workspace/api-client-react';
 import type { Pet } from '@workspace/api-client-react';
 import { compressImage } from '@/utils/compressImage';
-import CropFramer from '@/components/CropFramer';
+import FrameRefiner from '@/components/FrameRefiner';
+import FocalImage from '@/components/FocalImage';
+import { computeAutoFrame } from '@/utils/computeAutoFrame';
+import type { CropRect } from '@/utils/computeAutoFrame';
 import { signalPostSuccess } from '@/utils/feedScrollSignal';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
-type AddStep = 'idle' | 'compressing' | 'framing' | 'form';
+type AddStep = 'idle' | 'compressing' | 'form';
 
 export default function AddScreen() {
   const colors       = useColors();
   const insets       = useSafeAreaInsets();
   const queryClient  = useQueryClient();
+  const { width: screenW, height: screenH } = useWindowDimensions();
   const topInset     = Platform.OS === 'web' ? 67 : insets.top;
   const isWeb        = Platform.OS === 'web';
 
+  // Target aspect ratio for auto-frame: the feed hero is full-screen portrait.
+  const feedAspect   = screenW / screenH;
+
   // The web tab bar is position:absolute with minHeight:84 (set in _layout.tsx).
-  // On web, React Navigation does NOT add the tab bar height to
-  // useSafeAreaInsets().bottom — insets.bottom only reflects the browser chrome
-  // inset. We must offset the sticky footer and scroll padding by the tab bar
-  // height ourselves.  On native, React Navigation augments insets.bottom to
-  // include the tab bar, so no extra offset is needed there.
-  const WEB_TAB_BAR_HEIGHT = 84; // must match minHeight in _layout.tsx tabBarStyle
+  const WEB_TAB_BAR_HEIGHT = 84;
 
   // ── Server state ──────────────────────────────────────────────────────────
   const { data: myPetsData, isLoading: petsLoading } = useGetMyPets();
@@ -72,16 +74,23 @@ export default function AddScreen() {
   // ── Local state ───────────────────────────────────────────────────────────
   const [step,          setStep]          = useState<AddStep>('idle');
   const [compressedUri, setCompressedUri] = useState<string | null>(null);
-  // Natural pixel dimensions of the compressed image (needed by CropFramer).
   const naturalSize = useRef({ width: 0, height: 0 });
   const [caption,       setCaption]       = useState('');
   const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
   const [isNursery,     setIsNursery]     = useState(false);
   const [isUploading,   setIsUploading]   = useState(false);
   const [error,         setError]         = useState<string | null>(null);
-  // Focal point chosen in the framing step (0–1, default center).
+
+  // Legacy focal point — derived from rect center for backward compat.
   const [cropFocusX,    setCropFocusX]    = useState(0.5);
   const [cropFocusY,    setCropFocusY]    = useState(0.5);
+
+  // New crop rect + mode.
+  const [cropRect,      setCropRect]      = useState<CropRect | null>(null);
+  const [cropMode,      setCropMode]      = useState<'cover' | 'contain'>('cover');
+
+  // Refiner modal visibility.
+  const [refinerOpen,   setRefinerOpen]   = useState(false);
 
   // Auto-select pet when there is exactly one.
   useEffect(() => {
@@ -92,36 +101,39 @@ export default function AddScreen() {
   const { mutateAsync: presignUpload } = usePresignUpload();
   const { mutateAsync: createPost    } = useCreatePost();
 
-  // ── Image pipeline (shared by both sources) ───────────────────────────────
-  // Compress → store natural size → advance to framing step.
-  // Called with the raw asset from either launchImageLibraryAsync or
-  // launchCameraAsync — the rest of the flow is identical.
+  // ── Image pipeline ────────────────────────────────────────────────────────
+  // Compress → auto-frame → jump straight to form.
   const processPickedAsset = useCallback(async (asset: ImagePicker.ImagePickerAsset) => {
     setCompressedUri(null);
     setStep('compressing');
     try {
       const compressed = await compressImage(asset.uri, asset.width, asset.height);
-      setCompressedUri(compressed.uri);
-      // Store compressed pixel dimensions (or original when not returned).
-      naturalSize.current = {
-        width:  (compressed as { width?: number }).width  ?? asset.width,
-        height: (compressed as { height?: number }).height ?? asset.height,
-      };
-      // Reset focal point to center for each new image.
-      setCropFocusX(0.5);
-      setCropFocusY(0.5);
-      setStep('framing');
+      const uri = compressed.uri;
+      const w   = (compressed as { width?: number }).width  ?? asset.width;
+      const h   = (compressed as { height?: number }).height ?? asset.height;
+
+      setCompressedUri(uri);
+      naturalSize.current = { width: w, height: h };
+
+      // Auto-frame: compute suggested rect (non-blocking, falls back to floor).
+      // Use the feed hero's aspect ratio (full-screen portrait) as the target.
+      const rect = await computeAutoFrame(uri, w, h, feedAspect);
+      setCropRect(rect);
+      // Derive focal point from rect center for backward compat.
+      setCropFocusX(rect.x + rect.w / 2);
+      setCropFocusY(rect.y + rect.h / 2);
+      setCropMode('cover');
+      setStep('form');
     } catch {
       setError('Failed to process image. Please try another photo.');
       setStep('idle');
     }
-  }, []);
+  }, [feedAspect]);
 
   // ── Image picking — library ────────────────────────────────────────────────
   const pickImage = useCallback(async () => {
     setError(null);
 
-    // On native, request library permission.
     if (Platform.OS !== 'web') {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== 'granted') {
@@ -149,8 +161,6 @@ export default function AddScreen() {
   }, [processPickedAsset]);
 
   // ── Image capture — camera (native only) ──────────────────────────────────
-  // Web camera capture is unreliable across browsers. On web we only offer the
-  // library picker (the file input may surface the camera natively for free).
   const captureImage = useCallback(async () => {
     setError(null);
 
@@ -172,7 +182,6 @@ export default function AddScreen() {
 
     if (result.canceled || !result.assets?.[0]) return;
 
-    // Camera produces JPEG on iOS; guard anyway for safety.
     const asset = result.assets[0];
     const mime  = asset.mimeType ?? '';
     if (mime && !['image/jpeg', 'image/png', 'image/webp'].includes(mime)) {
@@ -183,21 +192,19 @@ export default function AddScreen() {
     await processPickedAsset(asset);
   }, [processPickedAsset]);
 
-  // ── Framing callbacks ─────────────────────────────────────────────────────
-  const handleFrameConfirm = useCallback((fx: number, fy: number) => {
-    setCropFocusX(fx);
-    setCropFocusY(fy);
-    setStep('form');
+  // ── Refiner callbacks ─────────────────────────────────────────────────────
+  const handleRefineConfirm = useCallback((rect: CropRect) => {
+    setCropRect(rect);
+    setCropFocusX(rect.x + rect.w / 2);
+    setCropFocusY(rect.y + rect.h / 2);
+    setRefinerOpen(false);
   }, []);
 
-  const handleFrameBack = useCallback(() => {
-    // Return to the form with the picked image retained.
-    // Only an explicit "Change photo" button discards the selection.
-    setStep('form');
+  const handleRefineCancel = useCallback(() => {
+    setRefinerOpen(false);
   }, []);
 
-  // ── Compose cancel — discards draft and returns to Home ──────────────────
-  // The Add tab has no back stack, so we reset state AND navigate to '/'.
+  // ── Compose cancel ────────────────────────────────────────────────────────
   const handleCancel = useCallback(() => {
     setStep('idle');
     setCompressedUri(null);
@@ -205,6 +212,9 @@ export default function AddScreen() {
     setIsNursery(false);
     setCropFocusX(0.5);
     setCropFocusY(0.5);
+    setCropRect(null);
+    setCropMode('cover');
+    setRefinerOpen(false);
     setError(null);
     if (pets.length !== 1) setSelectedPetId(null);
     router.navigate('/');
@@ -217,7 +227,6 @@ export default function AddScreen() {
     setError(null);
 
     try {
-      // 1. Materialise as a blob to get the exact byte count.
       const imageResponse = await fetch(compressedUri);
       const blob          = await imageResponse.blob();
 
@@ -227,12 +236,10 @@ export default function AddScreen() {
         return;
       }
 
-      // 2. Obtain presigned PUT URL.
       const { uploadUrl, mediaKey } = await presignUpload({
         data: { contentType: 'image/jpeg', sizeBytes: blob.size },
       });
 
-      // 3. Upload directly to R2.
       const putRes = await fetch(uploadUrl, {
         method:  'PUT',
         headers: { 'Content-Type': 'image/jpeg' },
@@ -240,20 +247,24 @@ export default function AddScreen() {
       });
       if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
 
-      // 4. Create the post record, including the focal point.
       await createPost({
         data: {
           petId:      selectedPetId,
           mediaKey,
           caption:    caption.trim() || undefined,
           isNursery,
+          // Legacy focal point (backward compat).
           cropFocusX,
           cropFocusY,
+          // New crop rect + mode.
+          cropMode:   cropMode,
+          cropX:      cropRect?.x ?? null,
+          cropY:      cropRect?.y ?? null,
+          cropW:      cropRect?.w ?? null,
+          cropH:      cropRect?.h ?? null,
         },
       });
 
-      // 5. Refresh feed and navigate home, scrolling the pager to the new post.
-      // Signal BEFORE invalidation so the timestamp always precedes the refetch.
       signalPostSuccess();
       queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
 
@@ -263,6 +274,8 @@ export default function AddScreen() {
       setIsNursery(false);
       setCropFocusX(0.5);
       setCropFocusY(0.5);
+      setCropRect(null);
+      setCropMode('cover');
       setStep('idle');
       if (pets.length !== 1) setSelectedPetId(null);
 
@@ -273,7 +286,11 @@ export default function AddScreen() {
     } finally {
       setIsUploading(false);
     }
-  }, [compressedUri, selectedPetId, isUploading, presignUpload, createPost, caption, isNursery, cropFocusX, cropFocusY, queryClient, pets.length]);
+  }, [
+    compressedUri, selectedPetId, isUploading, presignUpload, createPost,
+    caption, isNursery, cropFocusX, cropFocusY, cropRect, cropMode,
+    queryClient, pets.length,
+  ]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const canSubmit = !!compressedUri && !!selectedPetId && !isUploading;
@@ -289,7 +306,6 @@ export default function AddScreen() {
     );
   }
 
-  // No pets — prompt user to create one first.
   if (pets.length === 0) {
     return (
       <View style={[s.fill, s.centered, { backgroundColor: colors.background, paddingTop: topInset }]}>
@@ -312,34 +328,32 @@ export default function AddScreen() {
       style={[s.fill, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      {/* ── Framing modal — sits above the tab bar, no tab-bar interaction ── */}
+      {/* ── Frame Refiner modal ─────────────────────────────────────────────── */}
       <Modal
-        visible={step === 'framing' && !!compressedUri}
+        visible={refinerOpen && !!compressedUri && !!cropRect}
         animationType="slide"
         presentationStyle="fullScreen"
         statusBarTranslucent
-        onRequestClose={handleFrameBack}
+        onRequestClose={handleRefineCancel}
       >
-        {compressedUri ? (
-          <CropFramer
+        {compressedUri && cropRect ? (
+          <FrameRefiner
             uri={compressedUri}
             naturalWidth={naturalSize.current.width  || 1}
             naturalHeight={naturalSize.current.height || 1}
-            onConfirm={handleFrameConfirm}
-            onBack={handleFrameBack}
+            initialRect={cropRect}
+            onConfirm={handleRefineConfirm}
+            onCancel={handleRefineCancel}
           />
         ) : null}
       </Modal>
+
       <ScrollView
         style={s.fill}
         contentContainerStyle={[
           s.scroll,
           {
             paddingTop: topInset + 16,
-            // On web the sticky footer is pushed up by WEB_TAB_BAR_HEIGHT (see
-            // below), so scroll content must also clear: footer intrinsic height
-            // (~80 px) + the tab bar margin beneath it. On native the existing
-            // insets.bottom handling in the footer already provides clearance.
             paddingBottom: isWeb ? 80 + WEB_TAB_BAR_HEIGHT : 24,
           },
         ]}
@@ -363,30 +377,35 @@ export default function AddScreen() {
             <Text style={[s.processingText, { color: colors.mutedForeground }]}>Processing…</Text>
           </View>
         ) : compressedUri ? (
-          // Form step: show the framed preview (cover, focal point applied).
+          // Form step: show crop-aware preview matching feed rendering.
           <View style={s.previewWrapper}>
-            <Image
+            <FocalImage
               source={{ uri: compressedUri }}
               style={s.preview}
-              resizeMode="cover"
+              focusX={cropFocusX}
+              focusY={cropFocusY}
+              cropX={cropRect?.x ?? null}
+              cropY={cropRect?.y ?? null}
+              cropW={cropRect?.w ?? null}
+              cropH={cropRect?.h ?? null}
+              mode={cropMode}
             />
-            {/* Re-frame button */}
+            {/* Overlay buttons */}
             <View style={s.previewBtnRow}>
               <TouchableOpacity
                 style={[s.previewBtn, { backgroundColor: 'rgba(6,11,16,0.6)' }]}
-                onPress={() => setStep('framing')}
+                onPress={() => setRefinerOpen(true)}
                 accessibilityRole="button"
                 accessibilityLabel="Adjust framing"
               >
                 <Feather name="crop" size={14} color="#F0F4F8" />
-                <Text style={s.previewBtnText}>Reframe</Text>
+                <Text style={s.previewBtnText}>Adjust framing</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[s.previewBtn, { backgroundColor: 'rgba(6,11,16,0.6)' }]}
                 onPress={() => {
-                  // Return to source selection — lets the user pick from
-                  // library or re-shoot rather than hardcoding library.
                   setCompressedUri(null);
+                  setCropRect(null);
                   setError(null);
                   setStep('idle');
                 }}
@@ -399,10 +418,7 @@ export default function AddScreen() {
             </View>
           </View>
         ) : (
-          // ── Source selection ────────────────────────────────────────────
-          // Native: camera capture + library. Web: library only (browser's
-          // file input may surface the camera natively for free; no custom
-          // camera UI needed or built here).
+          // ── Source selection ──────────────────────────────────────────────
           <View style={[s.sourceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             {Platform.OS !== 'web' && (
               <>
@@ -490,6 +506,27 @@ export default function AddScreen() {
               <View style={[s.thumb, isNursery && s.thumbOn]} />
             </View>
           </Pressable>
+
+          {/* Show whole photo toggle — only shown when an image is selected */}
+          {compressedUri ? (
+            <Pressable
+              style={[s.toggleRow, { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.border }]}
+              onPress={() => setCropMode((m) => m === 'contain' ? 'cover' : 'contain')}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: cropMode === 'contain' }}
+              accessibilityLabel="Show whole photo"
+            >
+              <View style={s.toggleInfo}>
+                <Text style={[s.toggleLabel, { color: colors.foreground }]}>Show whole photo</Text>
+                <Text style={[s.toggleSub, { color: colors.mutedForeground }]}>
+                  Fit the full image with blurred background
+                </Text>
+              </View>
+              <View style={[s.track, { backgroundColor: cropMode === 'contain' ? colors.primary : colors.border }]}>
+                <View style={[s.thumb, cropMode === 'contain' && s.thumbOn]} />
+              </View>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Error */}
@@ -499,7 +536,7 @@ export default function AddScreen() {
 
       </ScrollView>
 
-      {/* ── Pinned post button — always visible above tab bar ── */}
+      {/* ── Pinned post button ── */}
       <View
         style={[
           s.stickyFooter,
@@ -507,11 +544,6 @@ export default function AddScreen() {
             paddingBottom: Math.max(insets.bottom, 8) + 8,
             borderTopColor: colors.border,
             backgroundColor: colors.background,
-            // On web, the tab bar is position:absolute and React Navigation does
-            // NOT add its height to insets.bottom, so the footer lands under the
-            // tab bar. Push it up by WEB_TAB_BAR_HEIGHT (84 px, matching
-            // minHeight in _layout.tsx). On native, insets.bottom already
-            // includes the tab bar height, so no extra margin is needed there.
             marginBottom: isWeb ? WEB_TAB_BAR_HEIGHT : 0,
           },
         ]}
@@ -617,7 +649,6 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       letterSpacing: -0.3,
     },
 
-    // Empty / no-pets state
     emptyTitle: {
       fontFamily: 'Inter_600SemiBold',
       fontSize: 18,
@@ -631,7 +662,6 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       paddingHorizontal: 32,
     },
 
-    // Source selection card (camera vs library)
     sourceCard: {
       borderRadius: 14,
       borderWidth: StyleSheet.hairlineWidth,
@@ -653,7 +683,6 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       height: StyleSheet.hairlineWidth,
     },
 
-    // Image area
     imagePlaceholder: {
       height: 220,
       borderRadius: 14,
@@ -663,14 +692,6 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       justifyContent: 'center',
       gap: 8,
       marginBottom: 16,
-    },
-    pickPhotoText: {
-      fontFamily: 'Inter_500Medium',
-      fontSize: 15,
-    },
-    pickPhotoHint: {
-      fontFamily: 'Inter_400Regular',
-      fontSize: 12,
     },
     processingText: {
       fontFamily: 'Inter_400Regular',
@@ -708,7 +729,6 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       color: '#F0F4F8',
     },
 
-    // Form card
     card: {
       borderRadius: 16,
       borderWidth: StyleSheet.hairlineWidth,
@@ -740,15 +760,12 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       flexGrow: 0,
     },
 
-    // Toggle
     toggleRow: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
       marginTop: 20,
       paddingTop: 16,
-      borderTopWidth: StyleSheet.hairlineWidth,
-      borderTopColor: c.border,
     },
     toggleInfo: { flex: 1, marginRight: 16 },
     toggleLabel: {
@@ -782,7 +799,6 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       alignSelf: 'flex-end',
     },
 
-    // Error
     error: {
       fontFamily: 'Inter_400Regular',
       fontSize: 13,
@@ -790,12 +806,10 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       marginBottom: 12,
     },
 
-    // Pinned footer that holds the Post button
     stickyFooter: {
       paddingHorizontal: 20,
       paddingTop: 12,
       borderTopWidth: StyleSheet.hairlineWidth,
     },
-
   });
 }

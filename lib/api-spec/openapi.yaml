@@ -1238,6 +1238,30 @@ components:
           format: float
           nullable: true
           description: Vertical focal point (0–1) for cover-crop rendering. null = center.
+        cropMode:
+          type: string
+          nullable: true
+          description: "'cover' or 'contain'. null = legacy cover behavior."
+        cropX:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect left edge as fraction of original width.
+        cropY:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect top edge as fraction of original height.
+        cropW:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect width as fraction of original width.
+        cropH:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect height as fraction of original height.
         isNursery:
           type: boolean
         createdAt:
@@ -1728,6 +1752,38 @@ components:
           minimum: 0
           maximum: 1
           description: Vertical focal point (0–1). null or omitted = center.
+        cropMode:
+          type: string
+          nullable: true
+          description: "'cover' (default) or 'contain'. null = default cover."
+        cropX:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Crop rect left edge as fraction of original width.
+        cropY:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Crop rect top edge as fraction of original height.
+        cropW:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Crop rect width as fraction of original width.
+        cropH:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Crop rect height as fraction of original height.
       required:
         - petId
         - mediaKey

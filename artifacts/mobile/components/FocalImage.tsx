@@ -1,8 +1,14 @@
 /**
- * FocalImage — cover-fit image with a poster-controlled focal point.
+ * FocalImage — cover-fit image with a poster-controlled focal point,
+ * plus optional rect-based crop and contain mode.
  *
- * Renders the image so that the point (focusX, focusY) in image-space
- * is centred in the container, clamped so no background is revealed.
+ * Modes:
+ *   mode='cover' (default):
+ *     - If cropX/Y/W/H are supplied: scale + position so that the crop rect
+ *       fills the container (rect-driven cover).
+ *     - Otherwise fall back to focusX/Y focal-point cover (legacy behavior).
+ *   mode='contain':
+ *     - Render the whole image scaled to fit, with a blurred copy as fill.
  *
  * focusX = 0 → left edge visible   focusX = 1 → right edge visible
  * focusY = 0 → top edge visible    focusY = 1 → bottom edge visible
@@ -41,11 +47,18 @@ interface FocalImageProps {
   style: ViewStyle | ViewStyle[];
   focusX?: number | null;
   focusY?: number | null;
+  /** Crop rect in 0–1 fractions of the original image. When provided and mode='cover', drives rect-based crop. */
+  cropX?: number | null;
+  cropY?: number | null;
+  cropW?: number | null;
+  cropH?: number | null;
+  /** 'cover' (default) or 'contain'. */
+  mode?: string | null;
 }
 
 // ─── FocalImage ───────────────────────────────────────────────────────────────
 
-export default function FocalImage({ source, style, focusX, focusY }: FocalImageProps) {
+export default function FocalImage({ source, style, focusX, focusY, cropX, cropY, cropW, cropH, mode }: FocalImageProps) {
   const [container, setContainer] = useState({ w: 0, h: 0 });
   const [natural,   setNatural]   = useState({ w: 0, h: 0 });
   const [retries,   setRetries]   = useState(0);
@@ -88,11 +101,6 @@ export default function FocalImage({ source, style, focusX, focusY }: FocalImage
   }, []);
 
   // ── Dimension resolution ──────────────────────────────────────────────────
-  // Primary: onLoad event (fast, zero extra network). The event shape varies:
-  //   • RN native:  e.nativeEvent.source.{width,height}
-  //   • RN Web:     e.nativeEvent.source.{width,height}  OR  e.source.{width,height}
-  //   • Some builds: neither field is present
-  // We read defensively and never destructure a possibly-undefined object.
   const handleLoad = useCallback(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (e: any) => {
@@ -107,12 +115,9 @@ export default function FocalImage({ source, style, focusX, focusY }: FocalImage
 
         if (typeof w === 'number' && w > 0 && typeof h === 'number' && h > 0) {
           setNatural({ w, h });
-          // Cache by the effective URI so the getSize fallback short-circuits.
           const uri = getUriFromSource(effectiveSource);
           if (uri) sizeCache.set(uri, { w, h });
         }
-        // If dimensions weren't in the event, the useEffect below will call
-        // Image.getSize as a fallback.
       } catch {
         // Swallow — the getSize fallback will cover this case.
       }
@@ -125,23 +130,18 @@ export default function FocalImage({ source, style, focusX, focusY }: FocalImage
   }, []);
 
   // Fallback: Image.getSize — fires when the load event didn't supply dims.
-  // Only called for URI-based sources (bundled require() assets have their
-  // dimensions embedded in the asset registry and onLoad always works there).
   useEffect(() => {
     const uri = getUriFromSource(effectiveSource);
-    if (!uri) return; // bundled asset — onLoad handles it
+    if (!uri) return;
 
-    // Already have dimensions from onLoad or a previous getSize call.
     if (natural.w > 0 && natural.h > 0) return;
 
-    // Check the shared cache first.
     const cached = sizeCache.get(uri);
     if (cached) {
       setNatural(cached);
       return;
     }
 
-    // Avoid launching a duplicate call for the same URI.
     if (getSizeUri.current === uri) return;
     getSizeUri.current = uri;
 
@@ -159,14 +159,59 @@ export default function FocalImage({ source, style, focusX, focusY }: FocalImage
     );
   }, [effectiveSource, natural.w, natural.h]);
 
-  // ── Cover-fit position with focal point ───────────────────────────────────
+  // ── Contain mode: whole image + blurred background fill ──────────────────
+  const isContain = mode === 'contain';
+
+  // ── Cover-fit position ────────────────────────────────────────────────────
   const imageStyle = useMemo(() => {
     const { w: cw, h: ch } = container;
     const { w: nw, h: nh } = natural;
 
-    // Before we have real dimensions: absoluteFill + resizeMode="cover" fallback.
     if (!cw || !ch || !nw || !nh) return null;
 
+    if (isContain) {
+      // Contain: scale to fit, centered.
+      const scale = Math.min(cw / nw, ch / nh);
+      const sw    = nw * scale;
+      const sh    = nh * scale;
+      const left  = (cw - sw) / 2;
+      const top   = (ch - sh) / 2;
+      return { position: 'absolute' as const, width: sw, height: sh, left, top };
+    }
+
+    // Cover mode.
+    const hasCropRect =
+      typeof cropX === 'number' && typeof cropY === 'number' &&
+      typeof cropW === 'number' && typeof cropH === 'number' &&
+      cropW > 0 && cropH > 0;
+
+    if (hasCropRect) {
+      // Rect-driven cover: scale so the crop rect fills the container.
+      const cropPxW = (cropW as number) * nw;
+      const cropPxH = (cropH as number) * nh;
+      const scale   = Math.max(cw / cropPxW, ch / cropPxH);
+      const sw      = nw * scale;
+      const sh      = nh * scale;
+
+      // Position the full scaled image so the crop rect's top-left aligns with
+      // the container top-left, then center the visible portion.
+      const cropDisplayW = cropPxW * scale;
+      const cropDisplayH = cropPxH * scale;
+      const panLeft  = -(cropX as number) * sw;
+      const panTop   = -(cropY as number) * sh;
+      const centerX  = (cw - cropDisplayW) / 2;
+      const centerY  = (ch - cropDisplayH) / 2;
+
+      return {
+        position: 'absolute' as const,
+        width:  sw,
+        height: sh,
+        left:   panLeft + centerX,
+        top:    panTop  + centerY,
+      };
+    }
+
+    // Legacy focal-point cover.
     const fx = focusX ?? 0.5;
     const fy = focusY ?? 0.5;
 
@@ -179,11 +224,43 @@ export default function FocalImage({ source, style, focusX, focusY }: FocalImage
     const top  = -Math.max(0, Math.min(fy * (sh - ch), sh - ch));
 
     return { position: 'absolute' as const, width: sw, height: sh, left, top };
-  }, [container, natural, focusX, focusY]);
+  }, [container, natural, focusX, focusY, cropX, cropY, cropW, cropH, isContain]);
 
   // After initial failure + one retry, show the placeholder.
   if (retries > 1) {
     return <PawPlaceholder style={style as ViewStyle} />;
+  }
+
+  if (isContain) {
+    return (
+      <View style={[style, styles.clip]} onLayout={handleLayout}>
+        {/* Blurred background fill */}
+        <Image
+          source={effectiveSource}
+          style={[StyleSheet.absoluteFill, styles.blurBg]}
+          resizeMode="cover"
+          blurRadius={24}
+          onError={handleError}
+        />
+        {/* Contain-fit foreground image */}
+        {imageStyle ? (
+          <Image
+            source={effectiveSource}
+            style={imageStyle}
+            onLoad={handleLoad}
+            onError={handleError}
+          />
+        ) : (
+          <Image
+            source={effectiveSource}
+            style={StyleSheet.absoluteFill}
+            resizeMode="contain"
+            onLoad={handleLoad}
+            onError={handleError}
+          />
+        )}
+      </View>
+    );
   }
 
   return (
@@ -209,5 +286,6 @@ export default function FocalImage({ source, style, focusX, focusY }: FocalImage
 }
 
 const styles = StyleSheet.create({
-  clip: { overflow: 'hidden' },
+  clip:   { overflow: 'hidden' },
+  blurBg: { opacity: 0.6 },
 });

@@ -49,6 +49,16 @@ export interface FeedPost {
   cropFocusX: number | null;
   /** Vertical focal point (0–1) for cover-crop rendering. null = center. */
   cropFocusY: number | null;
+  /** 'cover' or 'contain'. null = legacy cover behavior. */
+  cropMode?: string | null;
+  /** Crop rect left edge as fraction of original width. */
+  cropX?: number | null;
+  /** Crop rect top edge as fraction of original height. */
+  cropY?: number | null;
+  /** Crop rect width as fraction of original width. */
+  cropW?: number | null;
+  /** Crop rect height as fraction of original height. */
+  cropH?: number | null;
   isNursery: boolean;
   createdAt: string;
   pet: PetSummary;
@@ -325,6 +335,32 @@ export interface CreatePostBody {
      * @maximum 1
      */
   cropFocusY?: number | null;
+  /** 'cover' (default) or 'contain'. null = default cover. */
+  cropMode?: string | null;
+  /**
+     * Crop rect left edge as fraction of original width.
+     * @minimum 0
+     * @maximum 1
+     */
+  cropX?: number | null;
+  /**
+     * Crop rect top edge as fraction of original height.
+     * @minimum 0
+     * @maximum 1
+     */
+  cropY?: number | null;
+  /**
+     * Crop rect width as fraction of original width.
+     * @minimum 0
+     * @maximum 1
+     */
+  cropW?: number | null;
+  /**
+     * Crop rect height as fraction of original height.
+     * @minimum 0
+     * @maximum 1
+     */
+  cropH?: number | null;
 }
 
 /**
