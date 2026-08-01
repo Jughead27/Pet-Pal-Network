@@ -50,6 +50,7 @@ import PawIcon from '@/components/PawIcon';
 import { computeAutoFrame } from '@/utils/computeAutoFrame';
 import type { CropRect } from '@/utils/computeAutoFrame';
 import { signalPostSuccess } from '@/utils/feedScrollSignal';
+import { getFeedCellDimensions } from '@/utils/feedCellDimensions';
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -63,9 +64,22 @@ export default function AddScreen() {
   const topInset     = Platform.OS === 'web' ? 67 : insets.top;
   const isWeb        = Platform.OS === 'web';
 
-  // The feed pager is full-screen on both native (tab bar position:absolute) and
-  // web (effectivePageHeight = windowHeight per index.tsx), so feedAspect = W/H.
-  const feedAspect   = screenW / screenH;
+  // Feed cell aspect ratio — use the live measured value from the last rendered
+  // FeedPage (exact). Falls back to a formula if the feed has never rendered yet
+  // (e.g. user opens Add before the home feed has loaded even once).
+  //
+  // The fallback approximates how index.tsx sizes each page:
+  //   • web:    effectivePageHeight = windowHeight (tab bar is position:absolute)
+  //   • native: measured height ≈ windowHeight − statusBar (insets.top)
+  //
+  // This constant is read once per render. The measurement is always available
+  // by the time a typical user reaches the compose flow (they visit Home first).
+  const _measured   = getFeedCellDimensions();
+  const feedAspect  = _measured
+    ? _measured.w / _measured.h
+    : Platform.OS === 'web'
+      ? screenW / screenH                           // web: windowHeight ≈ screenH
+      : screenW / Math.max(1, screenH - insets.top); // native: subtract status bar
 
   // Preview = a deterministically scaled feed cell.
   // Both dimensions are computed explicitly — do NOT combine aspectRatio with
@@ -359,6 +373,7 @@ export default function AddScreen() {
             naturalHeight={naturalSize.current.height || 1}
             initialRect={cropRect}
             initialMode={cropMode}
+            feedAspect={feedAspect}
             onConfirm={handleRefineConfirm}
             onCancel={handleRefineCancel}
           />

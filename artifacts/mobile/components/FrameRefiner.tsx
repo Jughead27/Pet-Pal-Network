@@ -38,6 +38,8 @@ interface FrameRefinerProps {
   initialRect: CropRect;
   /** Starting fit mode; user can toggle between Crop (cover) and Fit (whole photo). */
   initialMode?: 'cover' | 'contain';
+  /** Feed cell width/height ratio — the crop frame is locked to this aspect. */
+  feedAspect: number;
   onConfirm: (rect: CropRect, mode: 'cover' | 'contain') => void;
   onCancel: () => void;
 }
@@ -45,6 +47,24 @@ interface FrameRefinerProps {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v));
+
+/**
+ * Snap a crop rect to the feed's locked aspect ratio, preserving its center.
+ * lockedRatio = w/h constraint in image-fraction space
+ *   = feedAspect × naturalHeight / naturalWidth
+ */
+function snapToAspect(rect: CropRect, lockedRatio: number): CropRect {
+  const cx = rect.x + rect.w / 2;
+  const cy = rect.y + rect.h / 2;
+  let w = rect.w;
+  let h = w / lockedRatio;
+  if (h > 1) { h = 1; w = h * lockedRatio; }
+  w = Math.min(w, 1);
+  h = Math.min(h, 1);
+  const x = clamp(cx - w / 2, 0, 1 - w);
+  const y = clamp(cy - h / 2, 0, 1 - h);
+  return { x, y, w, h };
+}
 
 // ─── FrameRefiner ─────────────────────────────────────────────────────────────
 
@@ -54,6 +74,7 @@ export default function FrameRefiner({
   naturalHeight,
   initialRect,
   initialMode = 'cover',
+  feedAspect,
   onConfirm,
   onCancel,
 }: FrameRefinerProps) {
@@ -62,6 +83,12 @@ export default function FrameRefiner({
 
   // ── Fit mode (Crop = cover / Fit = whole photo + blurred fill) ─────────────
   const [mode, setMode] = useState<'cover' | 'contain'>(initialMode);
+
+  // ── Locked aspect: the crop frame IS the feed frame. ─────────────────────
+  // w/h in image-fraction space that maps to the feed cell's exact aspect ratio.
+  // All pinch/corner interactions enforce this ratio so what you see in the
+  // refiner is exactly what the feed renders — no re-cropping by the viewer.
+  const lockedRatio = (feedAspect * naturalHeight) / naturalWidth;
 
   // ── Display geometry ──────────────────────────────────────────────────────
   const TOP_BAR_H    = insets.top + 56;
@@ -74,13 +101,15 @@ export default function FrameRefiner({
   const imgLeft  = (screenW - imgW) / 2;
   const imgTop   = TOP_BAR_H + (displayH - imgH) / 2;
 
-  // ── Crop rect state (0–1 fractions) ──────────────────────────────────────
-  const rectRef = useRef<CropRect>({ ...initialRect });
-  const [rect, setRect] = useState<CropRect>({ ...initialRect });
+  // ── Crop rect state — snapped to feed aspect on open ─────────────────────
+  // Snap handles any rects stored before locked-aspect enforcement was added.
+  const snappedInitial = snapToAspect({ ...initialRect }, lockedRatio);
+  const rectRef = useRef<CropRect>({ ...snappedInitial });
+  const [rect, setRect] = useState<CropRect>({ ...snappedInitial });
 
   // ── Minimum crop rect (prevent upscaling past ~1:1) ───────────────────────
+  // minCropH is always derived from minCropW via lockedRatio.
   const minCropW = screenW / naturalWidth;
-  const minCropH = screenW / naturalHeight;
 
   // ── Convert fraction → display coords ────────────────────────────────────
   const toDisplay = useCallback(
@@ -132,11 +161,12 @@ export default function FrameRefiner({
 
           const scale = dist / pb.dist;
           const base  = pb.rect;
-          const { minCropW: mcw, minCropH: mch } = minRef.current;
+          const { minCropW: mcw, lockedRatio: lr } = minRef.current;
 
-          // Scale around the base rect's center, clamped to source resolution cap.
-          const cw  = clamp(base.w / scale, mcw, 1);
-          const ch  = clamp(base.h / scale, mch, 1);
+          // Scale around the base rect's center, maintaining the locked feed aspect.
+          let cw = clamp(base.w / scale, mcw, 1);
+          let ch = cw / lr;
+          if (ch > 1) { ch = 1; cw = clamp(ch * lr, mcw, 1); }
           const ccx = base.x + base.w / 2;
           const ccy = base.y + base.h / 2;
           const nx  = clamp(ccx - cw / 2, 0, 1 - cw);
@@ -182,8 +212,8 @@ export default function FrameRefiner({
   const blBase = useRef(makeCornerBase());
   const brBase = useRef(makeCornerBase());
 
-  const minRef = useRef({ minCropW, minCropH });
-  minRef.current = { minCropW, minCropH };
+  const minRef = useRef({ minCropW, lockedRatio });
+  minRef.current = { minCropW, lockedRatio };
 
   const makeCornerResponder = useCallback((corner: Corner, base: React.MutableRefObject<{ rect: CropRect }>) => {
     return PanResponder.create({
@@ -193,33 +223,55 @@ export default function FrameRefiner({
         base.current.rect = { ...rectRef.current };
       },
       onPanResponderMove: (_, gs) => {
-        const { imgW: iw, imgH: ih } = imgGeom.current;
-        const { minCropW: mcw, minCropH: mch } = minRef.current;
-        const dx = gs.dx / iw;
-        const dy = gs.dy / ih;
-        const r  = base.current.rect;
+        // With a locked aspect ratio each corner is a zoom handle only —
+        // dragging it horizontally changes width; height is always derived
+        // from width via lockedRatio. The OPPOSITE corner stays anchored.
+        const { imgW: iw } = imgGeom.current;
+        const { minCropW: mcw, lockedRatio: lr } = minRef.current;
+        const dxFrac = gs.dx / iw;
+        const r = base.current.rect;
+        const minH = mcw / lr;
 
-        let { x, y, w, h } = r;
+        const fixedRx = r.x + r.w; // right x (anchor for tl / bl)
+        const fixedBy = r.y + r.h; // bottom y (anchor for tl / tr)
 
-        if (corner === 'tl' || corner === 'tr') {
-          const newY = clamp(y + dy, 0, y + h - mch);
-          const dh   = y - newY;
-          y = newY;
-          h = clamp(h + dh, mch, 1);
-        } else {
-          h = clamp(h + dy, mch, 1 - y);
+        let x = r.x, y = r.y, w = r.w, h = r.h;
+
+        if (corner === 'br') {
+          // Anchor: tl. Drag right expands.
+          w = clamp(r.w + dxFrac, mcw, 1 - r.x);
+          h = w / lr;
+          if (r.y + h > 1) { h = 1 - r.y; w = h * lr; }
+          x = r.x; y = r.y;
+        } else if (corner === 'bl') {
+          // Anchor: tr. Drag left expands.
+          w = clamp(r.w - dxFrac, mcw, fixedRx);
+          h = w / lr;
+          if (r.y + h > 1) { h = 1 - r.y; w = h * lr; }
+          x = fixedRx - w; y = r.y;
+        } else if (corner === 'tr') {
+          // Anchor: bl. Drag right expands; top moves up.
+          w = clamp(r.w + dxFrac, mcw, 1 - r.x);
+          h = w / lr;
+          y = fixedBy - h;
+          if (y < 0) { h = fixedBy; w = h * lr; y = 0; }
+          x = r.x;
+        } else { // tl
+          // Anchor: br. Drag left expands; top-left moves up-left.
+          w = clamp(r.w - dxFrac, mcw, fixedRx);
+          h = w / lr;
+          x = fixedRx - w;
+          y = fixedBy - h;
+          if (x < 0) { w = fixedRx; h = w / lr; x = 0; y = fixedBy - h; }
+          if (y < 0) { h = fixedBy; w = h * lr; y = 0; x = fixedRx - w; }
         }
 
-        if (corner === 'tl' || corner === 'bl') {
-          const newX = clamp(x + dx, 0, x + w - mcw);
-          const dw   = x - newX;
-          x = newX;
-          w = clamp(w + dw, mcw, 1);
-        } else {
-          w = clamp(w + dx, mcw, 1 - x);
-        }
-
-        const next = { x, y, w, h };
+        const next = {
+          x: clamp(x, 0, Math.max(0, 1 - w)),
+          y: clamp(y, 0, Math.max(0, 1 - h)),
+          w: clamp(w, mcw, 1),
+          h: clamp(h, minH, 1),
+        };
         rectRef.current = next;
         setRect({ ...next });
       },

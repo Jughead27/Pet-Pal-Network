@@ -42,6 +42,7 @@ import type { FeedPost, PackResult } from '@workspace/api-client-react';
 import ActionRail from '@/components/ActionRail';
 import AddToPackLink from '@/components/AddToPackLink';
 import PopText from '@/components/PopText';
+import { setFeedCellDimensions } from '@/utils/feedCellDimensions';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -301,7 +302,13 @@ export default function FeedPage({
   return (
     <View
       style={[styles.page, { height }]}
-      onLayout={(e) => { pageWidthRef.current = e.nativeEvent.layout.width; }}
+      onLayout={(e) => {
+        const w = e.nativeEvent.layout.width;
+        pageWidthRef.current = w;
+        // Write the exact rendered cell size so the compose screen can lock its
+        // crop frame and preview to the same aspect without guessing.
+        setFeedCellDimensions(w, height);
+      }}
     >
       {/* Full-bleed hero image — respects poster's crop rect/mode or focal point */}
       <FocalImage
@@ -314,6 +321,7 @@ export default function FeedPage({
         cropW={post.cropW ?? null}
         cropH={post.cropH ?? null}
         mode={post.cropMode ?? null}
+        containAlignBottom={bottomOffset + petInfoHeightRef.current + 16}
       />
 
       {/* Media tap target (sits below all interactive overlays) */}

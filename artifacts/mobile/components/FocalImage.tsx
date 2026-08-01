@@ -54,11 +54,17 @@ interface FocalImageProps {
   cropH?: number | null;
   /** 'cover' (default) or 'contain'. */
   mode?: string | null;
+  /**
+   * Contain mode only. When set, positions the photo so its bottom edge is
+   * this many px above the container's bottom edge — placing it just above
+   * a name/caption overlay. Omit to vertically centre the photo.
+   */
+  containAlignBottom?: number;
 }
 
 // ─── FocalImage ───────────────────────────────────────────────────────────────
 
-export default function FocalImage({ source, style, focusX, focusY, cropX, cropY, cropW, cropH, mode }: FocalImageProps) {
+export default function FocalImage({ source, style, focusX, focusY, cropX, cropY, cropW, cropH, mode, containAlignBottom }: FocalImageProps) {
   const [container, setContainer] = useState({ w: 0, h: 0 });
   const [natural,   setNatural]   = useState({ w: 0, h: 0 });
   const [retries,   setRetries]   = useState(0);
@@ -170,14 +176,17 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
     if (!cw || !ch || !nw || !nh) return null;
 
     if (isContain) {
-      // Contain: scale to fit width (or height for portrait photos), pin to top.
-      // Top-aligned so the photo occupies the upper portion of the cell and the
-      // blurred fill shows beneath it — name/caption overlay the blur, never black.
+      // Contain: scale to fit, horizontally centred.
+      // Vertically: when containAlignBottom is set, position the photo so its
+      // bottom edge sits containAlignBottom px above the container's bottom
+      // (just above a name/caption overlay). Otherwise centre vertically.
       const scale = Math.min(cw / nw, ch / nh);
       const sw    = nw * scale;
       const sh    = nh * scale;
       const left  = (cw - sw) / 2;
-      const top   = 0;
+      const top   = containAlignBottom != null
+        ? Math.max(0, ch - containAlignBottom - sh)
+        : (ch - sh) / 2;
       return { position: 'absolute' as const, width: sw, height: sh, left, top };
     }
 

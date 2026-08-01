@@ -1,0 +1,22 @@
+PROMPT — Fix the WYSIWYG root cause: use the feed cell's REAL aspect, not screenW/screenH. add.tsx + share to refiner/preview/feed. NO schema change.
+
+CONTEXT: The crop-lock fix used `feedAspect = screenW / screenH` — the RAW SCREEN aspect, not the feed cell's. The feed cell is screenW × (screenH − top inset − bottom inset − tab bar), so its real aspect is meaningfully WIDER than screenW/screenH (~0.62 vs ~0.46). Locking the crop to screenW/screenH while the feed renders at the cell's real aspect makes the feed re-crop the result — this is the mismatch we've chased every round. This one wrong constant is the root cause.
+
+SCOPE (fix this one value + thread it through):
+1) Compute the FEED CELL's REAL aspect — never screenW/screenH:
+   - PREFERRED: MEASURE the actual feed cell via onLayout (the SAME pattern already used for petInfoHeightRef in the Fit fix) and use its real width/height ratio.
+   - Share this measured aspect so the compose refiner AND the compose preview use the exact value the feed cell actually renders at.
+   - Fallback only if no measured value is available at compose time: screenW ÷ (windowHeight − insets.top − insets.bottom − tabBarHeight), matching exactly how the feed cell is sized. NEVER screenW/screenH.
+2) ONE source of truth for the feed cell's dimensions, used by BOTH the feed and the compose crop pipeline. If the feed cell computes/measures its own size, export that and reuse it — do not let compose independently guess.
+3) Thread this single correct aspect through FrameRefiner's lockedRatio, the compose preview, and FocalImage's feed rendering — one value, one source.
+
+DO NOT MODIFY:
+- The Fit composition fix (containAlignBottom) — correct; leave it.
+- Cover-mode feed, crop columns (NO schema change), follow-paw placement, SVG paw chip, field order, the "choose a pet" hint.
+- Right-rail icons (separate project). R2/auth/A-fix offset/other screens.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari):
+1. THE TEST: open Adjust framing, zoom + pan to a clearly OFF-CENTER region, apply, post → the compose preview, the refiner crop, and the feed cell all show the IDENTICAL region. This has failed every round because of the wrong aspect; it must hold now.
+2. Fit post still shows the photo just above the name (unchanged).
+3. Cover-mode feed still correct.
+4. Golden path.

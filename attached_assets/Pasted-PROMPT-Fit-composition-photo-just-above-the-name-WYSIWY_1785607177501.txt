@@ -1,0 +1,30 @@
+PROMPT — Fit composition (photo just above the name) + WYSIWYG-on-crop (unify the aspect across refiner/preview/feed). Feed + compose. NO schema change.
+
+CONTEXT: Two issues from live QA. (1) The Fit-mode top:0 pin looks wrong — a wide contained photo leaves a big blur gap between the photo and the pet name. (2) A DELIBERATELY cropped photo still doesn't match the feed — which proves the refiner crops to a DIFFERENT aspect than the feed displays (the earlier "already correct, no changes needed" was wrong). Fix both.
+
+SCOPE:
+
+1) FIT-MODE COMPOSITION (feed):
+   - Remove the top:0 pin. Position the contained ("show whole photo") image so its BOTTOM edge sits a small, consistent margin ABOVE the pet name/caption block — photo and caption grouped together at the bottom.
+   - The full-bleed blur fills the area ABOVE the photo as an ambient backdrop. No large empty gap between the photo and the name.
+
+2) WYSIWYG ON CROP — unify the aspect (the recurring bug; it must actually be rebuilt, not asserted):
+   - The mismatch on a deliberate crop proves the refiner crops to a DIFFERENT aspect than the feed displays, so the feed cover-fits the crop and re-crops it. 
+   - FIX: the Adjust-framing refiner must crop to the FEED CELL's EXACT real aspect ratio — the crop frame the user drags IS the feed's frame (identical aspect). Store ONE crop rect in that aspect.
+   - The compose inline preview AND the feed both render that exact rect at that exact aspect via the SAME component. Refiner == preview == feed: one aspect, one rect, applied identically.
+   - Do NOT assert "already correct." Verify by cropping DELIBERATELY (zoom + pan to an off-center region).
+
+DO NOT MODIFY:
+- Cover-mode feed rendering (correct). NO schema change (crop columns exist).
+- The follow-paw placement, the SVG paw chip, field order, the "choose a pet" hint — all correct from prior passes.
+- Right-rail icons (separate icon-family project). R2/auth/A-fix offset/other screens.
+- The detail screen's contain-fit — leave it unchanged unless it shares the Fit path; if it does, keep the detail behavior as-is.
+
+PRESERVATION CLAUSE:
+Preserve all correct behavior. No Reanimated. RN longhand styles. Handle overflow correctly.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari):
+1. FIT: a "show whole photo" post shows the photo sitting JUST ABOVE the pet name (no big blur gap between them); the blur fills above; clean composition.
+2. WYSIWYG ON A DELIBERATE CROP: open Adjust framing, zoom + pan to an OFF-CENTER region, apply, post → the compose preview, the refiner crop, and the feed cell all show the IDENTICAL region. Use a real off-center crop, NOT the auto-frame.
+3. Cover-mode feed still correct.
+4. Golden path.
