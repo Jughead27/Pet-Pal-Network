@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, petsTable, packFollowsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
+import { activePets } from "../lib/petQueries.js";
 
 const router: IRouter = Router();
 
@@ -14,8 +15,8 @@ router.post("/pets/:id/pack", async (req, res) => {
   const { id: petId } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
-  // Verify pet exists
-  const [pet] = await db.select({ id: petsTable.id }).from(petsTable).where(eq(petsTable.id, petId));
+  // Verify pet exists and is not soft-deleted
+  const [pet] = await db.select({ id: petsTable.id }).from(petsTable).where(and(eq(petsTable.id, petId), activePets));
   if (!pet) {
     res.status(404).json({ error: "Not found" });
     return;
@@ -45,8 +46,8 @@ router.delete("/pets/:id/pack", async (req, res) => {
   const { id: petId } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
-  // Verify pet exists
-  const [pet] = await db.select({ id: petsTable.id }).from(petsTable).where(eq(petsTable.id, petId));
+  // Verify pet exists and is not soft-deleted
+  const [pet] = await db.select({ id: petsTable.id }).from(petsTable).where(and(eq(petsTable.id, petId), activePets));
   if (!pet) {
     res.status(404).json({ error: "Not found" });
     return;

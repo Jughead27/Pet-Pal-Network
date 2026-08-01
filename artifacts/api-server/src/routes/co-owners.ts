@@ -57,11 +57,11 @@ router.post("/pets/:petId/co-owner-invites", async (req, res) => {
     return;
   }
 
-  // Verify pet exists
+  // Verify pet exists and is not soft-deleted
   const [pet] = await db
     .select({ id: petsTable.id, name: petsTable.name })
     .from(petsTable)
-    .where(eq(petsTable.id, petId))
+    .where(and(eq(petsTable.id, petId), activePets))
     .limit(1);
   if (!pet) { res.status(404).json({ error: "Pet not found" }); return; }
 

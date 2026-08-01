@@ -1,0 +1,43 @@
+TASK: Close 4 write-path existence guards that don't filter deleted
+pets, by applying the existing `activePets` accessor. Single scoped
+change.
+
+CONTEXT: A read-only audit confirmed all 11 pet-READ surfaces already
+route through the shared `activePets` accessor
+(api-server/src/lib/petQueries.ts) — no read leaks. But 4 WRITE-PATH
+existence checks accept a deleted pet's ID as valid, allowing
+joins/inserts to land on ghost (soft-deleted) records. Add the
+accessor to those 4 checks so writes can't target a deleted pet.
+
+DO — add `activePets` (isNull(deletedAt)) to the pet existence check
+in each of these 4 sites, matching how the read paths already use it:
+  1. pack.ts line ~18   — join pack (POST /pets/:id/pack)
+  2. pack.ts line ~49   — leave pack (DELETE /pets/:id/pack)
+  3. posts.ts line ~40  — new post (POST /posts) pet existence check
+  4. co-owners.ts line ~62 — co-owner invite
+     (POST /pets/:id/co-owners/invites)
+  Each should treat a soft-deleted pet as NOT FOUND — same behavior a
+  non-existent pet already gets (return the existing 404/not-found
+  path; do not invent a new error shape).
+
+DO NOT: touch the 11 read surfaces (already correct), the admin
+PETS_INCLUDING_DELETED opt-out, the purge job, delete-pet logic, or any
+UI. Server write-guards only.
+
+PRESERVATION CLAUSE: writes against ACTIVE (non-deleted) pets behave
+exactly as today — pack join/leave, posting, and co-owner invites all
+still work normally. The only change: the same actions targeting a
+soft-deleted pet now cleanly fail as not-found instead of proceeding.
+
+ACCEPTANCE (live on pshpsh.net):
+1. Against a normal pet: join pack, leave pack, create a post, send a
+   co-owner invite — all still work.
+2. Against a soft-deleted pet's ID: each of the 4 actions is rejected
+   as not-found (no ghost row created).
+3. grep confirms all 4 sites now reference `activePets`; admin remains
+   the sole PETS_INCLUDING_DELETED caller.
+4. Golden path intact.
+
+OUTPUT: the 4 edited sites (before/after), confirmation of the
+not-found behavior, and the Review Changes count. Commit locally; I
+will Sync.

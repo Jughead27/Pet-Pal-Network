@@ -14,6 +14,7 @@ import { CreatePostBody } from "@workspace/api-zod";
 import { deleteObject } from "../lib/r2.js";
 import { notBlockedCommentAuthor, notHiddenByAdminComment } from "../lib/excludeBlocked.js";
 import { isPetOwner, isPetPrimaryOwner } from "../lib/isPetOwner.js";
+import { activePets } from "../lib/petQueries.js";
 
 const router: IRouter = Router();
 
@@ -35,11 +36,11 @@ router.post("/posts", async (req, res) => {
 
   const { petId, mediaKey, caption, isNursery, cropFocusX, cropFocusY } = parsed.data;
 
-  // Verify pet exists and caller is any owner (primary or co)
+  // Verify pet exists, is not soft-deleted, and caller is any owner (primary or co)
   const [pet] = await db
     .select({ id: petsTable.id })
     .from(petsTable)
-    .where(eq(petsTable.id, petId))
+    .where(and(eq(petsTable.id, petId), activePets))
     .limit(1);
 
   if (!pet) {
