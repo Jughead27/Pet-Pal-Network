@@ -1,0 +1,42 @@
+PROMPT — New Post page: best-in-class redesign + WYSIWYG portrait preview (add.tsx + Adjust-framing refiner; NO schema change)
+
+CONTEXT: Rebuild the New Post screen to be best-in-class, and fold in the still-outstanding portrait-preview fix. The "Adjust framing" refiner and the FEED both render the stored crop CORRECTLY today — only the inline New Post preview is wrong (landscape). The crop logic itself is correct; do not touch it. No schema change — all crop columns already exist.
+
+SCOPE (the whole New Post screen):
+
+1) WYSIWYG PORTRAIT PREVIEW:
+   - The inline preview must render through the SAME cover-fit component and SAME stored crop rect the FEED uses. Do not re-derive the crop.
+   - Shape the preview container from the FEED CELL's REAL aspect ratio (the same aspect the feed and refiner already use — they're correct). Do NOT use screenW/screenH.
+   - Set the shape via the `aspectRatio` style (aspectRatio = feedCellWidth/feedCellHeight), not a manual pixel-height calc. REMOVE any leftover fixed-height/landscape style on the preview wrapper — that old style is clamping it to landscape.
+   - If the portrait preview is too tall for the form, cap its max height and KEEP the aspect (narrower centered portrait); the crop region shown must stay the exact feed crop.
+   - Result: preview is visibly TALLER THAN WIDE and matches the feed + refiner exactly.
+
+2) FIELD ORDER (top to bottom): Photo → PET → Caption → Nursery → Post. (Pet moves ABOVE caption — the pet is the post's identity; the caption is optional.)
+
+3) "SHOW WHOLE PHOTO" — remove from the form entirely. Move it INTO the Adjust-framing refiner as a Crop / Fit mode toggle: Crop = cover (default), Fit = whole photo + blurred-fill. The refiner writes crop_mode exactly as the form toggle did. No whole-photo control remains in the form.
+
+4) PET SELECTOR: drop the "Cat"/"Dog" species subtitle. Show each pet's AVATAR (their face) + NAME. (Avatars already exist from the pet-avatar feature; if the compose pet-list query doesn't include the avatar URL, add it.)
+
+5) SINGLE-PET AUTO-SELECT: if the user has exactly one pet, auto-select it and replace the card grid with a quiet "posting as [PetName]" line — no forced choice. Multi-pet users still see the avatar+name cards.
+
+6) CAPTION placeholder personalizes once a pet is selected: "Say something about [PetName]… (optional)". Before selection (multi-pet, none chosen yet) keep "Say something about your pet… (optional)".
+
+DO NOT MODIFY:
+- The feed + detail render — correct.
+- computeAutoFrame, the decapitation guard, the stored crop columns — the crop is correct; this is a UI pass, NO schema change.
+- The refiner's crop/zoom mechanics (Animated + PanResponder, zoom cap) — you are only ADDING the Crop/Fit toggle inside it, not touching the drag/zoom.
+- R2 upload/presign/CORS, auth, trust layer, invites, delete-pet, the activePets accessor, all other screens.
+- The A-fix pinned Post button + WEB_TAB_BAR_HEIGHT offset.
+
+PRESERVATION CLAUSE:
+Preserve all current New Post behavior not named — the photo-required + pet-required gate, Cancel (reachable from the first frame), Post enable/disable logic, native paths. Any bottom-pinned control clears the tab bar + safe-area (WEB_TAB_BAR_HEIGHT + env(safe-area-inset-bottom)). NO Reanimated (built-in Animated / PanResponder only). overflow:'visible' on ancestors of out-of-bounds drawing. RN longhand styles only.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari — Replit sim can't render this app):
+1. Preview: select the Newt photo → the inline preview is PORTRAIT and matches the feed post AND the Adjust-framing crop exactly (all three agree).
+2. Order: fields read Photo → Pet → Caption → Nursery → Post, top to bottom.
+3. Whole-photo: there is NO "show whole photo" toggle in the form; open Adjust framing → a Crop/Fit toggle is there; Fit → whole image + blurred-fill (previews and posts that way); Crop → cover.
+4. Pet cards: show avatar + name, NO "Cat"/"Dog" label. (On a single-pet test account it auto-selects and shows "posting as [PetName]".)
+5. Caption: after choosing Newt, the placeholder reads "Say something about Newt… (optional)".
+6. Post it → the feed matches the inline preview exactly.
+7. An existing pre-B post renders exactly as before.
+8. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → sign out.

@@ -36,7 +36,9 @@ interface FrameRefinerProps {
   naturalWidth: number;
   naturalHeight: number;
   initialRect: CropRect;
-  onConfirm: (rect: CropRect) => void;
+  /** Starting fit mode; user can toggle between Crop (cover) and Fit (whole photo). */
+  initialMode?: 'cover' | 'contain';
+  onConfirm: (rect: CropRect, mode: 'cover' | 'contain') => void;
   onCancel: () => void;
 }
 
@@ -51,11 +53,15 @@ export default function FrameRefiner({
   naturalWidth,
   naturalHeight,
   initialRect,
+  initialMode = 'cover',
   onConfirm,
   onCancel,
 }: FrameRefinerProps) {
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+
+  // ── Fit mode (Crop = cover / Fit = whole photo + blurred fill) ─────────────
+  const [mode, setMode] = useState<'cover' | 'contain'>(initialMode);
 
   // ── Display geometry ──────────────────────────────────────────────────────
   const TOP_BAR_H    = insets.top + 56;
@@ -229,8 +235,8 @@ export default function FrameRefiner({
 
   // ── Confirm ───────────────────────────────────────────────────────────────
   const handleConfirm = useCallback(() => {
-    onConfirm({ ...rectRef.current });
-  }, [onConfirm]);
+    onConfirm({ ...rectRef.current }, mode);
+  }, [onConfirm, mode]);
 
   // ── Rendered crop rect in display coordinates ─────────────────────────────
   const displayRect = useMemo(() => toDisplay(rect), [rect, toDisplay]);
@@ -291,6 +297,32 @@ export default function FrameRefiner({
 
       {/* Bottom bar */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
+        {/* Crop / Fit mode segmented toggle */}
+        <View style={styles.modeToggle}>
+          <Pressable
+            style={[styles.modeBtn, mode === 'cover' && styles.modeBtnActive]}
+            onPress={() => setMode('cover')}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: mode === 'cover' }}
+            accessibilityLabel="Crop"
+          >
+            <Text style={[styles.modeBtnText, mode === 'cover' && styles.modeBtnTextActive]}>
+              Crop
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.modeBtn, mode === 'contain' && styles.modeBtnActive]}
+            onPress={() => setMode('contain')}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: mode === 'contain' }}
+            accessibilityLabel="Fit — show whole photo"
+          >
+            <Text style={[styles.modeBtnText, mode === 'contain' && styles.modeBtnTextActive]}>
+              Fit
+            </Text>
+          </Pressable>
+        </View>
+
         <Pressable
           style={({ pressed }) => [styles.doneBtn, pressed && styles.doneBtnPressed]}
           onPress={handleConfirm}
@@ -420,5 +452,29 @@ const styles = StyleSheet.create({
     color: '#060B10',
     fontSize: 16,
     fontWeight: '700' as const,
+  },
+  // Crop / Fit segmented toggle
+  modeToggle: {
+    flexDirection: 'row' as const,
+    marginBottom: 12,
+    borderRadius: 10,
+    overflow: 'hidden' as const,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  modeBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center' as const,
+  },
+  modeBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  modeBtnText: {
+    color: 'rgba(240,244,248,0.6)',
+    fontSize: 14,
+    fontWeight: '600' as const,
+  },
+  modeBtnTextActive: {
+    color: '#F0F4F8',
   },
 });

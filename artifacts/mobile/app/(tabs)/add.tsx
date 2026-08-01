@@ -16,6 +16,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -63,13 +64,6 @@ export default function AddScreen() {
 
   // Target aspect ratio for auto-frame: the feed hero is full-screen portrait.
   const feedAspect   = screenW / screenH;
-
-  // Compose preview dimensions — same aspect ratio as the feed cell so the
-  // preview is a true WYSIWYG crop preview.  Width fills the content area
-  // (minus the 20 px padding on each side); height is derived from feedAspect
-  // so the shape is identical to what the feed will render.
-  const contentW  = screenW - 40;
-  const previewH  = Math.round(contentW / feedAspect);
 
   // The web tab bar is position:absolute with minHeight:84 (set in _layout.tsx).
   const WEB_TAB_BAR_HEIGHT = 84;
@@ -200,10 +194,11 @@ export default function AddScreen() {
   }, [processPickedAsset]);
 
   // ── Refiner callbacks ─────────────────────────────────────────────────────
-  const handleRefineConfirm = useCallback((rect: CropRect) => {
+  const handleRefineConfirm = useCallback((rect: CropRect, mode: 'cover' | 'contain') => {
     setCropRect(rect);
     setCropFocusX(rect.x + rect.w / 2);
     setCropFocusY(rect.y + rect.h / 2);
+    setCropMode(mode);
     setRefinerOpen(false);
   }, []);
 
@@ -301,6 +296,12 @@ export default function AddScreen() {
 
   // ── Helpers ───────────────────────────────────────────────────────────────
   const canSubmit = !!compressedUri && !!selectedPetId && !isUploading;
+  // Derive the selected pet so we can personalise the caption placeholder and
+  // show the single-pet "posting as" display without an extra query.
+  const selectedPet = pets.find((p) => p.id === selectedPetId) ?? null;
+  const captionPlaceholder = selectedPet
+    ? `Say something about ${selectedPet.name}… (optional)`
+    : 'Say something about your pet… (optional)';
   const s = makeStyles(colors);
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -349,6 +350,7 @@ export default function AddScreen() {
             naturalWidth={naturalSize.current.width  || 1}
             naturalHeight={naturalSize.current.height || 1}
             initialRect={cropRect}
+            initialMode={cropMode}
             onConfirm={handleRefineConfirm}
             onCancel={handleRefineCancel}
           />
@@ -379,18 +381,37 @@ export default function AddScreen() {
 
         {/* ── Image area ── */}
         {step === 'compressing' ? (
-          <View style={[s.imagePlaceholder, { backgroundColor: colors.card, borderColor: colors.border, height: previewH }]}>
+          <View style={[
+            s.imagePlaceholder,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              aspectRatio: feedAspect,
+              maxHeight: 480,
+              alignSelf: 'center',
+              width: '100%',
+            },
+          ]}>
             <ActivityIndicator color={colors.primary} />
             <Text style={[s.processingText, { color: colors.mutedForeground }]}>Processing…</Text>
           </View>
         ) : compressedUri ? (
-          // Form step: WYSIWYG preview — same aspect ratio as the feed cell.
-          // previewH = contentW / feedAspect so the shape is identical to what
-          // the feed will render; FocalImage applies the same cover-rect logic.
-          <View style={s.previewWrapper}>
+          // WYSIWYG portrait preview — exactly the same crop logic as the feed.
+          // aspectRatio gives the portrait shape; maxHeight caps it so it doesn't
+          // dominate on landscape viewports; alignSelf='center' centers the box
+          // when maxHeight kicks in and Yoga narrows the width to maintain ratio.
+          <View style={[
+            s.previewWrapper,
+            {
+              aspectRatio: feedAspect,
+              maxHeight: 480,
+              alignSelf: 'center',
+              width: '100%',
+            },
+          ]}>
             <FocalImage
               source={{ uri: compressedUri }}
-              style={[s.preview, { height: previewH }]}
+              style={s.preview}
               focusX={cropFocusX}
               focusY={cropFocusY}
               cropX={cropRect?.x ?? null}
@@ -399,32 +420,7 @@ export default function AddScreen() {
               cropH={cropRect?.h ?? null}
               mode={cropMode}
             />
-
-            {/* ── Left overlay: "Whole photo" toggle — always above the fold ── */}
-            <TouchableOpacity
-              style={[
-                s.previewBtn,
-                s.previewBtnLeft,
-                {
-                  backgroundColor: cropMode === 'contain'
-                    ? 'rgba(46,191,165,0.85)'   // teal tint when active
-                    : 'rgba(6,11,16,0.6)',
-                },
-              ]}
-              onPress={() => setCropMode((m) => m === 'contain' ? 'cover' : 'contain')}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: cropMode === 'contain' }}
-              accessibilityLabel="Show whole photo"
-            >
-              <Feather
-                name={cropMode === 'contain' ? 'minimize' : 'maximize'}
-                size={14}
-                color="#F0F4F8"
-              />
-              <Text style={s.previewBtnText}>Whole photo</Text>
-            </TouchableOpacity>
-
-            {/* ── Right overlay: "Adjust framing" + "Change" ── */}
+            {/* Overlay — "Whole photo" removed; now lives inside the refiner */}
             <View style={s.previewBtnRow}>
               <TouchableOpacity
                 style={[s.previewBtn, { backgroundColor: 'rgba(6,11,16,0.6)' }]}
@@ -487,13 +483,46 @@ export default function AddScreen() {
         {/* ── Form ── */}
         <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
 
-          {/* Caption */}
-          <Text style={[s.label, { color: colors.mutedForeground }]}>Caption</Text>
+          {/* Pet — FIRST: the pet is the post's identity */}
+          <Text style={[s.label, { color: colors.mutedForeground }]}>Pet</Text>
+          {pets.length === 1 ? (
+            // Single-pet: auto-selected — show a quiet "posting as" line
+            <View style={s.postingAsRow}>
+              {pets[0].avatarUrl ? (
+                <Image source={{ uri: pets[0].avatarUrl }} style={s.postingAsAvatar} />
+              ) : (
+                <View style={[s.postingAsAvatarFallback, { backgroundColor: colors.secondary }]}>
+                  <Text style={[s.postingAsAvatarInitial, { color: colors.mutedForeground }]}>
+                    {pets[0].name[0]?.toUpperCase() ?? '?'}
+                  </Text>
+                </View>
+              )}
+              <Text style={[s.postingAsName, { color: colors.foreground }]}>
+                {pets[0].name}
+              </Text>
+            </View>
+          ) : (
+            // Multi-pet: avatar + name chips
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.petScroll}>
+              {pets.map((pet) => (
+                <PetChip
+                  key={pet.id}
+                  pet={pet}
+                  selected={pet.id === selectedPetId}
+                  colors={colors}
+                  onPress={() => setSelectedPetId(pet.id)}
+                />
+              ))}
+            </ScrollView>
+          )}
+
+          {/* Caption — AFTER Pet; placeholder personalises once pet is chosen */}
+          <Text style={[s.label, { color: colors.mutedForeground, marginTop: 20 }]}>Caption</Text>
           <TextInput
             style={[s.input, s.captionInput, { backgroundColor: colors.secondary, borderColor: colors.border, color: colors.foreground }]}
             value={caption}
             onChangeText={setCaption}
-            placeholder="Say something about your pet… (optional)"
+            placeholder={captionPlaceholder}
             placeholderTextColor={colors.mutedForeground}
             selectionColor={colors.primary}
             multiline
@@ -501,26 +530,6 @@ export default function AddScreen() {
             blurOnSubmit
             maxLength={280}
           />
-
-          {/* Pet selector — hidden when there is only one pet */}
-          {pets.length > 1 && (
-            <>
-              <Text style={[s.label, { color: colors.mutedForeground, marginTop: 16 }]}>
-                Pet
-              </Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.petScroll}>
-                {pets.map((pet) => (
-                  <PetChip
-                    key={pet.id}
-                    pet={pet}
-                    selected={pet.id === selectedPetId}
-                    colors={colors}
-                    onPress={() => setSelectedPetId(pet.id)}
-                  />
-                ))}
-              </ScrollView>
-            </>
-          )}
 
           {/* Nursery toggle */}
           <Pressable
@@ -605,17 +614,26 @@ function PetChip({ pet, selected, colors, onPress }: PetChipProps) {
         },
       ]}
     >
+      {pet.avatarUrl ? (
+        <Image source={{ uri: pet.avatarUrl }} style={chipStyles.avatar} />
+      ) : (
+        <View style={[
+          chipStyles.avatarFallback,
+          { backgroundColor: selected ? 'rgba(255,255,255,0.25)' : colors.border },
+        ]}>
+          <Text style={[
+            chipStyles.avatarInitial,
+            { color: selected ? colors.primaryForeground : colors.foreground },
+          ]}>
+            {pet.name[0]?.toUpperCase() ?? '?'}
+          </Text>
+        </View>
+      )}
       <Text style={[
         chipStyles.name,
         { color: selected ? colors.primaryForeground : colors.foreground },
       ]}>
         {pet.name}
-      </Text>
-      <Text style={[
-        chipStyles.species,
-        { color: selected ? colors.primaryForeground : colors.mutedForeground },
-      ]}>
-        {pet.species}
       </Text>
     </TouchableOpacity>
   );
@@ -624,21 +642,34 @@ function PetChip({ pet, selected, colors, onPress }: PetChipProps) {
 const chipStyles = StyleSheet.create({
   chip: {
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
-    paddingHorizontal: 14,
+    borderRadius: 12,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     marginRight: 8,
     alignItems: 'center',
-    minWidth: 80,
+    minWidth: 70,
+    gap: 6,
+  },
+  avatar: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  avatarFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitial: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 16,
   },
   name: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 14,
-  },
-  species: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 11,
-    marginTop: 2,
+    fontSize: 13,
+    textAlign: 'center',
   },
 });
 
@@ -698,7 +729,7 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
     },
 
     imagePlaceholder: {
-      height: 220,
+      // height omitted — applied inline via aspectRatio + maxHeight
       borderRadius: 14,
       borderWidth: StyleSheet.hairlineWidth,
       borderStyle: 'dashed',
@@ -713,14 +744,15 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       marginTop: 8,
     },
     previewWrapper: {
+      // aspectRatio + maxHeight + alignSelf applied inline so they can use the
+      // runtime feedAspect value.  Only non-runtime chrome lives here.
       borderRadius: 14,
       overflow: 'hidden',
       marginBottom: 16,
-      position: 'relative',
     },
     preview: {
-      width: '100%',
-      height: 260,
+      // Fill the aspectRatio-driven height of previewWrapper.
+      flex: 1,
     },
     previewBtnRow: {
       position: 'absolute',
@@ -728,13 +760,6 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       right: 10,
       flexDirection: 'row',
       gap: 8,
-    },
-    // "Whole photo" toggle — pinned to bottom-left of the preview so it's
-    // always visible above the fold, opposite the framing/change buttons.
-    previewBtnLeft: {
-      position: 'absolute',
-      bottom: 10,
-      left: 10,
     },
     previewBtn: {
       flexDirection: 'row',
@@ -748,6 +773,34 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
       color: '#F0F4F8',
+    },
+
+    // "Posting as" row — shown instead of pet chips when the user has exactly one pet.
+    postingAsRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginBottom: 4,
+    },
+    postingAsAvatar: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+    },
+    postingAsAvatarFallback: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    postingAsAvatarInitial: {
+      fontFamily: 'Inter_600SemiBold',
+      fontSize: 13,
+    },
+    postingAsName: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 15,
     },
 
     card: {
