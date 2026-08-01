@@ -1,0 +1,47 @@
+TASK: Replace the always-expanded inline breed list on pet/edit.tsx
+(and pet/create.tsx if it shares the pattern) with a collapsed
+tap-to-open picker. Single scoped change.
+
+CONTEXT: The breed selector renders as a long, always-expanded inline
+list (~236 dog breeds). It hijacks scroll — users flick to reach the
+bottom of the screen and instead scroll through breeds, making the
+bottom of the page (incl. the delete zone) hard to reach and everyday
+editing awkward.
+
+DO:
+1. Report how breed and species are currently rendered on
+   pet/edit.tsx and pet/create.tsx.
+2. Replace the inline breed list with a single tappable SUMMARY ROW
+   showing the current value + affordance, e.g. "Breed  Golden
+   Retriever  ›". Tapping it opens the breed list in a MODAL or
+   separate screen (searchable if easy); selecting returns and updates
+   the row.
+3. Apply the SAME collapsed-row pattern to species ONLY IF it is also
+   an always-expanded long inline list; if species is already compact,
+   leave it and report which.
+4. Result: the edit screen is short — the picker no longer adds scroll
+   length, so Save/Cancel and the delete zone are reachable with a
+   normal scroll.
+5. Selecting a breed must persist through Save exactly as before (same
+   field, same submit). Preserve the current species→breed filtering
+   (changing species resets/filters breed as it does today).
+
+DO NOT: change the delete affordance/confirm (separate task), Save
+logic beyond reading the same selected value, other fields, or auth.
+Don't lose species→breed filtering.
+
+PRESERVATION CLAUSE: choosing/saving a breed works exactly as today;
+only the picking UI changes from inline-list to tap-to-open. Existing
+pets' species/breed values display correctly in the new row.
+
+ACCEPTANCE (live on pshpsh.net):
+1. Edit screen shows a compact "Breed: {current} ›" row, not a long
+   list; the screen is short and the bottom easily reached.
+2. Tapping opens the picker; selecting returns and updates the row.
+3. Save persists the breed; reopening shows it.
+4. Species→breed relationship still correct.
+5. pet/create.tsx breed selection still works (if it was changed).
+6. Golden path intact.
+
+OUTPUT: breed/species rendering before vs after, files changed, Review
+Changes count. Commit locally; I will Sync.

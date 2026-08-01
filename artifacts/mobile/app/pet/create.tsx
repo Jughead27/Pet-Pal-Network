@@ -21,6 +21,7 @@ import {
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -60,6 +61,7 @@ export default function CreatePetScreen() {
   const [selectedSpeciesId, setSelectedSpeciesId] = useState<string | null>(null);
   const [selectedBreedId,   setSelectedBreedId]   = useState<string | null>(null);
   const [breedSearch,       setBreedSearch]       = useState('');
+  const [breedPickerVisible, setBreedPickerVisible] = useState(false);
   const [customBreed,       setCustomBreed]       = useState('');
   const [useCustomBreed,    setUseCustomBreed]    = useState(false);
   const [bio,               setBio]               = useState('');
@@ -168,6 +170,17 @@ export default function CreatePetScreen() {
   // ── Selected species label (for the breed section header) ─────────────────
   const selectedSpeciesName = speciesList.find((sp) => sp.id === selectedSpeciesId)?.name ?? '';
 
+  const breedLabel =
+    ['Fish', 'Bird', 'Reptile', 'Amphibian', 'Invertebrate', 'Small Mammal'].includes(selectedSpeciesName)
+      ? 'Type / Kind'
+      : 'Breed';
+
+  // Resolved display name for the selected breed FK — drives the summary row
+  const selectedBreedName = useMemo(
+    () => allBreeds.find((b) => b.id === selectedBreedId)?.name ?? null,
+    [allBreeds, selectedBreedId],
+  );
+
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <KeyboardAvoidingView
@@ -260,11 +273,7 @@ export default function CreatePetScreen() {
         {selectedSpeciesId && (
           <View style={s.card}>
             <Text style={s.label}>
-              {selectedSpeciesName === 'Fish' || selectedSpeciesName === 'Bird' ||
-               selectedSpeciesName === 'Reptile' || selectedSpeciesName === 'Amphibian' ||
-               selectedSpeciesName === 'Invertebrate' || selectedSpeciesName === 'Small Mammal'
-                ? `Type / Kind`
-                : `Breed`}
+              {breedLabel}
               <Text style={[s.label, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}> (optional)</Text>
             </Text>
 
@@ -272,76 +281,27 @@ export default function CreatePetScreen() {
               <ActivityIndicator color={colors.primary} style={{ marginVertical: 8 }} />
             ) : allBreeds.length > 0 ? (
               <>
-                {/* Search box */}
-                <View style={[s.searchBox, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-                  <Feather name="search" size={15} color={colors.mutedForeground} style={s.searchIcon} />
-                  <TextInput
-                    style={[s.searchInput, { color: colors.foreground }]}
-                    value={breedSearch}
-                    onChangeText={setBreedSearch}
-                    placeholder={`Search breeds…`}
-                    placeholderTextColor={colors.mutedForeground}
-                    selectionColor={colors.primary}
-                    returnKeyType="search"
-                    clearButtonMode="while-editing"
-                  />
-                  {breedSearch.length > 0 && Platform.OS !== 'ios' && (
-                    <TouchableOpacity onPress={() => setBreedSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Feather name="x" size={14} color={colors.mutedForeground} />
-                    </TouchableOpacity>
-                  )}
-                </View>
+                {/* Summary row — tapping opens the full-screen picker modal */}
+                <TouchableOpacity
+                  onPress={() => { setBreedSearch(''); setBreedPickerVisible(true); }}
+                  style={s.breedSummaryRow}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Choose ${breedLabel.toLowerCase()}`}
+                >
+                  <Text
+                    style={[
+                      s.breedSummaryValue,
+                      { color: (useCustomBreed || selectedBreedId) ? colors.foreground : colors.mutedForeground },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {useCustomBreed ? 'Custom (see below)' : selectedBreedName ?? 'Not selected'}
+                  </Text>
+                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                </TouchableOpacity>
 
-                {/* Breed chips — fixed-height scrollable list */}
-                <View style={s.breedListWrapper}>
-                  <FlatList
-                    data={filteredBreeds}
-                    keyExtractor={(item) => item.id}
-                    scrollEnabled
-                    nestedScrollEnabled
-                    showsVerticalScrollIndicator={false}
-                    keyboardShouldPersistTaps="handled"
-                    style={s.breedList}
-                    renderItem={({ item }) => {
-                      const active = item.id === selectedBreedId && !useCustomBreed;
-                      return (
-                        <TouchableOpacity
-                          onPress={() => handleBreedSelect(item.id)}
-                          activeOpacity={0.7}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected: active }}
-                          style={[
-                            s.breedRow,
-                            { borderBottomColor: colors.border },
-                            active && { backgroundColor: `${colors.primary}18` },
-                          ]}
-                        >
-                          <Text style={[s.breedRowText, { color: active ? colors.primary : colors.foreground }]}>
-                            {item.name}
-                          </Text>
-                          {active && (
-                            <Ionicons name="checkmark" size={16} color={colors.primary} />
-                          )}
-                        </TouchableOpacity>
-                      );
-                    }}
-                    ListFooterComponent={() => (
-                      <TouchableOpacity
-                        onPress={() => handleBreedSelect(NOT_LISTED_ID)}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        style={[s.breedRow, { borderBottomWidth: 0 }]}
-                      >
-                        <Text style={[s.breedRowText, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
-                          Not listed — enter my own
-                        </Text>
-                        <Feather name="edit-2" size={14} color={colors.mutedForeground} />
-                      </TouchableOpacity>
-                    )}
-                  />
-                </View>
-
-                {/* Custom breed input (shown when "Not listed" chosen) */}
+                {/* Custom breed input — only shown when "Not listed" is active */}
                 {useCustomBreed && (
                   <View style={s.customBreedWrapper}>
                     <TextInput
@@ -421,6 +381,105 @@ export default function CreatePetScreen() {
           onPress={() => router.back()}
         />
       </ScrollView>
+
+      {/* ── Breed picker modal ── */}
+      <Modal
+        visible={breedPickerVisible}
+        animationType="slide"
+        onRequestClose={() => setBreedPickerVisible(false)}
+      >
+        <View style={[s.breedModal, { backgroundColor: colors.background }]}>
+          {/* Header */}
+          <View style={[s.breedModalHeader, { borderBottomColor: colors.border, paddingTop: topInset + 16 }]}>
+            <Text style={[s.breedModalTitle, { color: colors.foreground }]}>
+              {breedLabel}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setBreedPickerVisible(false)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+            >
+              <Feather name="x" size={22} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Search */}
+          <View style={[s.breedModalSearch, { borderBottomColor: colors.border }]}>
+            <View style={[s.searchBox, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
+              <Feather name="search" size={15} color={colors.mutedForeground} style={s.searchIcon} />
+              <TextInput
+                style={[s.searchInput, { color: colors.foreground }]}
+                value={breedSearch}
+                onChangeText={setBreedSearch}
+                placeholder="Search breeds…"
+                placeholderTextColor={colors.mutedForeground}
+                selectionColor={colors.primary}
+                returnKeyType="search"
+                clearButtonMode="while-editing"
+                autoFocus={Platform.OS !== 'web'}
+              />
+              {breedSearch.length > 0 && Platform.OS !== 'ios' && (
+                <TouchableOpacity
+                  onPress={() => setBreedSearch('')}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Feather name="x" size={14} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+
+          {/* Breed list */}
+          <FlatList
+            data={filteredBreeds}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => {
+              const active = item.id === selectedBreedId && !useCustomBreed;
+              return (
+                <TouchableOpacity
+                  onPress={() => {
+                    handleBreedSelect(item.id);
+                    setBreedPickerVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: active }}
+                  style={[
+                    s.breedRow,
+                    { borderBottomColor: colors.border },
+                    active && { backgroundColor: `${colors.primary}18` },
+                  ]}
+                >
+                  <Text style={[s.breedRowText, { color: active ? colors.primary : colors.foreground }]}>
+                    {item.name}
+                  </Text>
+                  {active && <Ionicons name="checkmark" size={16} color={colors.primary} />}
+                </TouchableOpacity>
+              );
+            }}
+            ListFooterComponent={() => (
+              <TouchableOpacity
+                onPress={() => {
+                  handleBreedSelect(NOT_LISTED_ID);
+                  setBreedPickerVisible(false);
+                  setTimeout(() => customBreedRef.current?.focus(), 350);
+                }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                style={[s.breedRow, { borderBottomWidth: 0, marginBottom: insets.bottom + 16 }]}
+              >
+                <Text style={[s.breedRowText, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
+                  Not listed — enter my own
+                </Text>
+                <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
+          />
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -503,14 +562,14 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       fontSize: 14,
     },
 
-    // Breed search
+    // Breed search (used inside the picker modal)
     searchBox: {
       flexDirection: 'row',
       alignItems: 'center',
       borderWidth: StyleSheet.hairlineWidth,
       borderRadius: c.radius - 4,
       paddingHorizontal: 10,
-      marginBottom: 8,
+      marginBottom: 0,
     },
     searchIcon:  { marginRight: 6 },
     searchInput: {
@@ -520,15 +579,48 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       paddingVertical: Platform.OS === 'ios' ? 11 : 8,
     },
 
-    // Breed list
-    breedListWrapper: {
+    // Breed summary row (collapsed picker on the create screen)
+    breedSummaryRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
       borderWidth: StyleSheet.hairlineWidth,
       borderColor: c.border,
       borderRadius: c.radius - 4,
-      overflow: 'hidden',
-      maxHeight: 240,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
     },
-    breedList: { flexGrow: 0 },
+    breedSummaryValue: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 15,
+      flex: 1,
+      marginRight: 8,
+    },
+
+    // Breed picker modal
+    breedModal: {
+      flex: 1,
+    },
+    breedModalHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 20,
+      paddingBottom: 16,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+    breedModalTitle: {
+      fontFamily: 'Inter_600SemiBold',
+      fontSize: 20,
+      color: c.foreground,
+    },
+    breedModalSearch: {
+      paddingHorizontal: 20,
+      paddingVertical: 12,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+    },
+
+    // Breed rows (used in picker modal)
     breedRow: {
       flexDirection: 'row',
       alignItems: 'center',
