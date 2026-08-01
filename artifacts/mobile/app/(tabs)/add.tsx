@@ -321,9 +321,19 @@ export default function AddScreen() {
   // Derive the selected pet so we can personalise the caption placeholder and
   // show the single-pet "posting as" display without an extra query.
   const selectedPet = pets.find((p) => p.id === selectedPetId) ?? null;
-  const captionPlaceholder = selectedPet
-    ? `Say something about ${selectedPet.name}… (optional)`
-    : 'Say something about your pet… (optional)';
+
+  // Caption placeholder — playful, pet-as-author voice, rotating.
+  // Template index is picked once per compose open (mount) and stays stable
+  // for the session; only the pet name slot changes when the user picks a pet.
+  const CAPTION_TEMPLATES = [
+    (name: string) => `What's ${name} thinking?`,
+    (name: string) => `What's ${name} up to?`,
+    (name: string) => `A word from ${name}…`,
+  ] as const;
+  const placeholderIdxRef = useRef(Math.floor(Math.random() * CAPTION_TEMPLATES.length));
+  const captionPlaceholder = CAPTION_TEMPLATES[placeholderIdxRef.current](
+    selectedPet ? selectedPet.name : 'your pet',
+  );
   const s = makeStyles(colors);
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -502,10 +512,10 @@ export default function AddScreen() {
               onPress={pickImage}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Choose from library"
+              accessibilityLabel="Add a photo / video"
             >
               <Feather name="image" size={22} color={colors.foreground} />
-              <Text style={[s.sourceRowText, { color: colors.foreground }]}>Choose from library</Text>
+              <Text style={[s.sourceRowText, { color: colors.foreground }]}>Add a photo / video</Text>
               <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>

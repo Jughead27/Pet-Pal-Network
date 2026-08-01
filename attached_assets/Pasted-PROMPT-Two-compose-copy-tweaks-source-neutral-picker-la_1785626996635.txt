@@ -1,0 +1,23 @@
+PROMPT — Two compose copy tweaks: source-neutral picker label + a rotating personalized caption placeholder. add.tsx only. NO schema change, NO logic change.
+
+SCOPE:
+1) PHOTO-PICKER BUTTON LABEL:
+   - Change the New Post photo-picker button from "Choose from library" to "Add a photo / video" — source-neutral (the button opens a sheet with take a photo / choose from library / choose from files; the label must not name one source). Keep the existing image icon + chevron.
+
+2) CAPTION PLACEHOLDER — playful, personalized, rotating:
+   - Replace "Say something about [pet]… (optional)" with a playful placeholder in the pet-as-author voice, PERSONALIZED to the selected pet and ROTATING among a small set. Pick one at random per compose open; keep it stable during that session (only swap the pet name if the pet changes — don't re-roll on every keystroke or reselect).
+   - Set (tune to taste): "What's [pet] thinking?", "What's [pet] up to?", "A word from [pet]…". Before a pet is selected (multi-pet, none chosen yet), use the "your pet" form, e.g. "What's your pet thinking?".
+   - DROP the "(optional)" — a placeholder is optional by nature, and Post already works without a caption.
+
+DO NOT MODIFY:
+- The photo-picker sheet's options or behavior — only the button label text.
+- The caption input logic, maxLength (250), or the tap-to-detail routing — only the placeholder text.
+- Everything else on compose (field order, pet chips, Fit-default, Adjust, rail, follow-label).
+- Schema, R2, auth, other screens.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari):
+1. The photo-picker button reads "Add a photo / video"; tapping it still offers all three sources.
+2. Once a pet is chosen, the caption placeholder shows a playful personalized line (e.g. "What's Newt thinking?"); a different one appears on different compose opens (rotation); before a pet is chosen it uses the "your pet" form.
+3. No "(optional)" anywhere in the placeholder.
+4. Posting still works with and without a caption.
+5. Golden path.
