@@ -1,0 +1,36 @@
+PROMPT — New Post: preview becomes a scaled feed cell (permanent WYSIWYG) + reachability + avatar placeholder (add.tsx; NO schema change)
+
+CONTEXT: The New Post redesign shipped, but the inline preview STILL doesn't match the feed — 3rd time. Root pattern: the preview is sized independently of the feed, so the math keeps diverging. This round: aspectRatio:feedAspect + maxHeight:480 clamps HEIGHT ONLY, which changes the aspect (squarer) → preview showed the full cat with margins, feed showed a tighter zoom. Also: the tall preview buries the Pet selector (photo selected → user sees photo + a DISABLED Post but not the pet picker, and must guess to scroll), and the pet chips show bland letter-circle placeholders. The Adjust-framing refiner and the feed are CORRECT — do not touch them. No schema change.
+
+SCOPE:
+1) PREVIEW = A SCALED FEED CELL (permanent WYSIWYG):
+   - Render the inline preview using the SAME feed-cell component and SAME stored crop the FEED uses — NOT an independently-styled box. It must structurally be the feed cell, just smaller, so it cannot diverge from the feed.
+   - Derive the shape from the feed cell's REAL aspect: screenW ÷ (available media height = screenH − top safe area − tab-bar height), NOT screenW/screenH. Reuse the exact aspect value/derivation the feed itself uses if one exists.
+   - Size DETERMINISTICALLY: choose a target height ≈ 40% of the viewport height, compute width = height × feedCellAspect, center horizontally. Compute BOTH dimensions explicitly. Do NOT combine aspectRatio with maxHeight (that clamp breaks the ratio — it is this bug).
+   - Result: the preview is the exact feed shape and crop, moderately sized.
+
+2) REACHABILITY:
+   - At ~40% preview height, the PET selector must be visible below the preview WITHOUT scrolling when a photo is selected (Pet is required to post). Tune the preview height so Photo → Pet fit in one screen.
+   - When a photo is selected but no pet is chosen, the disabled Post button shows a quiet hint (e.g., "Choose a pet to post") so the user isn't left guessing why Post is greyed.
+
+3) AVATAR PLACEHOLDER:
+   - Replace the letter-initial circle with an on-brand PAW-GLYPH placeholder when a pet has no avatar photo. If a pet HAS an avatar photo, show it. Never a naked initial.
+
+DO NOT MODIFY:
+- The Adjust-framing refiner (correct) — Crop/Fit toggle, drag/zoom, zoom cap all stay.
+- The feed + detail render (correct).
+- computeAutoFrame, the decapitation guard, the crop columns — crop logic is correct; NO schema change.
+- Field order (Photo → Pet → Caption → Nursery → Post), the personalized caption placeholder, single-pet auto-select — all correct from the last pass; keep them.
+- R2/presign/CORS, auth, the A-fix offset, all other screens.
+
+PRESERVATION CLAUSE:
+Preserve everything from the last New Post pass except the preview sizing, the disabled-Post hint, and the avatar placeholder. NO Reanimated (Animated/PanResponder only). overflow:'visible' on ancestors. RN longhand styles. Bottom-pinned controls clear tab-bar + safe-area.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari — Replit sim can't render the app):
+1. HEADLINE: post the Newt photo → the inline preview, the Adjust-framing crop, and the posted feed cell all show the SAME crop region in the SAME shape. (3rd attempt — confirm it's the same CROP as the feed, not just "it's portrait.")
+2. With a photo selected, the PET selector is visible without scrolling; pick a pet and Post enables.
+3. Before a pet is picked, the disabled Post shows the "choose a pet" hint.
+4. Pet chips show a paw-glyph placeholder (or a real avatar), never a letter.
+5. Field order, personalized caption, and the Crop/Fit refiner all still work.
+6. An existing pre-redesign post renders exactly as before.
+7. Golden path: sign in → Home → boop persists → Nursery pager → post flow → sign out.

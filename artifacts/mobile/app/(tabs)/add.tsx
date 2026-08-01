@@ -62,8 +62,15 @@ export default function AddScreen() {
   const topInset     = Platform.OS === 'web' ? 67 : insets.top;
   const isWeb        = Platform.OS === 'web';
 
-  // Target aspect ratio for auto-frame: the feed hero is full-screen portrait.
+  // The feed pager is full-screen on both native (tab bar position:absolute) and
+  // web (effectivePageHeight = windowHeight per index.tsx), so feedAspect = W/H.
   const feedAspect   = screenW / screenH;
+
+  // Preview = a deterministically scaled feed cell.
+  // Both dimensions are computed explicitly — do NOT combine aspectRatio with
+  // maxHeight; Yoga clamps height only and silently changes the ratio.
+  const previewH = Math.round(screenH * 0.40);        // ~40 % of viewport
+  const previewW = Math.round(previewH * feedAspect); // exact same ratio
 
   // The web tab bar is position:absolute with minHeight:84 (set in _layout.tsx).
   const WEB_TAB_BAR_HEIGHT = 84;
@@ -386,27 +393,23 @@ export default function AddScreen() {
             {
               backgroundColor: colors.card,
               borderColor: colors.border,
-              aspectRatio: feedAspect,
-              maxHeight: 480,
+              width: previewW,
+              height: previewH,
               alignSelf: 'center',
-              width: '100%',
             },
           ]}>
             <ActivityIndicator color={colors.primary} />
             <Text style={[s.processingText, { color: colors.mutedForeground }]}>Processing…</Text>
           </View>
         ) : compressedUri ? (
-          // WYSIWYG portrait preview — exactly the same crop logic as the feed.
-          // aspectRatio gives the portrait shape; maxHeight caps it so it doesn't
-          // dominate on landscape viewports; alignSelf='center' centers the box
-          // when maxHeight kicks in and Yoga narrows the width to maintain ratio.
+          // Preview is an explicitly-sized scaled feed cell — both width and height
+          // computed from previewH × feedAspect so the ratio is guaranteed exact.
           <View style={[
             s.previewWrapper,
             {
-              aspectRatio: feedAspect,
-              maxHeight: 480,
+              width: previewW,
+              height: previewH,
               alignSelf: 'center',
-              width: '100%',
             },
           ]}>
             <FocalImage
@@ -492,9 +495,7 @@ export default function AddScreen() {
                 <Image source={{ uri: pets[0].avatarUrl }} style={s.postingAsAvatar} />
               ) : (
                 <View style={[s.postingAsAvatarFallback, { backgroundColor: colors.secondary }]}>
-                  <Text style={[s.postingAsAvatarInitial, { color: colors.mutedForeground }]}>
-                    {pets[0].name[0]?.toUpperCase() ?? '?'}
-                  </Text>
+                  <Text style={s.postingAsAvatarPaw}>🐾</Text>
                 </View>
               )}
               <Text style={[s.postingAsName, { color: colors.foreground }]}>
@@ -585,6 +586,11 @@ export default function AddScreen() {
             </Text>
           )}
         </Button>
+        {!!compressedUri && !selectedPetId && (
+          <Text style={[s.postHint, { color: colors.mutedForeground }]}>
+            Choose a pet above to post
+          </Text>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -621,12 +627,7 @@ function PetChip({ pet, selected, colors, onPress }: PetChipProps) {
           chipStyles.avatarFallback,
           { backgroundColor: selected ? 'rgba(255,255,255,0.25)' : colors.border },
         ]}>
-          <Text style={[
-            chipStyles.avatarInitial,
-            { color: selected ? colors.primaryForeground : colors.foreground },
-          ]}>
-            {pet.name[0]?.toUpperCase() ?? '?'}
-          </Text>
+          <Text style={chipStyles.avatarPaw}>🐾</Text>
         </View>
       )}
       <Text style={[
@@ -662,9 +663,8 @@ const chipStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitial: {
-    fontFamily: 'Inter_600SemiBold',
-    fontSize: 16,
+  avatarPaw: {
+    fontSize: 20,
   },
   name: {
     fontFamily: 'Inter_600SemiBold',
@@ -794,13 +794,18 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       alignItems: 'center',
       justifyContent: 'center',
     },
-    postingAsAvatarInitial: {
-      fontFamily: 'Inter_600SemiBold',
-      fontSize: 13,
+    postingAsAvatarPaw: {
+      fontSize: 15,
     },
     postingAsName: {
       fontFamily: 'Inter_500Medium',
       fontSize: 15,
+    },
+    postHint: {
+      fontFamily: 'Inter_400Regular',
+      fontSize: 12,
+      textAlign: 'center',
+      marginTop: 6,
     },
 
     card: {
