@@ -12,7 +12,7 @@
 export interface CreatePostBody {
   petId: string;
   mediaKey: string;
-  /** @maxLength 280 */
+  /** @maxLength 250 */
   caption?: string;
   isNursery?: boolean;
   /**

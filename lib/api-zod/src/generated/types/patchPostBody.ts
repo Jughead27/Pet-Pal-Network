@@ -12,7 +12,7 @@
 export interface PatchPostBody {
   /**
      * New caption; null clears it.
-     * @maxLength 280
+     * @maxLength 250
      */
   caption?: string | null;
   /** Whether this is a Nursery (baby/hatchling) post. */

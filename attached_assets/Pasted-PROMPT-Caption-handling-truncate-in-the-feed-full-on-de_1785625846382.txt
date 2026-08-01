@@ -1,0 +1,29 @@
+PROMPT — Caption handling: truncate in the feed, full on detail, quiet input cap. Feed + detail + compose. NO schema change.
+
+CONTEXT: Captions are optional garnish and the pet is the hero. Keep the feed caption short so it never eats the photo or destabilizes the layout; the full caption lives on the detail screen. Cap input generously and quietly — NO character counter (that's a status-y element, against the calm mission).
+
+SCOPE:
+1) FEED — truncate the caption:
+   - The feed caption line (under the pet name / breed) truncates to a max of ~2 lines with an ellipsis: numberOfLines={2}, ellipsizeMode="tail". A short caption still shows in full; only long ones truncate.
+   - Do NOT add a separate "…more" — the existing "View full photo →" already routes to the detail screen where the full caption lives. That is the read-more path.
+   - This keeps the pet the hero and the caption height predictable (also helps the rail nominal-height concern).
+
+2) DETAIL — full caption:
+   - The detail screen shows the FULL caption (no truncation).
+
+3) COMPOSE INPUT — a generous, quiet cap:
+   - The caption TextInput gets maxLength ~250 (generous — enough for a real caption, not a blog post). It quietly stops accepting input at the max.
+   - NO character counter / "X characters left" anywhere. That status-y element fights the calm mission.
+   - Defensive: the server clamps/validates caption length to the same max. NO schema change — the column already stores captions; this is just a length guard.
+
+DO NOT MODIFY:
+- The pet name / breed / "View full photo →" layout — only add truncation to the caption line itself.
+- Fit/cover rendering, the right rail, the follow-label, crop, field order, the "choose a pet" hint.
+- Schema (caption already stored). R2/auth/other screens.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari):
+1. FEED: a post with a LONG caption shows ~2 lines then an ellipsis; the layout stays clean.
+2. DETAIL: opening that post (via "View full photo →") shows the FULL caption.
+3. INPUT: in New Post, the caption input stops at the cap (~250 chars) and there is NO character counter visible.
+4. A short caption still shows fully in the feed.
+5. Golden path.

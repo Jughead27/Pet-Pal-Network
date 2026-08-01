@@ -557,7 +557,7 @@ export default function AddScreen() {
             multiline
             returnKeyType="done"
             blurOnSubmit
-            maxLength={280}
+            maxLength={250}
           />
 
           {/* Nursery toggle */}

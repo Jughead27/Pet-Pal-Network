@@ -139,8 +139,7 @@ export default function FeedPage({
   const chromeOpacity = useRef(new Animated.Value(1)).current;
 
   // ── Caption ───────────────────────────────────────────────────────────────
-  const [captionExpanded,    setCaptionExpanded]    = useState(false);
-  const [captionNeedsMore,   setCaptionNeedsMore]   = useState(false);
+  // Always truncated to 2 lines in the feed; full caption lives on the detail screen.
   const petInfoHeightRef = useRef(120);
 
   // ── Pop animations ────────────────────────────────────────────────────────
@@ -421,45 +420,24 @@ export default function FeedPage({
           {petBreed}
         </Text>
 
-        {/* Caption with expand/collapse + tap-to-detail */}
-        <View>
-          {/* Off-screen measure to detect truncation */}
+        {/* Caption — truncated to 2 lines in the feed; full caption on the detail screen */}
+        <TouchableOpacity
+          onPress={() => router.push(`/post/${post.id}`)}
+          activeOpacity={0.75}
+          accessibilityRole="button"
+          accessibilityLabel="View full post"
+          hitSlop={{ top: 4, bottom: 4, left: 0, right: 0 }}
+        >
           <Text
-            style={[styles.petCaption, styles.captionMeasure]}
-            onTextLayout={(e) =>
-              setCaptionNeedsMore(e.nativeEvent.lines.length > 2)
-            }
+            style={[styles.petCaption, { color: 'rgba(240,244,248,0.9)' }]}
+            numberOfLines={2}
+            ellipsizeMode="tail"
           >
-            {caption}
+            {`${caption || 'View full photo'}\u00A0`}
+            {/* Non-breaking space keeps the glyph with the last word — prevents orphaning. */}
+            <Text style={styles.captionExpand}>{'↗'}</Text>
           </Text>
-          <TouchableOpacity
-            onPress={() => router.push(`/post/${post.id}`)}
-            activeOpacity={0.75}
-            accessibilityRole="button"
-            accessibilityLabel="View full post"
-            hitSlop={{ top: 4, bottom: 4, left: 0, right: 0 }}
-          >
-            <Text
-              style={[styles.petCaption, { color: 'rgba(240,244,248,0.9)' }]}
-              numberOfLines={captionExpanded ? undefined : 2}
-            >
-              {`${caption || 'View full photo'}\u00A0`}
-              {/* Non-breaking space keeps the glyph with the last word — prevents orphaning.
-                  Nested Text renders inline in the parent's text flow on native and web. */}
-              <Text style={styles.captionExpand}>{'↗'}</Text>
-            </Text>
-          </TouchableOpacity>
-          {captionNeedsMore && (
-            <TouchableOpacity
-              onPress={() => setCaptionExpanded((v) => !v)}
-              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-            >
-              <Text style={styles.captionMore}>
-                {captionExpanded ? 'less' : 'more'}
-              </Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        </TouchableOpacity>
       </Animated.View>
 
       {/* Reaction pop texts */}
@@ -547,20 +525,6 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 2,
     fontStyle: 'italic',
-    ...TEXT_SHADOW,
-  },
-  captionMeasure: {
-    position: 'absolute',
-    opacity: 0,
-    color: 'transparent',
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    pointerEvents: 'none' as any,
-  },
-  captionMore: {
-    marginTop: 2,
-    fontSize: 12,
-    fontWeight: '600' as const,
-    color: 'rgba(240,244,248,0.55)',
     ...TEXT_SHADOW,
   },
   // Expand glyph — inline hint that the text block is tappable.

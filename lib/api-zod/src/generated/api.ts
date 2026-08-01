@@ -451,7 +451,7 @@ export const PresignUploadResponse = zod.object({
  * Creates a post for a pet owned by the caller. Returns 403 if the pet is not owned by the caller.
  * @summary Create a post
  */
-export const createPostBodyCaptionMax = 280;
+export const createPostBodyCaptionMax = 250;
 
 export const createPostBodyCropFocusXMin = 0;
 export const createPostBodyCropFocusXMax = 1;
@@ -505,7 +505,7 @@ export const PatchPostParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const patchPostBodyCaptionMax = 280;
+export const patchPostBodyCaptionMax = 250;
 
 
 

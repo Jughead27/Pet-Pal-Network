@@ -1735,7 +1735,7 @@ components:
           type: string
         caption:
           type: string
-          maxLength: 280
+          maxLength: 250
         isNursery:
           type: boolean
         cropFocusX:
@@ -1820,7 +1820,7 @@ components:
         caption:
           type: string
           nullable: true
-          maxLength: 280
+          maxLength: 250
           description: New caption; null clears it.
         isNursery:
           type: boolean
