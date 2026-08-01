@@ -390,8 +390,9 @@ export default function FeedPage({
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel={`View ${petName}'s profile`}
+            style={styles.petNameBtn}
           >
-            <Text style={styles.petName}>{petName}</Text>
+            <Text style={styles.petName} numberOfLines={1} ellipsizeMode="tail">{petName}</Text>
           </TouchableOpacity>
           <AddToPackLink
             petId={petId}
@@ -399,7 +400,7 @@ export default function FeedPage({
           />
         </View>
 
-        <Text style={[styles.petBreed, { color: 'rgba(240,244,248,0.75)' }]}>
+        <Text style={[styles.petBreed, { color: 'rgba(240,244,248,0.75)' }]} numberOfLines={1} ellipsizeMode="tail">
           {petBreed}
         </Text>
 
@@ -503,6 +504,12 @@ const styles = StyleSheet.create({
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  petNameBtn: {
+    flex: 1,
+    overflow: 'hidden',
+    marginRight: 8,
   },
   petName: {
     color: '#F0F4F8',

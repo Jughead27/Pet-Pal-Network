@@ -283,8 +283,8 @@ export default function FrameRefiner({
       <View style={[styles.handle, { left: displayRect.left - HANDLE / 2, top: displayRect.top + displayRect.height - HANDLE / 2 }]} {...blResponder.panHandlers} />
       <View style={[styles.handle, { left: displayRect.left + displayRect.width - HANDLE / 2, top: displayRect.top + displayRect.height - HANDLE / 2 }]} {...brResponder.panHandlers} />
 
-      {/* Live preview inset */}
-      <PreviewInset uri={uri} rect={rect} naturalWidth={naturalWidth} naturalHeight={naturalHeight} top={insets.top + 60} />
+      {/* Live preview inset — reflects the current Crop/Fit mode */}
+      <PreviewInset uri={uri} rect={rect} naturalWidth={naturalWidth} naturalHeight={naturalHeight} top={insets.top + 60} mode={mode} />
 
       {/* Top bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
@@ -344,11 +344,24 @@ interface PreviewInsetProps {
   naturalWidth: number;
   naturalHeight: number;
   top: number;
+  /** 'cover' shows the crop window; 'contain' shows whole image + blurred fill. */
+  mode: string;
 }
 
-function PreviewInset({ uri, rect, naturalWidth, naturalHeight, top }: PreviewInsetProps) {
+function PreviewInset({ uri, rect, naturalWidth, naturalHeight, top, mode }: PreviewInsetProps) {
   const PREVIEW_SIZE = 80;
 
+  if (mode === 'contain') {
+    // Fit mode: show the whole image with a blurred background fill.
+    return (
+      <View style={[styles.previewBox, { top, width: PREVIEW_SIZE, height: PREVIEW_SIZE }]} pointerEvents="none">
+        <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" blurRadius={20} />
+        <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
+      </View>
+    );
+  }
+
+  // Crop mode: render only the crop-window region.
   const scaleX = PREVIEW_SIZE / (rect.w * naturalWidth);
   const scaleY = PREVIEW_SIZE / (rect.h * naturalHeight);
   const scale  = Math.max(scaleX, scaleY);

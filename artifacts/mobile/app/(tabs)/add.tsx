@@ -402,40 +402,52 @@ export default function AddScreen() {
             <Text style={[s.processingText, { color: colors.mutedForeground }]}>Processing…</Text>
           </View>
         ) : compressedUri ? (
-          // Preview is an explicitly-sized scaled feed cell — both width and height
-          // computed from previewH × feedAspect so the ratio is guaranteed exact.
-          <View style={[
-            s.previewWrapper,
-            {
-              width: previewW,
-              height: previewH,
-              alignSelf: 'center',
-            },
-          ]}>
-            <FocalImage
-              source={{ uri: compressedUri }}
-              style={s.preview}
-              focusX={cropFocusX}
-              focusY={cropFocusY}
-              cropX={cropRect?.x ?? null}
-              cropY={cropRect?.y ?? null}
-              cropW={cropRect?.w ?? null}
-              cropH={cropRect?.h ?? null}
-              mode={cropMode}
-            />
-            {/* Overlay — "Whole photo" removed; now lives inside the refiner */}
-            <View style={s.previewBtnRow}>
+          // Preview is an explicitly-sized scaled feed cell.
+          // Controls sit in a clean row BELOW the portrait preview so they
+          // are never clipped by the overflow:hidden wrapper.
+          <>
+            <View style={[
+              s.previewWrapper,
+              {
+                width: previewW,
+                height: previewH,
+                alignSelf: 'center',
+              },
+            ]}>
+              <FocalImage
+                source={{ uri: compressedUri }}
+                style={s.preview}
+                focusX={cropFocusX}
+                focusY={cropFocusY}
+                cropX={cropRect?.x ?? null}
+                cropY={cropRect?.y ?? null}
+                cropW={cropRect?.w ?? null}
+                cropH={cropRect?.h ?? null}
+                mode={cropMode}
+              />
+            </View>
+            {/* Controls row — below the preview, never clips */}
+            <View style={[
+              s.previewControls,
+              {
+                width: previewW,
+                alignSelf: 'center',
+                backgroundColor: colors.secondary,
+                borderColor: colors.border,
+              },
+            ]}>
               <TouchableOpacity
-                style={[s.previewBtn, { backgroundColor: 'rgba(6,11,16,0.6)' }]}
+                style={s.previewControlBtn}
                 onPress={() => setRefinerOpen(true)}
                 accessibilityRole="button"
                 accessibilityLabel="Adjust framing"
               >
-                <Feather name="crop" size={14} color="#F0F4F8" />
-                <Text style={s.previewBtnText}>Adjust framing</Text>
+                <Feather name="crop" size={13} color={colors.mutedForeground} />
+                <Text style={[s.previewControlText, { color: colors.mutedForeground }]}>Adjust framing</Text>
               </TouchableOpacity>
+              <View style={[s.previewControlDivider, { backgroundColor: colors.border }]} />
               <TouchableOpacity
-                style={[s.previewBtn, { backgroundColor: 'rgba(6,11,16,0.6)' }]}
+                style={s.previewControlBtn}
                 onPress={() => {
                   setCompressedUri(null);
                   setCropRect(null);
@@ -445,11 +457,11 @@ export default function AddScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Change photo"
               >
-                <Feather name="refresh-cw" size={14} color="#F0F4F8" />
-                <Text style={s.previewBtnText}>Change</Text>
+                <Feather name="refresh-cw" size={13} color={colors.mutedForeground} />
+                <Text style={[s.previewControlText, { color: colors.mutedForeground }]}>Change</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </>
         ) : (
           // ── Source selection ──────────────────────────────────────────────
           <View style={[s.sourceCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -664,7 +676,7 @@ const chipStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarPaw: {
-    fontSize: 20,
+    fontSize: 24,
   },
   name: {
     fontFamily: 'Inter_600SemiBold',
@@ -754,25 +766,29 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       // Fill the aspectRatio-driven height of previewWrapper.
       flex: 1,
     },
-    previewBtnRow: {
-      position: 'absolute',
-      bottom: 10,
-      right: 10,
+    previewControls: {
       flexDirection: 'row',
-      gap: 8,
+      marginTop: 6,
+      marginBottom: 8,
+      borderRadius: 10,
+      overflow: 'hidden',
+      borderWidth: StyleSheet.hairlineWidth,
     },
-    previewBtn: {
+    previewControlBtn: {
+      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 9,
       gap: 6,
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 20,
     },
-    previewBtnText: {
+    previewControlDivider: {
+      width: StyleSheet.hairlineWidth,
+      alignSelf: 'stretch',
+    },
+    previewControlText: {
       fontFamily: 'Inter_500Medium',
       fontSize: 13,
-      color: '#F0F4F8',
     },
 
     // "Posting as" row — shown instead of pet chips when the user has exactly one pet.

@@ -1,0 +1,43 @@
+PROMPT — Fix 5 issues from the New Post update (feed regression + WYSIWYG + Fit + controls + paw). Compose + feed-cell component. NO schema change.
+
+CONTEXT: The last update added a portrait preview, made Pet reachable, added a "choose a pet" hint and a paw placeholder — keep all of that. But it regressed the FEED and left 4 rough edges. The feed was CORRECT before this update; do not accept any change to how it renders except the caption-overflow fix below.
+
+SCOPE:
+
+1) FEED REGRESSION (highest priority — a working thing broke):
+   - The Home feed's caption overlay (pet name / breed / "view full photo") now bleeds off the RIGHT edge, and the feed media appears horizontally offset (dark strip on the right, content clipped on the left). This began with the preview-reuse change — the shared feed-cell component was likely modified.
+   - RESTORE the feed to its pre-update rendering: media fills the full width with NO horizontal offset or dark strip; the caption overlay sits properly inset.
+   - Make the preview reuse ADDITIVE (e.g., a size prop) so the feed's own render path is byte-identical to before. If the component was changed for the preview, isolate those changes off the feed path.
+   - Caption overlay: add RIGHT padding and TRUNCATE long name/breed (ellipsis) so text can never bleed off the right edge on any post.
+
+2) WYSIWYG EXACTNESS:
+   - Once the feed is restored, the compose preview must be PIXEL-IDENTICAL to the feed cell — same (unmodified) feed-cell component, same crop, same aspect from the SAME source the feed uses. Not "close" — identical.
+
+3) REFINER FIT MODE (currently a dead toggle):
+   - In "Adjust framing," toggling Crop ↔ Fit must VISIBLY change the live preview immediately: Fit = whole image (contain) + a blurred fill behind the letterbox; Crop = cover. Right now nothing happens. Wire the live preview AND the applied/posted result to render the selected mode.
+
+4) FRAMING CONTROLS LAYOUT:
+   - "Adjust framing" and "Change" are clipped on the narrower portrait preview ("Change" → "Chai") with a shadow/overflow artifact. Fix so they fit cleanly and never clip. PREFERRED: move them to a clean row BELOW the preview, OR make the whole preview tap-to-adjust with a quiet "change photo" text link underneath. Controls must not overflow the preview's rounded container.
+
+5) PAW PLACEHOLDER VISIBILITY:
+   - The paw-glyph placeholder on pet chips is too faint. Increase opacity / stroke weight / size so it reads clearly (not a ghost), staying monochrome and on-brand.
+
+DO NOT MODIFY:
+- The feed's render EXCEPT restoring it to correct + the caption right-padding/truncation above. No other feed changes.
+- computeAutoFrame, the decapitation guard, the crop columns — NO schema change.
+- The refiner's drag/zoom + zoom cap (only wire the Fit-mode live render).
+- Field order (Photo→Pet→Caption→Nursery→Post), single-pet auto-select, personalized caption placeholder, the "choose a pet" hint — all correct; keep them.
+- The right-rail icons (boop/treat/comment/share) — separate custom-icon-family project; leave them this pass.
+- R2/presign/CORS, auth, the A-fix offset, all other screens.
+
+PRESERVATION CLAUSE:
+Preserve all correct behavior from the last pass. No Reanimated (Animated/PanResponder only). Handle overflow correctly (controls must not spill past the preview container). RN longhand styles. Bottom-pinned controls clear tab-bar + safe-area.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari):
+1. FEED: open Home — the pet name/breed/"view full photo" caption sits fully on-screen (no right-edge bleed) on both a short name AND a long one; the media fills full width (no dark strip / offset).
+2. WYSIWYG: post the Newt photo → the compose preview and the feed cell show the IDENTICAL crop in the IDENTICAL shape.
+3. FIT: in Adjust framing, toggle Fit → the preview immediately shows the whole photo + blurred fill; toggle Crop → cover; the posted result matches whichever was chosen.
+4. CONTROLS: the framing controls are fully visible (no "Chai" clip) with no shadow/overflow artifact.
+5. PAW: the pet-chip paw placeholder is clearly legible.
+6. An existing pre-update post renders correctly.
+7. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → sign out.
