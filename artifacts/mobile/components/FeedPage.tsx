@@ -504,12 +504,13 @@ const styles = StyleSheet.create({
   identityRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    overflow: 'hidden',
   },
   petNameBtn: {
-    flex: 1,
+    // flexShrink:1 lets a long name truncate without eating all row space,
+    // so AddToPackLink always stays visible inline next to the name.
+    flexShrink: 1,
     overflow: 'hidden',
-    marginRight: 8,
+    marginRight: 6,
   },
   petName: {
     color: '#F0F4F8',

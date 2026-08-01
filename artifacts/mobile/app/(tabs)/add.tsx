@@ -46,6 +46,7 @@ import type { Pet } from '@workspace/api-client-react';
 import { compressImage } from '@/utils/compressImage';
 import FrameRefiner from '@/components/FrameRefiner';
 import FocalImage from '@/components/FocalImage';
+import PawIcon from '@/components/PawIcon';
 import { computeAutoFrame } from '@/utils/computeAutoFrame';
 import type { CropRect } from '@/utils/computeAutoFrame';
 import { signalPostSuccess } from '@/utils/feedScrollSignal';
@@ -507,7 +508,7 @@ export default function AddScreen() {
                 <Image source={{ uri: pets[0].avatarUrl }} style={s.postingAsAvatar} />
               ) : (
                 <View style={[s.postingAsAvatarFallback, { backgroundColor: colors.secondary }]}>
-                  <Text style={s.postingAsAvatarPaw}>🐾</Text>
+                  <PawIcon size={15} color={colors.mutedForeground} />
                 </View>
               )}
               <Text style={[s.postingAsName, { color: colors.foreground }]}>
@@ -639,7 +640,7 @@ function PetChip({ pet, selected, colors, onPress }: PetChipProps) {
           chipStyles.avatarFallback,
           { backgroundColor: selected ? 'rgba(255,255,255,0.25)' : colors.border },
         ]}>
-          <Text style={chipStyles.avatarPaw}>🐾</Text>
+          <PawIcon size={20} color={selected ? colors.primaryForeground : colors.mutedForeground} />
         </View>
       )}
       <Text style={[
@@ -674,9 +675,6 @@ const chipStyles = StyleSheet.create({
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  avatarPaw: {
-    fontSize: 24,
   },
   name: {
     fontFamily: 'Inter_600SemiBold',
@@ -809,9 +807,6 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       borderRadius: 16,
       alignItems: 'center',
       justifyContent: 'center',
-    },
-    postingAsAvatarPaw: {
-      fontSize: 15,
     },
     postingAsName: {
       fontFamily: 'Inter_500Medium',

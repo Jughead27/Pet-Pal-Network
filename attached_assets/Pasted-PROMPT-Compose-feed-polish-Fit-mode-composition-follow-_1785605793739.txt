@@ -1,0 +1,33 @@
+PROMPT — Compose/feed polish: Fit-mode composition + follow-paw placement + paw-chip glyph. Feed + compose. NO schema change.
+
+CONTEXT: The feed regression is fixed and Fit renders. Three remaining issues from live QA. Do not disturb the now-correct cover-mode feed except the Fit + follow-paw items below.
+
+SCOPE:
+
+1) FIT-MODE COMPOSITION ("show whole photo" posts, feed + detail):
+   - Currently the contained photo floats vertically centered and the pet name/caption sit in a BLACK band below it — reads as a bug.
+   - FIX: the blurred fill must be FULL-BLEED — it fills the ENTIRE cell behind everything, so there are NO black bands anywhere. The contained (whole) photo is composited on top, positioned in the UPPER portion of the cell so the pet name / caption / "view full photo" / rail overlay the BLURRED area below it (same scrim treatment as a cover photo). The caption must always sit over blur, never over black.
+   - Result: photo up top, name/caption in the blurred region beneath it — one cohesive composition.
+
+2) FOLLOW-PAW PLACEMENT (feed):
+   - The follow paw is now floating detached in the mid-RIGHT of the image (a regression from the last pass). Restore it INLINE next to the pet name at bottom-left, small and subtle — it's a follow-state indicator attached to the name, not a floating element.
+
+3) PAW-CHIP PLACEHOLDER (compose pet chips):
+   - The placeholder is a COLOR EMOJI; bumping its size did not fix the faintness (an emoji's opacity/weight/color can't be restyled). REPLACE it with a MONOCHROME VECTOR/SVG paw glyph at a clearly legible foreground contrast on the chip background, on-brand. (This is the first glyph of the custom icon family — build it as a reusable shared SVG.)
+
+DO NOT MODIFY:
+- Cover-mode feed rendering (fixed + correct) — only add the full-bleed blur for Fit posts and the follow-paw placement.
+- The WYSIWYG preview, computeAutoFrame, crop columns — NO schema change.
+- Field order, single-pet auto-select, personalized caption, "choose a pet" hint, the framing-controls row below the preview — all correct; keep them.
+- The right-rail icons (boop/treat/comment/share) — separate custom-icon-family project; leave them.
+- R2/auth/A-fix offset/other screens.
+
+PRESERVATION CLAUSE:
+Preserve all correct behavior. No Reanimated. RN longhand styles. Handle overflow correctly.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari):
+1. FIT: a "show whole photo" post shows the whole image with blurred fill BEHIND EVERYTHING (no black band); the name/caption sit over the blur below the photo, cleanly spaced.
+2. FOLLOW PAW: on a feed post, the follow paw sits right next to the pet name (bottom-left), not floating on the right.
+3. PAW CHIP: the compose pet-chip paw is clearly legible — a crisp monochrome glyph, not a faint emoji.
+4. Cover-mode feed still correct (caption not bleeding, full-width media).
+5. Golden path.

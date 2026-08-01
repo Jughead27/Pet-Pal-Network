@@ -170,12 +170,14 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
     if (!cw || !ch || !nw || !nh) return null;
 
     if (isContain) {
-      // Contain: scale to fit, centered.
+      // Contain: scale to fit width (or height for portrait photos), pin to top.
+      // Top-aligned so the photo occupies the upper portion of the cell and the
+      // blurred fill shows beneath it — name/caption overlay the blur, never black.
       const scale = Math.min(cw / nw, ch / nh);
       const sw    = nw * scale;
       const sh    = nh * scale;
       const left  = (cw - sw) / 2;
-      const top   = (ch - sh) / 2;
+      const top   = 0;
       return { position: 'absolute' as const, width: sw, height: sh, left, top };
     }
 
@@ -287,5 +289,6 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
 
 const styles = StyleSheet.create({
   clip:   { overflow: 'hidden' },
-  blurBg: { opacity: 0.6 },
+  // opacity: 1 (default) — fully-opaque blurred fill; no dark bleed-through.
+  blurBg: {},
 });
