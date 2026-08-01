@@ -15,7 +15,7 @@ import {
   usersTable,
   auditLogTable,
 } from "@workspace/db";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, isNull } from "drizzle-orm";
 import { isPetPrimaryOwner } from "../lib/isPetOwner.js";
 
 const router: IRouter = Router();
@@ -143,6 +143,7 @@ router.get("/me/co-owner-invites", async (req, res) => {
       and(
         eq(petOwnerInvitesTable.inviteeId, userId),
         eq(petOwnerInvitesTable.status, "pending"),
+        isNull(petsTable.deletedAt),
       ),
     )
     .orderBy(desc(petOwnerInvitesTable.createdAt));
@@ -158,7 +159,7 @@ router.get("/pets/:petId/co-owners", async (req, res) => {
   const [pet] = await db
     .select({ id: petsTable.id })
     .from(petsTable)
-    .where(eq(petsTable.id, petId))
+    .where(and(eq(petsTable.id, petId), isNull(petsTable.deletedAt)))
     .limit(1);
   if (!pet) { res.status(404).json({ error: "Pet not found" }); return; }
 

@@ -1,0 +1,47 @@
+TASK: Deleted (soft-deleted) pets still appear in some read paths —
+confirmed in "My Pack". Audit EVERY surface that reads/displays pets
+and ensure each excludes soft-deleted pets (deleted_at IS NOT NULL).
+Fix all that leak. Scoped to read-gating only.
+
+CONTEXT: Pets use soft-delete (deleted_at timestamp). Gating was
+supposed to be centralized at the pet layer, but the Pack/follows
+query joins pets directly and bypasses it, so deleted pets still show
+in "My Pack". Other read paths may have the same gap.
+
+STEP 1 — AUDIT, REPORT FIRST:
+  List every query/endpoint/screen that reads or displays pets —
+  including at least: the main feed, "My Pack" / follows lists,
+  Nursery, Sniff / search / discovery, pet profile lookups, and any
+  place a pet is referenced as an author/owner (boops, treats,
+  comments, notifications). For EACH, state whether it currently
+  filters deleted_at IS NULL. Report the full list before fixing.
+
+STEP 2 — FIX:
+  Add the deleted_at IS NULL filter to EVERY read path that lacks it
+  (Pack confirmed; fix any others the audit finds). A soft-deleted pet
+  must not appear anywhere a user browses — not in Pack, feed,
+  search, Nursery, or as a visible author reference.
+  If a single shared "get pets" accessor/query-builder exists that all
+  reads could route through, note it (don't refactor everything now —
+  just report whether that centralization is feasible as a follow-up).
+
+DO NOT: change the delete flow, the confirm dialog, the breed picker,
+the purge job, or write paths. Do not hard-delete anything. This is
+purely adding read filters.
+
+PRESERVATION CLAUSE: non-deleted pets appear exactly as before
+everywhere; the ONLY behavior change is that soft-deleted pets stop
+appearing in read surfaces.
+
+ACCEPTANCE (live on pshpsh.net):
+1. Delete a test pet → it disappears from "My Pack" immediately.
+2. It's also absent from feed, search/Sniff, Nursery, and any
+   author/owner reference.
+3. A non-deleted pet still appears normally in all those places.
+4. The pet's row still exists in DB with deleted_at set (still a soft
+   delete).
+5. Golden path intact.
+
+OUTPUT: the STEP 1 audit list (every pet-read surface + whether it was
+filtered), what was fixed, whether a shared accessor is feasible, and
+the Review Changes count. Commit locally; I will Sync.

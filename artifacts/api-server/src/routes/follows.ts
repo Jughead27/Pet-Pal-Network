@@ -15,7 +15,7 @@
 
 import { Router, type IRouter } from "express";
 import { db, interestFollowsTable, packFollowsTable, petsTable, postsTable, speciesTable, breedsTable } from "@workspace/db";
-import { eq, and, sql, asc } from "drizzle-orm";
+import { eq, and, isNull, sql, asc } from "drizzle-orm";
 import { mediaTokenUrl } from "../lib/r2.js";
 
 const router: IRouter = Router();
@@ -142,7 +142,7 @@ router.get("/me/follows", async (req, res) => {
       })
       .from(packFollowsTable)
       .innerJoin(petsTable, eq(petsTable.id, packFollowsTable.petId))
-      .where(eq(packFollowsTable.userId, userId))
+      .where(and(eq(packFollowsTable.userId, userId), isNull(petsTable.deletedAt)))
       .orderBy(asc(petsTable.name)),
 
     // Followed species: interest_follows → species WHERE speciesId IS NOT NULL
