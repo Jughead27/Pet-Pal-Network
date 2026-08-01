@@ -55,6 +55,15 @@ export default function AddScreen() {
   const insets       = useSafeAreaInsets();
   const queryClient  = useQueryClient();
   const topInset     = Platform.OS === 'web' ? 67 : insets.top;
+  const isWeb        = Platform.OS === 'web';
+
+  // The web tab bar is position:absolute with minHeight:84 (set in _layout.tsx).
+  // On web, React Navigation does NOT add the tab bar height to
+  // useSafeAreaInsets().bottom — insets.bottom only reflects the browser chrome
+  // inset. We must offset the sticky footer and scroll padding by the tab bar
+  // height ourselves.  On native, React Navigation augments insets.bottom to
+  // include the tab bar, so no extra offset is needed there.
+  const WEB_TAB_BAR_HEIGHT = 84; // must match minHeight in _layout.tsx tabBarStyle
 
   // ── Server state ──────────────────────────────────────────────────────────
   const { data: myPetsData, isLoading: petsLoading } = useGetMyPets();
@@ -325,7 +334,14 @@ export default function AddScreen() {
         style={s.fill}
         contentContainerStyle={[
           s.scroll,
-          { paddingTop: topInset + 16, paddingBottom: 24 },
+          {
+            paddingTop: topInset + 16,
+            // On web the sticky footer is pushed up by WEB_TAB_BAR_HEIGHT (see
+            // below), so scroll content must also clear: footer intrinsic height
+            // (~80 px) + the tab bar margin beneath it. On native the existing
+            // insets.bottom handling in the footer already provides clearance.
+            paddingBottom: isWeb ? 80 + WEB_TAB_BAR_HEIGHT : 24,
+          },
         ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -491,6 +507,12 @@ export default function AddScreen() {
             paddingBottom: Math.max(insets.bottom, 8) + 8,
             borderTopColor: colors.border,
             backgroundColor: colors.background,
+            // On web, the tab bar is position:absolute and React Navigation does
+            // NOT add its height to insets.bottom, so the footer lands under the
+            // tab bar. Push it up by WEB_TAB_BAR_HEIGHT (84 px, matching
+            // minHeight in _layout.tsx). On native, insets.bottom already
+            // includes the tab bar height, so no extra margin is needed there.
+            marginBottom: isWeb ? WEB_TAB_BAR_HEIGHT : 0,
           },
         ]}
       >
