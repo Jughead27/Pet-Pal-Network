@@ -56,6 +56,8 @@ export default function AddToPackLink({ petId, initialInPack, onSuccess }: AddTo
   const mutatingRef = useRef(false);
 
   const inactiveOpacity = progress.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+  // "following" label fades in subtly when active; invisible (not just dim) when not following.
+  const labelOpacity    = progress.interpolate({ inputRange: [0, 1], outputRange: [0, 0.58] });
 
   const { mutate: joinPack }  = useJoinPetPack();
   const { mutate: leavePack } = useLeavePetPack();
@@ -134,6 +136,11 @@ export default function AddToPackLink({ petId, initialInPack, onSuccess }: AddTo
           <PawIcon size={14} color="#060B10" />
         </Animated.View>
       </View>
+
+      {/* Persistent follow-state label — visible only while following; typographic whisper. */}
+      <Animated.Text style={[styles.followingLabel, { opacity: labelOpacity }]}>
+        following
+      </Animated.Text>
     </TouchableOpacity>
   );
 }
@@ -143,10 +150,10 @@ export default function AddToPackLink({ petId, initialInPack, onSuccess }: AddTo
 const styles = StyleSheet.create({
   touchable: {
     marginLeft: 6,
-    width: 40,
-    height: 40,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    height: 40,
+    paddingHorizontal: 7,
   },
   ringContainer: {
     width: 26,
@@ -166,5 +173,15 @@ const styles = StyleSheet.create({
   ringActive: {
     backgroundColor: '#F0F4F8',
     borderColor: '#F0F4F8',
+  },
+  // Persistent follow-state label — shown only when following (opacity driven by animation).
+  // Intentionally small, italic, and muted: a typographic whisper, not a badge.
+  followingLabel: {
+    marginLeft: 3,
+    fontSize: 10,
+    fontStyle: 'italic' as const,
+    color: 'rgba(240,244,248,1)',
+    letterSpacing: -0.1,
+    lineHeight: 14,
   },
 });
