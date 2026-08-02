@@ -445,18 +445,24 @@ export default function ActionRail({
         onError: (error) => {
           isTreatPending.current = false;
           const status = (error as { status?: number }).status;
-          if (status === 429) {
-            shakeAnimation();
-            // Delegate to caller — the narrow in-rail transient clips long copy.
-            onOutOfTreats?.();
-          } else if (status === 403) {
-            // Shake on self-treat too — same shake+message pattern, no pop.
+          if (status === 403) {
+            // Self-treat nudge — narrow transient is fine for this short copy.
             shakeAnimation();
             showTransient('Your own pet? Sneaky.', 2000);
+          } else {
+            // 429 (daily limit) or any other rejection:
+            // 1. Instantly clear any lingering transient (e.g. "Last one!" from
+            //    the preceding success) so the narrow label goes dark immediately.
+            // 2. Fire the full-width FeedPage toast — the ONLY surface for this.
+            //    The narrow ~120 px transientLabel must NEVER show the out-of-treats
+            //    copy; it would clip it. We clear it first, unconditionally.
+            transientOpacity.setValue(0);
+            onTransientChange?.(false);
+            shakeAnimation();
+            onOutOfTreats?.();
           }
           // onTreatFired and onTreatTeaching are intentionally NOT called here.
-          // Rejected treats (429 / 403) must produce no pop of any kind — only
-          // the shake and transient message above.
+          // Rejected treats must produce no pop of any kind — only the shake.
         },
       },
     );

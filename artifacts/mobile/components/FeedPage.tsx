@@ -576,6 +576,8 @@ const styles = StyleSheet.create({
   // Out-of-treats toast — centered, wide, sits just above the rail.
   // Warm copy, no harsh error styling. pointerEvents:none so it never
   // intercepts taps on the content beneath.
+  // zIndex/elevation ensure it renders above every other absolute layer
+  // (Pressable tap-target, scrims, rail) so nothing can bury or clip it.
   outOfTreatsToast: {
     position: 'absolute',
     left: 24,
@@ -585,6 +587,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 18,
     alignItems: 'center',
+    zIndex: 999,
+    elevation: 999,
+    overflow: 'visible',
   },
   outOfTreatsText: {
     fontSize: 13,

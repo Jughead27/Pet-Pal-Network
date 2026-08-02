@@ -1,0 +1,24 @@
+PROMPT — Fix the out-of-treats message: it STILL clips ("Your o…"). Make the new full-width toast the ONLY surface. ActionRail + FeedPage. NO schema change.
+
+CONTEXT: We already added a full-width FeedPage toast (left:24/right:24, "You're all out of treats for today 🐾") and changed ActionRail's 429 handler to call onOutOfTreats?.() instead of showTransient. But live, the out-of-treats message STILL clips to "Your o…" — which is the OLD narrow ~120px transientLabel. A full-width toast cannot clip a short message, so this PROVES the old narrow path is STILL rendering the out-of-treats text (the new toast isn't the thing showing). TRACE it in the code and make the new toast the sole out-of-treats surface.
+
+SCOPE:
+1) TRACE the out-of-treats render path:
+   - Find EVERY path that can render the out-of-treats message. The clipped "Your o…" means the narrow transientLabel is still being fed the out-of-treats text somewhere. Identify which is true: (a) onOutOfTreats is NOT fully wired FeedPage → ActionRail (so the new toast never fires), and/or (b) a showTransient / onTransientChange call for the 429/out-of-treats case still runs (feeding the old narrow label).
+2) FIX:
+   - Fully wire onOutOfTreats: FeedPage passes it to ActionRail; ActionRail's 429/out-of-treats handler calls ONLY onOutOfTreats (no showTransient for this case); FeedPage's onOutOfTreats renders the new full-width toast.
+   - Remove/bypass ANY remaining path that routes the out-of-treats message through the narrow transientLabel. The narrow label must NEVER render the out-of-treats copy.
+   - The new full-width toast is the ONE AND ONLY surface for out-of-treats.
+
+DO NOT MODIFY:
+- The transient/toast system for OTHER messages — only the out-of-treats routing.
+- The treat backend / daily-limit / 429 logic — only how the message is surfaced.
+- The boop/yum mayhem, the first-treat overlap fix, counts, glyphs.
+- Schema, R2, auth, other screens.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari):
+1. Use up your treats, then tap treat → the FULL-WIDTH toast appears ("You're all out of treats for today 🐾"), fully readable, NOT clipped to "Your o…".
+2. The narrow label never shows the out-of-treats text.
+3. Any other transient messages still work.
+4. The first-treat overlap fix + the boop/yum mayhem are unchanged.
+5. Golden path.
