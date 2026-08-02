@@ -126,13 +126,20 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
       {
         onSuccess: (newComment) => {
           setDraft('');
-          // Append to query cache — instant display without a round-trip refetch
+          // Append to query cache for instant display in the list before dismiss
           queryClient.setQueryData<PostComment[]>(
             getGetPostCommentsQueryKey(postId),
             (old) => [...(old ?? []), newComment],
           );
+          // Invalidate so the next open always refetches from the server —
+          // this guarantees true persistence is visible when the sheet reopens.
+          void queryClient.invalidateQueries({
+            queryKey: getGetPostCommentsQueryKey(postId),
+          });
           // Notify parent page to bump its comment count
           onCommentPosted?.();
+          // Auto-dismiss — nothing to cancel once submission succeeded
+          onClose();
         },
       },
     );
@@ -415,6 +422,7 @@ const styles = StyleSheet.create({
     borderTopWidth:    StyleSheet.hairlineWidth,
   },
   input: {
+    flex:             1, // fill inputBar width — prevents placeholder truncation on web
     borderRadius:     20,
     borderWidth:      1,
     paddingHorizontal: 14,

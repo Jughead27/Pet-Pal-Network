@@ -1,0 +1,28 @@
+SCOPE: Fix CommentSheet post-submission flow — three related issues.
+
+CONTEXT: After the font-size fix, comments can now be typed and the "Post" tap appears to work (comment shows in the list), but: (1) there's no way to exit the sheet after posting except "Cancel", and (2) the comment does not actually persist.
+
+DIAGNOSE FIRST (before assuming a fix):
+- Confirm whether the POST comment API call is actually succeeding and the comment is truly saved server-side — check network response/status on submit.
+- Check what "Cancel" currently does — if it discards/reverts any local state, confirm whether tapping it AFTER a successful post is incorrectly wiping out or hiding the already-submitted comment, versus the comment never having been correctly persisted in the first place. These are different bugs with different fixes — identify which one this actually is.
+- Check whether reopening the comment sheet re-fetches the comment list from the server, or relies on stale local/optimistic state that doesn't reflect what's actually saved.
+
+FIX:
+1. After a successful comment post, the sheet should AUTO-DISMISS back to the post (standard behavior — there's nothing to cancel once a submission succeeds). Do not leave the user stuck with only a "Cancel" affordance after posting.
+2. Ensure the comment is genuinely persisted server-side and that reopening the comment sheet on the same post reliably shows it (via a real refetch or correctly updated cache — not stale optimistic UI that disappears).
+3. Fix the input placeholder rendering — "Add a comment..." is currently truncating to "Add a c" since the font-size fix (14/15px → 16px). Adjust the input's width/padding so the full placeholder text fits correctly at the new font size.
+
+DO NOT MODIFY: font-size values just fixed (stay at 16px), boop/treat systems, other screens' inputs, comment data model.
+
+PRESERVATION CLAUSE: the underlying comment creation API and data model stay unchanged — this is about correctly closing the loop client-side (dismiss on success, accurate persistence/refetch) and the placeholder truncation fix.
+
+ACCEPTANCE TEST (golden path, test on iOS Safari):
+- Sign in
+- Open a post with zero comments, tap comment, confirm placeholder reads "Add a comment..." in full (not truncated)
+- Type and submit a comment → sheet auto-dismisses back to the post, no zoom issue
+- Reopen the comment sheet on the SAME post → the comment is still there (true persistence, not lost on reopen)
+- Refresh the page entirely and reopen the same post's comments → comment still there (confirms server-side persistence, not just local cache)
+- Home loads, boop persists
+- Nursery pager works
+- Post flow works
+- Sign out
