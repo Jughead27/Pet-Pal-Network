@@ -10,7 +10,11 @@
  * Request body for creating a post
  */
 export interface CreatePostBody {
-  petId: string;
+  /**
+     * IDs of pets to tag. The first element is the primary pet (shown as the post author). Caller must own the primary pet. Additional pets can be anyone's pet — tags are live immediately with no approval required.
+     * @minItems 1
+     */
+  petIds: string[];
   mediaKey: string;
   /** @maxLength 250 */
   caption?: string;

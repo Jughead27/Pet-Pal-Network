@@ -37,6 +37,7 @@ import type {
   MeProfile,
   MyFollowsResponse,
   MyPetsResponse,
+  NotificationsResponse,
   PackMembersResponse,
   PackResult,
   PatchPostBody,
@@ -48,6 +49,8 @@ import type {
   PostCreated,
   PresignBody,
   PresignResult,
+  SearchPets200,
+  SearchPetsParams,
   SpeciesListResponse,
   TreatResult,
   VerifyUpload200,
@@ -2377,6 +2380,313 @@ export const useDeleteComment = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getDeleteCommentMutationOptions(options));
+    }
+
+export const getRemovePostPetTagUrl = (id: string,
+    petId: string,) => {
+
+
+
+
+  return `/api/posts/${id}/pets/${petId}`
+}
+
+/**
+ * Removes a specific pet's tag from a post. Only that pet's owner can call this (403 otherwise). The post itself is not deleted. Returns 400 if this is the last tag on the post.
+ * @summary Remove a pet tag from a post
+ */
+export const removePostPetTag = async (id: string,
+    petId: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRemovePostPetTagUrl(id,petId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getRemovePostPetTagMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removePostPetTag>>, TError,{id: string;petId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof removePostPetTag>>, TError,{id: string;petId: string}, TContext> => {
+
+const mutationKey = ['removePostPetTag'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof removePostPetTag>>, {id: string;petId: string}> = (props) => {
+          const {id,petId} = props ?? {};
+
+          return  removePostPetTag(id,petId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RemovePostPetTagMutationResult = NonNullable<Awaited<ReturnType<typeof removePostPetTag>>>
+
+    export type RemovePostPetTagMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Remove a pet tag from a post
+ */
+export const useRemovePostPetTag = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof removePostPetTag>>, TError,{id: string;petId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof removePostPetTag>>,
+        TError,
+        {id: string;petId: string},
+        TContext
+      > => {
+      return useMutation(getRemovePostPetTagMutationOptions(options));
+    }
+
+export const getSearchPetsUrl = (params: SearchPetsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/pets/search?${stringifiedParams}` : `/api/pets/search`
+}
+
+/**
+ * Returns up to 20 pets matching the query against pet name OR owner username. Own pets are returned first. Used by the compose flow pet-tagging step.
+ * @summary Search pets by name or owner username
+ */
+export const searchPets = async (params: SearchPetsParams, options?: RequestInit): Promise<SearchPets200> => {
+
+  return customFetch<SearchPets200>(getSearchPetsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSearchPetsQueryKey = (params?: SearchPetsParams,) => {
+    return [
+    `/api/pets/search`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchPetsQueryOptions = <TData = Awaited<ReturnType<typeof searchPets>>, TError = ErrorType<ErrorResponse>>(params: SearchPetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchPets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchPetsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchPets>>> = ({ signal }) => searchPets(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchPets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type SearchPetsQueryResult = NonNullable<Awaited<ReturnType<typeof searchPets>>>
+export type SearchPetsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Search pets by name or owner username
+ */
+
+export function useSearchPets<TData = Awaited<ReturnType<typeof searchPets>>, TError = ErrorType<ErrorResponse>>(
+ params: SearchPetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchPets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getSearchPetsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetNotificationsUrl = () => {
+
+
+
+
+  return `/api/notifications`
+}
+
+/**
+ * @summary Get in-app notifications
+ */
+export const getNotifications = async ( options?: RequestInit): Promise<NotificationsResponse> => {
+
+  return customFetch<NotificationsResponse>(getGetNotificationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetNotificationsQueryKey = () => {
+    return [
+    `/api/notifications`
+    ] as const;
+    }
+
+
+export const getGetNotificationsQueryOptions = <TData = Awaited<ReturnType<typeof getNotifications>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetNotificationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getNotifications>>> = ({ signal }) => getNotifications({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getNotifications>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetNotificationsQueryResult = NonNullable<Awaited<ReturnType<typeof getNotifications>>>
+export type GetNotificationsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get in-app notifications
+ */
+
+export function useGetNotifications<TData = Awaited<ReturnType<typeof getNotifications>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getNotifications>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetNotificationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getMarkNotificationsReadUrl = () => {
+
+
+
+
+  return `/api/notifications/read-all`
+}
+
+/**
+ * @summary Mark all notifications as read
+ */
+export const markNotificationsRead = async ( options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getMarkNotificationsReadUrl(),
+  {
+    ...options,
+    method: 'PATCH'
+
+
+  }
+);}
+
+
+
+
+
+export const getMarkNotificationsReadMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markNotificationsRead>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markNotificationsRead>>, TError,void, TContext> => {
+
+const mutationKey = ['markNotificationsRead'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markNotificationsRead>>, void> = () => {
+
+
+          return  markNotificationsRead(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkNotificationsReadMutationResult = NonNullable<Awaited<ReturnType<typeof markNotificationsRead>>>
+
+    export type MarkNotificationsReadMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Mark all notifications as read
+ */
+export const useMarkNotificationsRead = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markNotificationsRead>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markNotificationsRead>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getMarkNotificationsReadMutationOptions(options));
     }
 
 export const getGetPostCommentsUrl = (id: string,) => {

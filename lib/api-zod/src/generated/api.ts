@@ -49,14 +49,22 @@ export const GetFeedResponse = zod.object({
   "breed": zod.string().nullish(),
   "speciesId": zod.string().nullable().describe('FK to the species catalogue; null if pet was created without catalogue selection.'),
   "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
-  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet')
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet'),
+  "ownerId": zod.string().describe('Clerk user ID of the primary owner — used for remove-tag permission checks.')
 }).describe('Minimal pet info embedded in feed posts'),
   "boopCount": zod.number(),
   "treatCount": zod.number(),
   "commentCount": zod.number(),
   "viewerHasBooped": zod.boolean(),
   "viewerHasTreated": zod.boolean(),
-  "archivedAt": zod.coerce.date().nullable().describe('Set when the post is archived; null when active.')
+  "archivedAt": zod.coerce.date().nullable().describe('Set when the post is archived; null when active.'),
+  "taggedPets": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "ownerId": zod.string().describe('Clerk user ID of the pet\'s primary owner'),
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer is an owner of this pet'),
+  "avatarUrl": zod.string().nullish()
+}).describe('A pet tagged in a post, with viewer ownership state')).describe('All pets tagged in this post (including the primary). Use this array for display.')
 }).describe('A post in the feed with reaction counts and viewer state')),
   "viewer": zod.object({
   "treatsRemainingToday": zod.number()
@@ -309,14 +317,22 @@ export const GetPetResponse = zod.object({
   "breed": zod.string().nullish(),
   "speciesId": zod.string().nullable().describe('FK to the species catalogue; null if pet was created without catalogue selection.'),
   "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
-  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet')
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet'),
+  "ownerId": zod.string().describe('Clerk user ID of the primary owner — used for remove-tag permission checks.')
 }).describe('Minimal pet info embedded in feed posts'),
   "boopCount": zod.number(),
   "treatCount": zod.number(),
   "commentCount": zod.number(),
   "viewerHasBooped": zod.boolean(),
   "viewerHasTreated": zod.boolean(),
-  "archivedAt": zod.coerce.date().nullable().describe('Set when the post is archived; null when active.')
+  "archivedAt": zod.coerce.date().nullable().describe('Set when the post is archived; null when active.'),
+  "taggedPets": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "ownerId": zod.string().describe('Clerk user ID of the pet\'s primary owner'),
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer is an owner of this pet'),
+  "avatarUrl": zod.string().nullish()
+}).describe('A pet tagged in a post, with viewer ownership state')).describe('All pets tagged in this post (including the primary). Use this array for display.')
 }).describe('A post in the feed with reaction counts and viewer state')),
   "archivedPosts": zod.array(zod.object({
   "id": zod.string(),
@@ -339,14 +355,22 @@ export const GetPetResponse = zod.object({
   "breed": zod.string().nullish(),
   "speciesId": zod.string().nullable().describe('FK to the species catalogue; null if pet was created without catalogue selection.'),
   "viewerInPack": zod.boolean().describe('Whether the authenticated viewer is in this pet\'s Pack'),
-  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet')
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet'),
+  "ownerId": zod.string().describe('Clerk user ID of the primary owner — used for remove-tag permission checks.')
 }).describe('Minimal pet info embedded in feed posts'),
   "boopCount": zod.number(),
   "treatCount": zod.number(),
   "commentCount": zod.number(),
   "viewerHasBooped": zod.boolean(),
   "viewerHasTreated": zod.boolean(),
-  "archivedAt": zod.coerce.date().nullable().describe('Set when the post is archived; null when active.')
+  "archivedAt": zod.coerce.date().nullable().describe('Set when the post is archived; null when active.'),
+  "taggedPets": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "ownerId": zod.string().describe('Clerk user ID of the pet\'s primary owner'),
+  "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer is an owner of this pet'),
+  "avatarUrl": zod.string().nullish()
+}).describe('A pet tagged in a post, with viewer ownership state')).describe('All pets tagged in this post (including the primary). Use this array for display.')
 }).describe('A post in the feed with reaction counts and viewer state')).describe('Archived posts for this pet. Populated only when the viewer is the owner; always an empty array for non-owners.\n'),
   "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet.'),
   "avatarUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar. Null when no avatar is set.'),
@@ -464,6 +488,7 @@ export const PresignUploadResponse = zod.object({
  * Creates a post for a pet owned by the caller. Returns 403 if the pet is not owned by the caller.
  * @summary Create a post
  */
+
 export const createPostBodyCaptionMax = 250;
 
 export const createPostBodyCropFocusXMin = 0;
@@ -487,7 +512,7 @@ export const createPostBodyCropHMax = 1;
 
 
 export const CreatePostBody = zod.object({
-  "petId": zod.string(),
+  "petIds": zod.array(zod.string()).min(1).describe('IDs of pets to tag. The first element is the primary pet (shown as the post author). Caller must own the primary pet. Additional pets can be anyone\'s pet — tags are live immediately with no approval required.\n'),
   "mediaKey": zod.string(),
   "caption": zod.string().max(createPostBodyCaptionMax).optional(),
   "isNursery": zod.boolean().optional(),
@@ -502,7 +527,7 @@ export const CreatePostBody = zod.object({
 
 export const CreatePostResponse = zod.object({
   "id": zod.string(),
-  "petId": zod.string(),
+  "petIds": zod.array(zod.string()).describe('All tagged pet IDs, primary first.'),
   "mediaKey": zod.string(),
   "caption": zod.string().nullish(),
   "isNursery": zod.boolean(),
@@ -696,6 +721,64 @@ export const DeleteCommentParams = zod.object({
 })
 
 export const DeleteCommentResponse = zod.void()
+
+
+/**
+ * Removes a specific pet's tag from a post. Only that pet's owner can call this (403 otherwise). The post itself is not deleted. Returns 400 if this is the last tag on the post.
+ * @summary Remove a pet tag from a post
+ */
+export const RemovePostPetTagParams = zod.object({
+  "id": zod.coerce.string().describe('Post ID'),
+  "petId": zod.coerce.string().describe('Pet ID to untag')
+})
+
+export const RemovePostPetTagResponse = zod.void()
+
+
+/**
+ * Returns up to 20 pets matching the query against pet name OR owner username. Own pets are returned first. Used by the compose flow pet-tagging step.
+ * @summary Search pets by name or owner username
+ */
+export const SearchPetsQueryParams = zod.object({
+  "q": zod.coerce.string().describe('Search query (min 1 character)'),
+  "exclude": zod.coerce.string().optional().describe('Comma-separated pet IDs to exclude from results')
+})
+
+export const SearchPetsResponse = zod.object({
+  "pets": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "species": zod.string(),
+  "ownerId": zod.string(),
+  "ownerUsername": zod.string(),
+  "avatarUrl": zod.string().nullish(),
+  "thumbnailUrl": zod.string().nullish()
+}).describe('Pet returned by the \/pets\/search endpoint'))
+})
+
+
+/**
+ * @summary Get in-app notifications
+ */
+export const GetNotificationsResponse = zod.object({
+  "notifications": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string().describe('\'pet_tagged\''),
+  "postId": zod.string().nullish(),
+  "petId": zod.string().nullish(),
+  "petName": zod.string().nullish(),
+  "actorUsername": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "readAt": zod.coerce.date().nullish()
+}).describe('In-app notification entry')),
+  "unreadCount": zod.number()
+})
+
+
+/**
+ * @summary Mark all notifications as read
+ */
+export const MarkNotificationsReadResponse = zod.void()
 
 
 /**

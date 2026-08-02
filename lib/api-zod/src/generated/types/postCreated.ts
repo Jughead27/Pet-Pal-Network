@@ -11,7 +11,8 @@
  */
 export interface PostCreated {
   id: string;
-  petId: string;
+  /** All tagged pet IDs, primary first. */
+  petIds: string[];
   mediaKey: string;
   caption?: string | null;
   isNursery: boolean;

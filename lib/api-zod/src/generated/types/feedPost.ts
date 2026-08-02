@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PetSummary } from './petSummary';
+import type { TaggedPet } from './taggedPet';
 
 /**
  * A post in the feed with reaction counts and viewer state
@@ -40,4 +41,6 @@ export interface FeedPost {
   viewerHasTreated: boolean;
   /** Set when the post is archived; null when active. */
   archivedAt: Date | null;
+  /** All pets tagged in this post (including the primary). Use this array for display. */
+  taggedPets: TaggedPet[];
 }

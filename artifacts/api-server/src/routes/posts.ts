@@ -8,8 +8,11 @@ import {
   treatsTable,
   configTable,
   usersTable,
+  postPetsTable,
+  notificationsTable,
+  blocksTable,
 } from "@workspace/db";
-import { and, asc, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { CreatePostBody } from "@workspace/api-zod";
 import { deleteObject } from "../lib/r2.js";
 import { notBlockedCommentAuthor, notHiddenByAdminComment } from "../lib/excludeBlocked.js";
@@ -21,8 +24,12 @@ const router: IRouter = Router();
 /**
  * POST /posts
  *
- * Creates a post for a pet owned (primary or co) by the authenticated user.
- * Stores posted_by_user_id for moderation/audit — never surfaced in any UI.
+ * Creates a post tagged with one or more pets.
+ *   - petIds[0] is the primary pet (stored in posts.pet_id for backward compat).
+ *     Caller must own the primary pet.
+ *   - All petIds are written to post_pets (the canonical tag source).
+ *   - Any pet not owned by the caller triggers a 'pet_tagged' notification for
+ *     that pet's owner.
  */
 router.post("/posts", async (req, res) => {
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
@@ -34,29 +41,62 @@ router.post("/posts", async (req, res) => {
     return;
   }
 
-  const { petId, mediaKey, caption, isNursery, cropFocusX, cropFocusY, cropMode, cropX, cropY, cropW, cropH } = parsed.data;
+  const { petIds, mediaKey, caption, isNursery, cropFocusX, cropFocusY, cropMode, cropX, cropY, cropW, cropH } = parsed.data;
+  const primaryPetId = petIds[0];
 
-  // Verify pet exists, is not soft-deleted, and caller is any owner (primary or co)
-  const [pet] = await db
-    .select({ id: petsTable.id })
+  // Verify all tagged pets exist and are active
+  const petRows = await db
+    .select({ id: petsTable.id, ownerId: petsTable.ownerId })
     .from(petsTable)
-    .where(and(eq(petsTable.id, petId), activePets))
-    .limit(1);
+    .where(and(inArray(petsTable.id, petIds), activePets));
 
-  if (!pet) {
-    res.status(404).json({ error: "Pet not found" });
+  if (petRows.length !== petIds.length) {
+    const foundIds = new Set(petRows.map((p) => p.id));
+    const missing = petIds.find((id) => !foundIds.has(id));
+    res.status(404).json({ error: `Pet not found: ${missing}` });
     return;
   }
 
-  if (!(await isPetOwner(userId, petId))) {
-    res.status(403).json({ error: "You do not own this pet" });
+  // Caller must own the primary pet
+  if (!(await isPetOwner(userId, primaryPetId))) {
+    res.status(403).json({ error: "You do not own the primary pet" });
     return;
+  }
+
+  // Derive cross-owner pets early — needed for both the block check and
+  // for creating notifications after the post is inserted.
+  const crossOwnerPets = petRows.filter((p) => p.ownerId !== userId);
+
+  // Block guard: reject if any tagged pet's owner has a block relationship
+  // with the poster (either direction).  Consistent with feed-side block
+  // exclusion: both "I blocked them" and "they blocked me" prevent the tag.
+  //
+  // Behavior: hard reject (403) rather than silent drop, so the poster
+  // knows immediately why the pet wasn't tagged.  There is no existing
+  // write-side partial-failure precedent in this app to follow.
+  if (crossOwnerPets.length > 0) {
+    const crossOwnerIds = crossOwnerPets.map((p) => p.ownerId);
+    const blockRows = await db
+      .select({ id: blocksTable.id })
+      .from(blocksTable)
+      .where(
+        or(
+          and(inArray(blocksTable.blockerId, crossOwnerIds), eq(blocksTable.blockedId, userId)),
+          and(eq(blocksTable.blockerId, userId),             inArray(blocksTable.blockedId, crossOwnerIds)),
+        ),
+      )
+      .limit(1);
+
+    if (blockRows.length > 0) {
+      res.status(403).json({ error: "Cannot tag a pet whose owner has blocked you (or whom you have blocked)" });
+      return;
+    }
   }
 
   const [post] = await db
     .insert(postsTable)
     .values({
-      petId,
+      petId:          primaryPetId,
       mediaKey,
       caption:        caption ?? null,
       isNursery:      isNursery ?? false,
@@ -67,21 +107,84 @@ router.post("/posts", async (req, res) => {
       cropY:          cropY     ?? null,
       cropW:          cropW     ?? null,
       cropH:          cropH     ?? null,
-      // Audit field — never returned to clients
       postedByUserId: userId,
     })
     .returning();
 
+  // Record all pet tags in post_pets (including primary)
+  await db
+    .insert(postPetsTable)
+    .values(petIds.map((petId) => ({ postId: post.id, petId, taggedByUserId: userId })))
+    .onConflictDoNothing();
+
+  // Notify owners of cross-owner tagged pets (crossOwnerPets derived above)
+  if (crossOwnerPets.length > 0) {
+    await db.insert(notificationsTable).values(
+      crossOwnerPets.map((p) => ({
+        userId:      p.ownerId,
+        type:        "pet_tagged",
+        postId:      post.id,
+        petId:       p.id,
+        actorUserId: userId,
+      })),
+    );
+  }
+
   res.status(201).json({
-    id:         post.id,
-    petId:      post.petId,
-    mediaKey:   post.mediaKey,
-    caption:    post.caption ?? null,
-    isNursery:  post.isNursery,
-    cropFocusX: post.cropFocusX ?? null,
-    cropFocusY: post.cropFocusY ?? null,
-    createdAt:  post.createdAt,
+    id:        post.id,
+    petIds,
+    mediaKey:  post.mediaKey,
+    caption:   post.caption  ?? null,
+    isNursery: post.isNursery,
+    createdAt: post.createdAt,
   });
+});
+
+/**
+ * DELETE /posts/:id/pets/:petId
+ *
+ * Removes a specific pet tag from a post.
+ * Only that pet's owner may call this (403 otherwise).
+ * Returns 400 if this is the last remaining tag on the post.
+ */
+router.delete("/posts/:id/pets/:petId", async (req, res) => {
+  const { id: postId, petId } = req.params;
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  // Verify viewer owns the pet
+  if (!(await isPetOwner(userId, petId))) {
+    res.status(403).json({ error: "You do not own this pet" });
+    return;
+  }
+
+  // Verify the tag exists
+  const [tag] = await db
+    .select({ id: postPetsTable.id })
+    .from(postPetsTable)
+    .where(and(eq(postPetsTable.postId, postId), eq(postPetsTable.petId, petId)))
+    .limit(1);
+
+  if (!tag) {
+    res.status(404).json({ error: "Tag not found" });
+    return;
+  }
+
+  // Prevent removing the last tag
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(postPetsTable)
+    .where(eq(postPetsTable.postId, postId));
+
+  if ((countRow?.count ?? 0) <= 1) {
+    res.status(400).json({ error: "Cannot remove the last pet tag from a post" });
+    return;
+  }
+
+  await db
+    .delete(postPetsTable)
+    .where(and(eq(postPetsTable.postId, postId), eq(postPetsTable.petId, petId)));
+
+  res.status(204).end();
 });
 
 /**

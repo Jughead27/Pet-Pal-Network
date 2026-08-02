@@ -25,3 +25,4 @@
 - [Co-ownership Architecture](co-ownership-architecture.md) — pet_owners join table, invite flow, permission model, viewerCanManagePost, mobile surface points.
 - [Auto-frame Architecture](auto-frame-architecture.md) — crop rect columns on posts, computeAutoFrame, FrameRefiner (pan+pinch), FocalImage modes, feedAspect = screenW/screenH.
 - [Quota Requests Architecture](quota-requests-architecture.md) — member invite quota requests; separate from invite_requests (pre-signup); grant bumps quota +5, audit logged.
+- [Multi-Pet Tagging Architecture](multi-pet-tagging.md) — post_pets canonical source; posts.petId backward compat; ownership rules; GET /pets/search must precede /:id; api-zod index exports only generated/api.

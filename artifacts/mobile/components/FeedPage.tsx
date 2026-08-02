@@ -376,7 +376,10 @@ export default function FeedPage({
           new Promise<void>(resolve => setTimeout(resolve, 2000)),
         ]);
       }
-      await executeShareCard({ mediaUri, cardRef, showToast, petNames: [post.pet.name] });
+      const allPetNames = (post.taggedPets ?? []).length > 0
+        ? (post.taggedPets ?? []).map(tp => tp.name)
+        : [post.pet.name];
+      await executeShareCard({ mediaUri, cardRef, showToast, petNames: allPetNames });
     } catch (err) {
       // User dismissed the share sheet — not an error worth surfacing.
       // Any other failure (fetch, canvas, sharing API) gets a toast so the
@@ -506,6 +509,18 @@ export default function FeedPage({
             initialInPack={post.pet.viewerInPack}
           />
         </View>
+
+        {/* Tagged-with row — only when other pets are in the post */}
+        {(post.taggedPets ?? []).filter(tp => tp.id !== petId).length > 0 && (
+          <Text style={[styles.taggedWith, { color: 'rgba(240,244,248,0.7)' }]} numberOfLines={1} ellipsizeMode="tail">
+            {'with '}
+            {(post.taggedPets ?? []).filter(tp => tp.id !== petId).map((tp, i, arr) => (
+              <Text key={tp.id} onPress={() => router.push(`/pet/${tp.id}` as never)} style={styles.taggedPetName}>
+                {tp.name}{i < arr.length - 1 ? ', ' : ''}
+              </Text>
+            ))}
+          </Text>
+        )}
 
         <Text style={[styles.petBreed, { color: 'rgba(240,244,248,0.75)' }]} numberOfLines={1} ellipsizeMode="tail">
           {petBreed}
@@ -651,6 +666,15 @@ const styles = StyleSheet.create({
     fontWeight: '500' as const,
     letterSpacing: 0.3,
     ...TEXT_SHADOW,
+  },
+  taggedWith: {
+    fontSize: 12,
+    marginTop: 2,
+    ...TEXT_SHADOW,
+  },
+  taggedPetName: {
+    fontWeight: '600' as const,
+    textDecorationLine: 'underline' as const,
   },
   petCaption: {
     fontSize: 13,

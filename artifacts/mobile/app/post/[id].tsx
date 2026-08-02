@@ -10,8 +10,9 @@
  * View-only for all viewers — delete is in the pet-profile post modal.
  */
 
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   ScrollView,
   StyleSheet,
@@ -26,7 +27,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { getGetFeedQueryKey } from '@workspace/api-client-react';
+import { getGetFeedQueryKey, useRemovePostPetTag } from '@workspace/api-client-react';
 import type { FeedPost, FeedResponse } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import { formatPostAge } from '@/utils/formatPostAge';
@@ -40,7 +41,35 @@ export default function PostDetailScreen() {
   const insets        = useSafeAreaInsets();
   const { id }        = useLocalSearchParams<{ id: string }>();
   const queryClient   = useQueryClient();
-  const [reportOpen, setReportOpen] = useState(false);
+  const [reportOpen,     setReportOpen]     = useState(false);
+  const [removingTagId,  setRemovingTagId]  = useState<string | null>(null);
+
+  const { mutateAsync: removeTag } = useRemovePostPetTag();
+
+  const handleRemoveTag = useCallback(async (petId: string) => {
+    if (!id || removingTagId) return;
+    setRemovingTagId(petId);
+    try {
+      await removeTag({ id, petId });
+      // Optimistically remove the pet from the feed cache so the row
+      // disappears immediately without waiting for a refetch.
+      queryClient.setQueryData<FeedResponse>(getGetFeedQueryKey(), (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          posts: old.posts.map((p) =>
+            p.id === id
+              ? { ...p, taggedPets: (p.taggedPets ?? []).filter((tp) => tp.id !== petId) }
+              : p
+          ),
+        };
+      });
+    } catch {
+      // Silent — the tag stays visible if the request failed.
+    } finally {
+      setRemovingTagId(null);
+    }
+  }, [id, removingTagId, removeTag, queryClient]);
 
   // Look up the post from the feed cache.
   const feedData = queryClient.getQueryData<FeedResponse>(getGetFeedQueryKey());
@@ -100,6 +129,47 @@ export default function PostDetailScreen() {
               {post.pet.name}
             </Text>
           </TouchableOpacity>
+
+          {/* Other tagged pets — each pet on its own row so the remove-tag
+              whisper can sit inline without fighting nested-Text onPress. */}
+          {(post.taggedPets ?? []).filter(tp => tp.id !== post.pet.id).length > 0 && (
+            <View style={styles.taggedPetsRow}>
+              <Text style={[styles.taggedWith, { color: colors.mutedForeground }]}>
+                also with
+              </Text>
+              {(post.taggedPets ?? []).filter(tp => tp.id !== post.pet.id).map((tp) => (
+                <View key={tp.id} style={styles.taggedPetLine}>
+                  <TouchableOpacity
+                    onPress={() => router.push(`/pet/${tp.id}` as never)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.taggedPetLink, { color: colors.primary }]}>
+                      {tp.name}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* "remove tag" — only shown to the owner of this specific pet.
+                      Matches the reportWhisper style: tiny, muted, typographic. */}
+                  {tp.viewerOwnsPet && (
+                    <TouchableOpacity
+                      onPress={() => handleRemoveTag(tp.id)}
+                      disabled={removingTagId === tp.id}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      style={styles.removeTagBtn}
+                    >
+                      {removingTagId === tp.id ? (
+                        <ActivityIndicator size="small" color={colors.mutedForeground} style={{ transform: [{ scale: 0.5 }] }} />
+                      ) : (
+                        <Text style={[styles.removeTagWhisper, { color: colors.mutedForeground }]}>
+                          remove tag
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
 
           {post.pet.breed ? (
             <Text style={[styles.petBreed, { color: colors.mutedForeground }]}>
@@ -186,6 +256,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500' as const,
     marginTop: -2,
+  },
+  taggedPetsRow: {
+    marginTop: 4,
+  },
+  taggedWith: {
+    fontSize: 11,
+    opacity: 0.55,
+    fontFamily: 'Inter_400Regular',
+    marginBottom: 2,
+  },
+  taggedPetLine: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    gap:            8,
+    marginBottom:   1,
+  },
+  taggedPetLink: {
+    fontSize:     13,
+    fontFamily:   'Inter_500Medium',
+  },
+  removeTagBtn: {
+    justifyContent: 'center',
+  },
+  // Matches reportWhisper — barely-there typographic action.
+  removeTagWhisper: {
+    fontSize:   11,
+    opacity:    0.35,
+    fontFamily: 'Inter_400Regular',
   },
   caption: {
     fontSize: 15,

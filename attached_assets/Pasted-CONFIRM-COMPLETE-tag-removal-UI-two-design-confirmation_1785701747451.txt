@@ -1,0 +1,38 @@
+CONFIRM/COMPLETE — tag-removal UI + two design confirmations
+
+Before this ships to real testers, need three things confirmed or 
+completed:
+
+1. REMOVE-TAG UI CHECK: The DELETE /posts/:id/pets/:petId endpoint 
+   exists server-side, but confirm whether there's an actual UI 
+   affordance for a tagged pet's owner to remove their own pet's tag 
+   from a post they don't own. If this UI does NOT exist yet, build it 
+   now: a quiet, typographic "remove tag" (or similar minimal wording) 
+   action visible on the post — in the "also with …" tagged-pets row on 
+   post detail is the natural spot — but ONLY visible to the currently 
+   signed-in user if they own one of the tagged pets shown there. 
+   Tapping it calls the existing DELETE endpoint and removes that pet's 
+   tag from the post (post itself stays, other tags stay). Keep it 
+   minimal — no capsule buttons, matching the existing report/delete 
+   whisper style already used elsewhere in the app.
+
+2. CONFIRM: the current implementation requires the poster to own at 
+   least petIds[0] (can't create a post tagging ONLY other people's 
+   pets, none of your own). Confirm this is intentional/as-built and 
+   report it back — no change needed unless you flag a reason it 
+   should be otherwise.
+
+3. CONFIRM: how does tagging interact with blocking? Specifically: if 
+   Pet A's owner has blocked the person trying to tag Pet A in a post, 
+   can that block still happen? Report current behavior. If nothing 
+   currently prevents a blocked user from tagging a blocked pet, flag 
+   that as a gap — decide with James before shipping whether that 
+   needs to be prevented, or whether removal-after-the-fact is 
+   sufficient given the tagged owner can always remove it.
+
+DO NOT MODIFY: anything else in the multi-pet tagging feature already 
+shipped — this is a completeness check plus one targeted addition if 
+the remove-tag UI is missing.
+
+REPORT BACK: clear yes/no on whether remove-tag UI existed already or 
+was just built, plus the confirm/flag answers to items 2 and 3.

@@ -40,6 +40,7 @@ import {
   usePresignUpload,
   useVerifyUpload,
   useCreatePost,
+  useSearchPets,
   getGetFeedQueryKey,
 } from '@workspace/api-client-react';
 import type { Pet } from '@workspace/api-client-react';
@@ -99,8 +100,9 @@ export default function AddScreen() {
   const [compressedUri, setCompressedUri] = useState<string | null>(null);
   const naturalSize = useRef({ width: 0, height: 0 });
   const [caption,       setCaption]       = useState('');
-  const [selectedPetId, setSelectedPetId] = useState<string | null>(null);
-  const [isNursery,     setIsNursery]     = useState(false);
+  const [selectedPetIds, setSelectedPetIds] = useState<Set<string>>(new Set());
+  const [petSearchQuery, setPetSearchQuery] = useState('');
+  const [isNursery,      setIsNursery]     = useState(false);
   const [isUploading,   setIsUploading]   = useState(false);
   const [error,         setError]         = useState<string | null>(null);
 
@@ -119,9 +121,9 @@ export default function AddScreen() {
   // image without losing caption / pet selection or resetting to the idle step.
   const [isChangingPhoto, setIsChangingPhoto] = useState(false);
 
-  // Auto-select pet when there is exactly one.
+  // Auto-select the only own pet when there is exactly one.
   useEffect(() => {
-    if (pets.length === 1) setSelectedPetId(pets[0].id);
+    if (pets.length === 1) setSelectedPetIds(new Set([pets[0].id]));
   }, [pets]);
 
   // ── Mutations ─────────────────────────────────────────────────────────────
@@ -254,13 +256,28 @@ export default function AddScreen() {
     setCropMode('contain');
     setRefinerOpen(false);
     setError(null);
-    if (pets.length !== 1) setSelectedPetId(null);
+    setPetSearchQuery('');
+    if (pets.length === 1) setSelectedPetIds(new Set([pets[0].id]));
+    else setSelectedPetIds(new Set());
     router.navigate('/');
   }, [pets.length]);
 
   // ── Submit ────────────────────────────────────────────────────────────────
+  // ── Pet search ────────────────────────────────────────────────────────────
+  // Searches other users' pets to tag alongside own pets.
+  const excludeParam = [...selectedPetIds].join(',');
+  const { data: petSearchData } = useSearchPets(
+    { q: petSearchQuery, exclude: excludeParam },
+    { query: { enabled: petSearchQuery.trim().length >= 1 } },
+  );
+  const petSearchResults = petSearchData?.pets ?? [];
+
+  // Own pets first in the petIds array (petIds[0] must be caller-owned).
+  const hasOwnPetSelected = [...selectedPetIds].some(id => pets.some(p => p.id === id));
+
+  // ── Submit ────────────────────────────────────────────────────────────────
   const handleSubmit = useCallback(async () => {
-    if (!compressedUri || !selectedPetId || isUploading) return;
+    if (!compressedUri || selectedPetIds.size === 0 || !hasOwnPetSelected || isUploading) return;
     setIsUploading(true);
     setError(null);
 
@@ -288,9 +305,12 @@ export default function AddScreen() {
       // Server-side magic-byte check — real security boundary.
       await verifyUpload({ data: { mediaKey } });
 
+      const ownedPetIds  = [...selectedPetIds].filter(id => pets.some(p => p.id === id));
+      const otherPetIds  = [...selectedPetIds].filter(id => !pets.some(p => p.id === id));
+      const orderedPetIds = [...ownedPetIds, ...otherPetIds];
       await createPost({
         data: {
-          petId:      selectedPetId,
+          petIds:     orderedPetIds,
           mediaKey,
           caption:    caption.trim() || undefined,
           isNursery,
@@ -317,8 +337,10 @@ export default function AddScreen() {
       setCropFocusY(0.5);
       setCropRect(null);
       setCropMode('contain');
+      setPetSearchQuery('');
       setStep('idle');
-      if (pets.length !== 1) setSelectedPetId(null);
+      if (pets.length === 1) setSelectedPetIds(new Set([pets[0].id]));
+      else setSelectedPetIds(new Set());
 
       router.navigate('/');
     } catch (e) {
@@ -328,16 +350,15 @@ export default function AddScreen() {
       setIsUploading(false);
     }
   }, [
-    compressedUri, selectedPetId, isUploading, presignUpload, createPost,
+    compressedUri, selectedPetIds, hasOwnPetSelected, isUploading, presignUpload, createPost,
     caption, isNursery, cropFocusX, cropFocusY, cropRect, cropMode,
-    queryClient, pets.length,
+    queryClient, pets,
   ]);
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-  const canSubmit = !!compressedUri && !!selectedPetId && !isUploading;
-  // Derive the selected pet so we can personalise the caption placeholder and
-  // show the single-pet "posting as" display without an extra query.
-  const selectedPet = pets.find((p) => p.id === selectedPetId) ?? null;
+  const canSubmit = !!compressedUri && selectedPetIds.size > 0 && hasOwnPetSelected && !isUploading;
+  // Derive the primary selected pet so we can personalise the caption placeholder.
+  const selectedPet = pets.find((p) => selectedPetIds.has(p.id)) ?? null;
 
   // Caption placeholder — playful, pet-as-author voice, rotating.
   // Template index is picked once per compose open (mount) and stays stable
@@ -602,33 +623,91 @@ export default function AddScreen() {
         <View style={[s.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
 
           {/* Pet — FIRST: the pet is the post's identity */}
-          <Text style={[s.label, { color: colors.mutedForeground }]}>Pet</Text>
-          {pets.length === 1 ? (
-            // Single-pet: auto-selected — show a quiet "posting as" line
-            <View style={s.postingAsRow}>
-              <PetAvatar
-                url={pets[0].thumbnailUrl}
-                size={32}
-                backgroundColor={colors.secondary}
-                pawColor={colors.mutedForeground}
+          <Text style={[s.label, { color: colors.mutedForeground }]}>Your pets</Text>
+
+          {/* Own-pet chips — always multi-select toggles */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.petScroll}>
+            {pets.map((pet) => (
+              <PetChip
+                key={pet.id}
+                pet={pet}
+                selected={selectedPetIds.has(pet.id)}
+                colors={colors}
+                onPress={() => {
+                  setSelectedPetIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(pet.id)) {
+                      // Require at least one own pet to stay selected
+                      const ownSelected = [...next].filter(id => pets.some(p => p.id === id));
+                      if (ownSelected.length <= 1) return prev;
+                      next.delete(pet.id);
+                    } else {
+                      next.add(pet.id);
+                    }
+                    return next;
+                  });
+                }}
               />
-              <Text style={[s.postingAsName, { color: colors.foreground }]}>
-                {pets[0].name}
-              </Text>
-            </View>
-          ) : (
-            // Multi-pet: avatar + name chips
+            ))}
+          </ScrollView>
+
+          {/* Tag another pet — search by name or owner username */}
+          <Text style={[s.label, { color: colors.mutedForeground, marginTop: 16 }]}>Tag another pet</Text>
+          <TextInput
+            style={[s.input, { backgroundColor: colors.secondary, borderColor: colors.border, color: colors.foreground }]}
+            value={petSearchQuery}
+            onChangeText={setPetSearchQuery}
+            placeholder="Search by pet or owner name…"
+            placeholderTextColor={colors.mutedForeground}
+            selectionColor={colors.primary}
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+          {petSearchResults.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.petScroll}>
-              {pets.map((pet) => (
-                <PetChip
-                  key={pet.id}
-                  pet={pet}
-                  selected={pet.id === selectedPetId}
-                  colors={colors}
-                  onPress={() => setSelectedPetId(pet.id)}
-                />
-              ))}
+              {petSearchResults
+                .filter((r) => !selectedPetIds.has(r.id) && !pets.some(p => p.id === r.id))
+                .map((result) => (
+                  <TouchableOpacity
+                    key={result.id}
+                    style={[s.searchResultChip, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+                    onPress={() => {
+                      setSelectedPetIds((prev) => new Set([...prev, result.id]));
+                      setPetSearchQuery('');
+                    }}
+                  >
+                    <Text style={[s.searchResultName, { color: colors.foreground }]}>
+                      {result.name}
+                    </Text>
+                    <Text style={[s.searchResultOwner, { color: colors.mutedForeground }]}>
+                      @{result.ownerUsername}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
             </ScrollView>
+          )}
+
+          {/* Selected cross-owner pets — removable chips */}
+          {[...selectedPetIds].filter(id => !pets.some(p => p.id === id)).length > 0 && (
+            <View style={s.taggedOthersRow}>
+              {[...selectedPetIds]
+                .filter(id => !pets.some(p => p.id === id))
+                .map(id => {
+                  // We stored the name via search result — look it up from petSearchData
+                  const info = petSearchData?.pets.find(p => p.id === id);
+                  return (
+                    <TouchableOpacity
+                      key={id}
+                      style={[s.taggedOtherChip, { backgroundColor: colors.primary + '22', borderColor: colors.primary }]}
+                      onPress={() => setSelectedPetIds((prev) => { const n = new Set(prev); n.delete(id); return n; })}
+                    >
+                      <Text style={[s.taggedOtherName, { color: colors.primary }]}>
+                        {info?.name ?? id.slice(0, 8)} ✕
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+            </View>
           )}
 
           {/* Caption — AFTER Pet; placeholder personalises once pet is chosen */}
@@ -700,7 +779,7 @@ export default function AddScreen() {
             </Text>
           )}
         </Button>
-        {!!compressedUri && !selectedPetId && (
+        {!!compressedUri && !hasOwnPetSelected && (
           <Text style={[s.postHint, { color: colors.mutedForeground }]}>
             Choose a pet above to post
           </Text>
@@ -980,6 +1059,40 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
 
     petScroll: {
       flexGrow: 0,
+    },
+
+    searchResultChip: {
+      borderWidth: 1,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      marginRight: 8,
+      marginTop: 6,
+    },
+    searchResultName: {
+      fontSize: 13,
+      fontFamily: 'Inter_500Medium',
+    },
+    searchResultOwner: {
+      fontSize: 11,
+      marginTop: 1,
+    },
+
+    taggedOthersRow: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      marginTop: 8,
+      gap: 6,
+    },
+    taggedOtherChip: {
+      borderWidth: 1,
+      borderRadius: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    taggedOtherName: {
+      fontSize: 13,
+      fontFamily: 'Inter_500Medium',
     },
 
     toggleRow: {

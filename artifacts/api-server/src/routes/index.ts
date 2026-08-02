@@ -17,6 +17,7 @@ import invitesMemberRouter from "./invites-member";
 import tosRouter from "./tos";
 import coOwnersRouter from "./co-owners";
 import quotaRequestsRouter from "./quota-requests";
+import notificationsRouter from "./notifications";
 import { requireClerkAuth } from "../middlewares/requireClerkAuth";
 import invitesRouter from "./invites";
 
@@ -50,5 +51,6 @@ router.use(invitesMemberRouter); // POST /invites/redeem  POST /invites  GET /in
 router.use(tosRouter);           // POST /tos/accept
 router.use(coOwnersRouter);      // co-owner invite + management routes
 router.use(quotaRequestsRouter); // POST /quota-requests  GET /quota-requests/mine
+router.use(notificationsRouter); // GET /notifications  PATCH /notifications/read-all
 
 export default router;

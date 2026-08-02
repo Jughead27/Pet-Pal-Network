@@ -1,0 +1,122 @@
+MULTI-PET POSTS + CROSS-OWNER TAGGING — tag multiple pets (own or others') in one post
+
+CONTEXT: Posts currently belong to exactly one pet. Need to support 
+tagging multiple pets in a single post — own pets AND, with the tagged 
+owner's implicit consent (immediate + removable, not pre-approval), 
+other users' pets too (e.g. a dog park photo with your dog and a 
+friend's dog). Distinct from a photo carousel — this is multiple pets 
+tagged on one post/photo.
+
+SCHEMA:
+  - Add a post_pets join table: post_id, pet_id, tagged_by_user_id 
+    (who added the tag — for audit/removal-rights purposes), created_at.
+  - No approval/status field needed given the visibility model below — 
+    tags are live immediately, not gated.
+  - Migrate existing posts: backfill post_pets from the current single 
+    pet_id relationship on posts so no existing post loses its pet tag. 
+    Idempotent migration per existing deploy-gotcha pattern.
+
+TAG VISIBILITY MODEL (LOCKED):
+  - Tags go live IMMEDIATELY when the post is created — no approval 
+    wait, regardless of whether the tagged pet is owned by the poster 
+    or by someone else.
+  - The tagged pet's owner (if not the poster) gets a notification that 
+    their pet was tagged.
+  - The tagged pet's owner can remove their pet from the tag at any 
+    time, one tap, no confirmation friction beyond maybe a lightweight 
+    "remove tag?" (your call on whether that needs a confirm step — 
+    keep it minimal either way, matching the typographic/no-capsule 
+    design system). Removing a tag does NOT delete the post — it just 
+    detaches that pet from it.
+  - Only the TAGGED PET'S OWNER can remove that specific tag — the 
+    poster cannot remove someone else's pet's tag, and can only remove 
+    their OWN pets' tags (which effectively just means editing their 
+    own post's pet list, same as any other edit).
+
+DISCOVERY / SEARCH (compose flow):
+  - Pet-tagging step supports searching/selecting pets by EITHER pet 
+    name OR owner username (combined search, matching the existing 
+    Sniff V2 search spec pattern).
+  - Results should reasonably scope to real pshpsh pets (not an 
+    unbounded fuzzy match) — search-as-you-type against pet name / 
+    owner username, standard typeahead pattern.
+  - Your own pets should surface first/prominently (as today), with 
+    other users' pets available via search.
+
+API:
+  - Post creation accepts an array of petIds (minimum 1). Server does 
+    NOT require ownership validation on every petId anymore (that 
+    changed from the earlier own-only design) — any existing, non-
+    deleted pet can be tagged. Record tagged_by_user_id per tag.
+  - New endpoint: DELETE /posts/:id/pets/:petId (or similar) — removes 
+    a single pet's tag from a post. Server-enforced: only that pet's 
+    OWNER can call this successfully (403 otherwise), regardless of who 
+    created the post.
+  - GET post responses (feed, post detail, pet-profile grids) return an 
+    array of tagged pets instead of a single pet object.
+  - Notification on tag: reuse whatever lightweight notification 
+    mechanism already exists in the app (if any) for the tagged owner; 
+    if nothing exists yet, a simple flag/entry is fine — don't over-
+    build a notification system for this alone.
+
+UI — COMPOSE (New Post flow):
+  - Pet step becomes multi-select with search (own pets prominent, 
+    others via name/username search per above). Toggle chips on/off, 
+    multiple can be active. Require at least 1 pet selected.
+
+UI — DISPLAY (feed, post detail):
+  - Show ALL tagged pets' avatar+name chips (wrapping row if needed, 
+    matching existing wrapping-row patterns).
+  - Post detail (or wherever makes sense): each tagged pet's owner 
+    (if not the poster) should have a way to remove their pet's tag — 
+    a quiet, typographic affordance, visible only to that pet's owner 
+    when viewing the post.
+
+UI — PET PROFILE GRIDS:
+  - A post appears in a pet's profile grid ("Posts") if that pet is 
+    ANY of the currently-tagged pets — regardless of who created the 
+    post. If a tag is removed, the post disappears from that pet's 
+    grid (but stays for any remaining tagged pets and the original 
+    poster's own grid if they're also tagged).
+  - Apply consistently to active and archived grids.
+
+UI — EDIT RIGHTS:
+  - Post edit/delete stays exclusively with the ORIGINAL POSTER — being 
+    tagged (even as an approved-by-default tag) never grants edit 
+    rights over the post itself. Only tag REMOVAL is available to a 
+    tagged pet's owner, nothing else about the post.
+
+SHARE CARD:
+  - buildShareText(petNames) already handles 1/2/3+ pet formatting — 
+    wire it to the actual array of currently-tagged pets.
+
+DO NOT MODIFY: the photo/media pipeline, Nursery flag behavior (stays 
+per-post), comment system, cross-owner CO-OWNERSHIP (separate feature, 
+not touched by this), blocking behavior (if a pet's owner has blocked 
+the poster, decide whether that should prevent tagging — flag this as 
+worth a quick explicit call before shipping if not already obvious from 
+existing block-enforcement patterns).
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Create a post tagging 2 of your own pets — confirm both show 
+   immediately, no approval wait.
+2. Create a post tagging one of your own pets PLUS a pet belonging to a 
+   different test account — confirm the tag appears immediately (not 
+   pending), and the other pet's owner account shows some notification 
+   of the tag.
+3. As the OTHER pet's owner, remove your pet's tag from that post — 
+   confirm it's removed, the post itself still exists with the 
+   remaining tagged pet(s), and you (as that pet's owner) could do this 
+   without any special permission beyond owning that pet.
+4. Confirm the ORIGINAL POSTER cannot remove the other owner's pet's 
+   tag (only the tagged pet's own owner can).
+5. Confirm the post appears in BOTH pets' profile grids while both tags 
+   are active, and disappears from one pet's grid after that pet's tag 
+   is removed.
+6. Confirm search in the pet-tagging step matches on pet name OR owner 
+   username.
+7. Confirm an existing pre-migration single-pet post still displays 
+   correctly.
+8. Share a multi-pet post — confirm caption correctly lists multiple 
+   names.
+9. Golden path unaffected.

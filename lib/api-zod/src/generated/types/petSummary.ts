@@ -20,4 +20,6 @@ export interface PetSummary {
   viewerInPack: boolean;
   /** Whether the authenticated viewer owns this pet */
   viewerOwnsPet: boolean;
+  /** Clerk user ID of the primary owner — used for remove-tag permission checks. */
+  ownerId: string;
 }

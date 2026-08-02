@@ -27,6 +27,8 @@ export interface PetSummary {
   viewerInPack: boolean;
   /** Whether the authenticated viewer owns this pet */
   viewerOwnsPet: boolean;
+  /** Clerk user ID of the primary owner — used for remove-tag permission checks. */
+  ownerId: string;
 }
 
 /**
@@ -34,6 +36,19 @@ export interface PetSummary {
  */
 export interface ViewerInfo {
   treatsRemainingToday: number;
+}
+
+/**
+ * A pet tagged in a post, with viewer ownership state
+ */
+export interface TaggedPet {
+  id: string;
+  name: string;
+  /** Clerk user ID of the pet's primary owner */
+  ownerId: string;
+  /** Whether the authenticated viewer is an owner of this pet */
+  viewerOwnsPet: boolean;
+  avatarUrl?: string | null;
 }
 
 /**
@@ -69,6 +84,8 @@ export interface FeedPost {
   viewerHasTreated: boolean;
   /** Set when the post is archived; null when active. */
   archivedAt: string | null;
+  /** All pets tagged in this post (including the primary). Use this array for display. */
+  taggedPets: TaggedPet[];
 }
 
 /**
@@ -325,10 +342,47 @@ export interface PresignResult {
 }
 
 /**
+ * Pet returned by the /pets/search endpoint
+ */
+export interface PetSearchResult {
+  id: string;
+  name: string;
+  species: string;
+  ownerId: string;
+  ownerUsername: string;
+  avatarUrl?: string | null;
+  thumbnailUrl?: string | null;
+}
+
+/**
+ * In-app notification entry
+ */
+export interface NotificationItem {
+  id: string;
+  /** 'pet_tagged' */
+  type: string;
+  postId?: string | null;
+  petId?: string | null;
+  petName?: string | null;
+  actorUsername?: string | null;
+  createdAt: string;
+  readAt?: string | null;
+}
+
+export interface NotificationsResponse {
+  notifications: NotificationItem[];
+  unreadCount: number;
+}
+
+/**
  * Request body for creating a post
  */
 export interface CreatePostBody {
-  petId: string;
+  /**
+     * IDs of pets to tag. The first element is the primary pet (shown as the post author). Caller must own the primary pet. Additional pets can be anyone's pet — tags are live immediately with no approval required.
+     * @minItems 1
+     */
+  petIds: string[];
   mediaKey: string;
   /** @maxLength 250 */
   caption?: string;
@@ -378,7 +432,8 @@ export interface CreatePostBody {
  */
 export interface PostCreated {
   id: string;
-  petId: string;
+  /** All tagged pet IDs, primary first. */
+  petIds: string[];
   mediaKey: string;
   caption?: string | null;
   isNursery: boolean;
@@ -558,5 +613,20 @@ export const GetFeedSort = {
 
 export type VerifyUpload200 = {
   ok: boolean;
+};
+
+export type SearchPetsParams = {
+/**
+ * Search query (min 1 character)
+ */
+q: string;
+/**
+ * Comma-separated pet IDs to exclude from results
+ */
+exclude?: string;
+};
+
+export type SearchPets200 = {
+  pets: PetSearchResult[];
 };
 

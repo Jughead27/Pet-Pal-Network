@@ -1169,6 +1169,141 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /posts/{id}/pets/{petId}:
+    delete:
+      operationId: removePostPetTag
+      tags: [posts]
+      summary: Remove a pet tag from a post
+      description: >
+        Removes a specific pet's tag from a post.
+        Only that pet's owner can call this (403 otherwise).
+        The post itself is not deleted.
+        Returns 400 if this is the last tag on the post.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Post ID
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Pet ID to untag
+      responses:
+        "204":
+          description: Tag removed
+        "400":
+          description: Cannot remove the last tag on a post
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Viewer does not own this pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Post or tag not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /pets/search:
+    get:
+      operationId: searchPets
+      tags: [pets]
+      summary: Search pets by name or owner username
+      description: >
+        Returns up to 20 pets matching the query against pet name OR owner username.
+        Own pets are returned first. Used by the compose flow pet-tagging step.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search query (min 1 character)
+        - name: exclude
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Comma-separated pet IDs to exclude from results
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pets:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PetSearchResult"
+                required:
+                  - pets
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications:
+    get:
+      operationId: getNotifications
+      tags: [notifications]
+      summary: Get in-app notifications
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationsResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /notifications/read-all:
+    patch:
+      operationId: markNotificationsRead
+      tags: [notifications]
+      summary: Mark all notifications as read
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Marked as read
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /posts/{id}/comments:
     get:
       operationId: getPostComments
@@ -1283,6 +1418,9 @@ components:
         viewerOwnsPet:
           type: boolean
           description: Whether the authenticated viewer owns this pet
+        ownerId:
+          type: string
+          description: Clerk user ID of the primary owner — used for remove-tag permission checks.
       required:
         - id
         - name
@@ -1290,6 +1428,7 @@ components:
         - speciesId
         - viewerInPack
         - viewerOwnsPet
+        - ownerId
 
     ViewerInfo:
       type: object
@@ -1371,6 +1510,11 @@ components:
           format: date-time
           nullable: true
           description: Set when the post is archived; null when active.
+        taggedPets:
+          type: array
+          items:
+            $ref: "#/components/schemas/TaggedPet"
+          description: All pets tagged in this post (including the primary). Use this array for display.
       required:
         - id
         - mediaKey
@@ -1381,6 +1525,7 @@ components:
         - archivedAt
         - createdAt
         - pet
+        - taggedPets
         - boopCount
         - treatCount
         - commentCount
@@ -1826,12 +1971,115 @@ components:
         - uploadUrl
         - mediaKey
 
+    TaggedPet:
+      type: object
+      description: A pet tagged in a post, with viewer ownership state
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        ownerId:
+          type: string
+          description: Clerk user ID of the pet's primary owner
+        viewerOwnsPet:
+          type: boolean
+          description: Whether the authenticated viewer is an owner of this pet
+        avatarUrl:
+          type: string
+          nullable: true
+      required:
+        - id
+        - name
+        - ownerId
+        - viewerOwnsPet
+
+    PetSearchResult:
+      type: object
+      description: Pet returned by the /pets/search endpoint
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        species:
+          type: string
+        ownerId:
+          type: string
+        ownerUsername:
+          type: string
+        avatarUrl:
+          type: string
+          nullable: true
+        thumbnailUrl:
+          type: string
+          nullable: true
+      required:
+        - id
+        - name
+        - species
+        - ownerId
+        - ownerUsername
+
+    NotificationItem:
+      type: object
+      description: In-app notification entry
+      properties:
+        id:
+          type: string
+        type:
+          type: string
+          description: "'pet_tagged'"
+        postId:
+          type: string
+          nullable: true
+        petId:
+          type: string
+          nullable: true
+        petName:
+          type: string
+          nullable: true
+        actorUsername:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        readAt:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+        - id
+        - type
+        - createdAt
+
+    NotificationsResponse:
+      type: object
+      properties:
+        notifications:
+          type: array
+          items:
+            $ref: "#/components/schemas/NotificationItem"
+        unreadCount:
+          type: integer
+      required:
+        - notifications
+        - unreadCount
+
     CreatePostBody:
       type: object
       description: Request body for creating a post
       properties:
-        petId:
-          type: string
+        petIds:
+          type: array
+          items:
+            type: string
+          minItems: 1
+          description: >
+            IDs of pets to tag. The first element is the primary pet (shown as the
+            post author). Caller must own the primary pet. Additional pets can be
+            anyone's pet — tags are live immediately with no approval required.
         mediaKey:
           type: string
         caption:
@@ -1886,7 +2134,7 @@ components:
           maximum: 1
           description: Crop rect height as fraction of original height.
       required:
-        - petId
+        - petIds
         - mediaKey
 
     PostCreated:
@@ -1895,8 +2143,11 @@ components:
       properties:
         id:
           type: string
-        petId:
-          type: string
+        petIds:
+          type: array
+          items:
+            type: string
+          description: All tagged pet IDs, primary first.
         mediaKey:
           type: string
         caption:
@@ -1909,7 +2160,7 @@ components:
           format: date-time
       required:
         - id
-        - petId
+        - petIds
         - mediaKey
         - isNursery
         - createdAt

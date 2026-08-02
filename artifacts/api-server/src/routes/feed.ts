@@ -8,6 +8,7 @@ import {
   commentsTable,
   configTable,
   packFollowsTable,
+  postPetsTable,
 } from "@workspace/db";
 import { and, eq, gte, desc, sql, isNull } from "drizzle-orm";
 import { activePets } from "../lib/petQueries.js";
@@ -91,6 +92,21 @@ router.get("/feed", async (req, res) => {
       )`,
       // Raw owner ID — used by the mobile block affordance in ReportFlow
       petOwnerId: petsTable.ownerId,
+      taggedPetRaw: sql<string | null>`COALESCE((
+        SELECT json_agg(json_build_object(
+          'id',            pp.pet_id::text,
+          'name',          pe_t.name,
+          'ownerId',       pe_t.owner_id,
+          'viewerOwnsPet', EXISTS(
+            SELECT 1 FROM pet_owners po2
+            WHERE po2.pet_id = pp.pet_id AND po2.user_id = ${userId}
+          ),
+          'avatarKey', pe_t.avatar_key
+        ) ORDER BY pp.created_at)
+        FROM post_pets pp
+        JOIN pets pe_t ON pe_t.id = pp.pet_id
+        WHERE pp.post_id = ${postsTable.id}
+      ), '[]'::json)`,
     })
     .from(postsTable)
     .innerJoin(petsTable,    eq(petsTable.id,    postsTable.petId))
@@ -152,6 +168,16 @@ router.get("/feed", async (req, res) => {
     commentCount:     r.commentCount,
     viewerHasBooped:  r.viewerHasBooped,
     viewerHasTreated: r.viewerHasTreated,
+    taggedPets: (() => {
+      const raw = r.taggedPetRaw as Array<{ id: string; name: string; ownerId: string; viewerOwnsPet: boolean; avatarKey: string | null }> | null;
+      return (Array.isArray(raw) ? raw : []).map((tp) => ({
+        id:            tp.id,
+        name:          tp.name,
+        ownerId:       tp.ownerId,
+        viewerOwnsPet: tp.viewerOwnsPet,
+        avatarUrl:     tp.avatarKey ? mediaTokenUrl(tp.avatarKey) : null,
+      }));
+    })(),
   }));
 
   res.json({ posts, viewer: { treatsRemainingToday } });

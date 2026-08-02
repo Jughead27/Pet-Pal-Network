@@ -13,8 +13,9 @@ import {
   interestFollowsTable,
   usersTable,
   petOwnersTable,
+  postPetsTable,
 } from "@workspace/db";
-import { eq, desc, sql, and, or, isNull, isNotNull } from "drizzle-orm";
+import { eq, desc, sql, and, or, isNull, isNotNull, ilike, notInArray } from "drizzle-orm";
 import { activePets } from "../lib/petQueries.js";
 import { CreatePetBody, PatchPetBody } from "@workspace/api-zod";
 import { mediaTokenUrl, copyObject } from "../lib/r2.js";
@@ -23,6 +24,71 @@ import { writeAudit } from "../lib/writeAudit.js";
 import { isPetOwner, isPetPrimaryOwner, getPetOwnerRow } from "../lib/isPetOwner.js";
 
 const router: IRouter = Router();
+
+/**
+ * GET /pets/search?q=&exclude=
+ *
+ * Search pets by name OR owner username (case-insensitive, partial match).
+ * Own pets returned first. Limit 20.
+ * Optional comma-separated `exclude` list of pet IDs to omit from results.
+ *
+ * MUST be registered before GET /pets/:id to avoid :id = "search" collision.
+ */
+router.get("/pets/search", async (req, res) => {
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+  const excludeRaw = typeof req.query.exclude === "string" ? req.query.exclude : "";
+  const excludeIds = excludeRaw.split(",").map((s) => s.trim()).filter(Boolean);
+
+  if (q.length === 0) {
+    res.json({ pets: [] });
+    return;
+  }
+
+  const pattern = `%${q}%`;
+
+  const whereConditions = [
+    activePets,
+    or(ilike(petsTable.name, pattern), ilike(usersTable.username, pattern)),
+    ...(excludeIds.length > 0 ? [notInArray(petsTable.id, excludeIds)] : []),
+  ] as Parameters<typeof and>;
+
+  const rows = await db
+    .select({
+      id:            petsTable.id,
+      name:          petsTable.name,
+      species:       petsTable.species,
+      ownerId:       petsTable.ownerId,
+      ownerUsername: usersTable.username,
+      avatarKey:     petsTable.avatarKey,
+      isOwn:         sql<boolean>`EXISTS(
+        SELECT 1 FROM pet_owners po
+        WHERE po.pet_id = ${petsTable.id} AND po.user_id = ${userId}
+      )`,
+    })
+    .from(petsTable)
+    .innerJoin(usersTable, eq(usersTable.id, petsTable.ownerId))
+    .where(and(...whereConditions))
+    .orderBy(
+      sql`CASE WHEN EXISTS(
+        SELECT 1 FROM pet_owners po WHERE po.pet_id = ${petsTable.id} AND po.user_id = ${userId}
+      ) THEN 0 ELSE 1 END`,
+      petsTable.name,
+    )
+    .limit(20);
+
+  res.json({
+    pets: rows.map((r) => ({
+      id:            r.id,
+      name:          r.name,
+      species:       r.species,
+      ownerId:       r.ownerId,
+      ownerUsername: r.ownerUsername ?? "",
+      avatarUrl:     r.avatarKey ? mediaTokenUrl(r.avatarKey) : null,
+      isOwn:         r.isOwn,
+    })),
+  });
+});
 
 /**
  * GET /pets/:id
@@ -137,6 +203,7 @@ router.get("/pets/:id", async (req, res) => {
     name:               pet.name,
     species:            pet.species,
     breed:              pet.breed ?? null,
+    ownerId:            pet.ownerId,
     viewerInPack,
     viewerOwnsPet:      viewerIsOwner,
     viewerIsPrimaryOwner,
@@ -186,13 +253,28 @@ router.get("/pets/:id", async (req, res) => {
       commentCount:     sql<number>`count(distinct case when ${commentsTable.deletedAt} is null then ${commentsTable.id} end)::int`,
       viewerHasBooped:  sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
       viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
+      taggedPetRaw: sql<string | null>`COALESCE((
+        SELECT json_agg(json_build_object(
+          'id',            pp.pet_id::text,
+          'name',          pe_t.name,
+          'ownerId',       pe_t.owner_id,
+          'viewerOwnsPet', EXISTS(
+            SELECT 1 FROM pet_owners po2
+            WHERE po2.pet_id = pp.pet_id AND po2.user_id = ${userId}
+          ),
+          'avatarKey', pe_t.avatar_key
+        ) ORDER BY pp.created_at)
+        FROM post_pets pp
+        JOIN pets pe_t ON pe_t.id = pp.pet_id
+        WHERE pp.post_id = ${postsTable.id}
+      ), '[]'::json)`,
     })
     .from(postsTable)
     .leftJoin(boopsTable,    eq(boopsTable.postId,    postsTable.id))
     .leftJoin(treatsTable,   eq(treatsTable.postId,   postsTable.id))
     .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
     .where(and(
-      eq(postsTable.petId, id),
+      sql`EXISTS(SELECT 1 FROM post_pets pp WHERE pp.post_id = ${postsTable.id} AND pp.pet_id::text = ${id})`,
       isNull(postsTable.archivedAt),
       viewerIsOwner ? undefined : notHiddenByAdminPost(),
     ))
@@ -220,6 +302,16 @@ router.get("/pets/:id", async (req, res) => {
       commentCount:        r.commentCount,
       viewerHasBooped:     r.viewerHasBooped,
       viewerHasTreated:    r.viewerHasTreated,
+      taggedPets: (() => {
+        const raw = r.taggedPetRaw as Array<{ id: string; name: string; ownerId: string; viewerOwnsPet: boolean; avatarKey: string | null }> | null;
+        return (Array.isArray(raw) ? raw : []).map((tp) => ({
+          id:            tp.id,
+          name:          tp.name,
+          ownerId:       tp.ownerId,
+          viewerOwnsPet: tp.viewerOwnsPet,
+          avatarUrl:     tp.avatarKey ? mediaTokenUrl(tp.avatarKey) : null,
+        }));
+      })(),
       // Per-post management flag — drives edit/archive/delete affordances.
       // postedByUserId intentionally NOT included in the response.
       viewerCanManagePost,
@@ -245,12 +337,30 @@ router.get("/pets/:id", async (req, res) => {
           commentCount:     sql<number>`count(distinct case when ${commentsTable.deletedAt} is null then ${commentsTable.id} end)::int`,
           viewerHasBooped:  sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
           viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
+          taggedPetRaw: sql<string | null>`COALESCE((
+            SELECT json_agg(json_build_object(
+              'id',            pp.pet_id::text,
+              'name',          pe_t.name,
+              'ownerId',       pe_t.owner_id,
+              'viewerOwnsPet', EXISTS(
+                SELECT 1 FROM pet_owners po2
+                WHERE po2.pet_id = pp.pet_id AND po2.user_id = ${userId}
+              ),
+              'avatarKey', pe_t.avatar_key
+            ) ORDER BY pp.created_at)
+            FROM post_pets pp
+            JOIN pets pe_t ON pe_t.id = pp.pet_id
+            WHERE pp.post_id = ${postsTable.id}
+          ), '[]'::json)`,
         })
         .from(postsTable)
         .leftJoin(boopsTable,    eq(boopsTable.postId,    postsTable.id))
         .leftJoin(treatsTable,   eq(treatsTable.postId,   postsTable.id))
         .leftJoin(commentsTable, eq(commentsTable.postId, postsTable.id))
-        .where(and(eq(postsTable.petId, id), isNotNull(postsTable.archivedAt)))
+        .where(and(
+          sql`EXISTS(SELECT 1 FROM post_pets pp WHERE pp.post_id = ${postsTable.id} AND pp.pet_id::text = ${id})`,
+          isNotNull(postsTable.archivedAt),
+        ))
         .groupBy(postsTable.id)
         .orderBy(desc(postsTable.archivedAt))
     : [];
@@ -275,6 +385,16 @@ router.get("/pets/:id", async (req, res) => {
       commentCount:        r.commentCount,
       viewerHasBooped:     r.viewerHasBooped,
       viewerHasTreated:    r.viewerHasTreated,
+      taggedPets: (() => {
+        const raw = r.taggedPetRaw as Array<{ id: string; name: string; ownerId: string; viewerOwnsPet: boolean; avatarKey: string | null }> | null;
+        return (Array.isArray(raw) ? raw : []).map((tp) => ({
+          id:            tp.id,
+          name:          tp.name,
+          ownerId:       tp.ownerId,
+          viewerOwnsPet: tp.viewerOwnsPet,
+          avatarUrl:     tp.avatarKey ? mediaTokenUrl(tp.avatarKey) : null,
+        }));
+      })(),
       viewerCanManagePost,
     };
   });
