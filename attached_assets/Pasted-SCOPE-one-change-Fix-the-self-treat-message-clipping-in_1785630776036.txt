@@ -1,0 +1,22 @@
+SCOPE (one change): Fix the self-treat message clipping in the right rail. When a user treats their own pet, the API returns 403 and the app currently shows "Your own pet? Sneaky." in the narrow ~120px transient label in ActionRail, where it clips to "Your o…". Route this 403 message through the SAME full-width toast already used for the 429 out-of-treats message, so it has room to render fully.
+
+CHANGES:
+1. FeedPage toast mechanism: generalize it to display an arbitrary message string instead of being hardcoded to the out-of-treats copy. If the callback is currently onOutOfTreats, change it to onToast(message: string) (or add a message param); the toast component renders whatever it's given. Keep the existing toast hardening (zIndex/elevation 999, overflow: 'visible') and its positioning/styling (left:24 / right:24) exactly as-is.
+2. ActionRail treat error handling:
+   - On 403 (self-treat): call onToast('Your own pet? Sneaky. 🐾') — do NOT route it through the narrow transient label anymore.
+   - On 429 (out of treats): call onToast("You're all out of treats for today 🐾") — same behavior as today, just via the generalized callback.
+   - Remove any path that sends the 403 message to showTransient / the narrow label.
+3. The narrow transient label stays ONLY for ultra-short status like "Last one!". Do not change that path.
+
+DO NOT MODIFY: the Boop/Yum reaction-pop scatter system (PopText, scatter geometry, word sets, colors); the accepted-treat "Yum!" path; the first-treat overlap fix (teaching pop); the "Last one!" transient; any glyphs/icons; boop behavior; treat/boop counts; the API/backend; the schema. NO schema change.
+
+PRESERVATION CLAUSE: Every behavior not named above stays identical. No unrelated refactors. Web, iOS, and Android behave identically.
+
+ACCEPTANCE TEST (end on the golden path):
+1. Sign in → Home loads.
+2. Treat one of YOUR OWN pets → "Your own pet? Sneaky. 🐾" shows in the FULL-WIDTH TOAST, not clipped (no "Your o…").
+3. "Last one!" narrow-label nudge and the accepted-treat "Yum!" pop path unchanged.
+4. Boop a post → boop persists.
+5. Nursery pager works → post flow works → sign out.
+
+Commit your changes locally.

@@ -284,10 +284,11 @@ interface ActionRailProps {
    */
   onTreatFired?: () => void;
   /**
-   * Called when the user hits the daily treat limit (429). Caller renders a
-   * full-width readable toast — the narrow in-rail transient can't fit the copy.
+   * Called on any treat rejection (429 daily limit, 403 self-treat) with the
+   * message to display. Caller renders a full-width readable toast — the narrow
+   * in-rail transient can't fit either message without clipping.
    */
-  onOutOfTreats?: () => void;
+  onToast?: (message: string) => void;
   /**
    * Fired with true when a transient label becomes visible, false when it fades
    * out. Lets FeedPage shift pop spawn points away from the label area.
@@ -324,7 +325,7 @@ export default function ActionRail({
   onSharePress,
   onBoopFired,
   onTreatFired,
-  onOutOfTreats,
+  onToast,
   onTransientChange,
   onBoopTeaching,
   onTreatTeaching,
@@ -445,21 +446,20 @@ export default function ActionRail({
         onError: (error) => {
           isTreatPending.current = false;
           const status = (error as { status?: number }).status;
+          // All rejections route through the full-width FeedPage toast.
+          // The narrow ~120 px transientLabel would clip either message.
+          // 1. Instantly clear any lingering transient (e.g. "Last one!" from
+          //    the preceding success) so the narrow label goes dark immediately.
+          // 2. Shake the treat icon.
+          // 3. Delegate copy rendering to the caller's full-width toast.
+          transientOpacity.setValue(0);
+          onTransientChange?.(false);
+          shakeAnimation();
           if (status === 403) {
-            // Self-treat nudge — narrow transient is fine for this short copy.
-            shakeAnimation();
-            showTransient('Your own pet? Sneaky.', 2000);
+            onToast?.('Your own pet? Sneaky. 🐾');
           } else {
-            // 429 (daily limit) or any other rejection:
-            // 1. Instantly clear any lingering transient (e.g. "Last one!" from
-            //    the preceding success) so the narrow label goes dark immediately.
-            // 2. Fire the full-width FeedPage toast — the ONLY surface for this.
-            //    The narrow ~120 px transientLabel must NEVER show the out-of-treats
-            //    copy; it would clip it. We clear it first, unconditionally.
-            transientOpacity.setValue(0);
-            onTransientChange?.(false);
-            shakeAnimation();
-            onOutOfTreats?.();
+            // 429 (daily treat limit) or any other unexpected rejection.
+            onToast?.("You're all out of treats for today 🐾");
           }
           // onTreatFired and onTreatTeaching are intentionally NOT called here.
           // Rejected treats must produce no pop of any kind — only the shake.

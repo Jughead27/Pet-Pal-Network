@@ -156,18 +156,21 @@ export default function FeedPage({
   const [chromeVisible, setChromeVisible] = useState(true);
   const chromeOpacity = useRef(new Animated.Value(1)).current;
 
-  // ── Out-of-treats toast ───────────────────────────────────────────────────
-  // Surfaces as a centered banner rather than the narrow in-rail transient,
-  // so the warm copy is fully readable on any viewport.
-  const outOfTreatsOpacity = useRef(new Animated.Value(0)).current;
-  const showOutOfTreatsToast = useCallback(() => {
-    outOfTreatsOpacity.setValue(0);
+  // ── Full-width treat-rejection toast ─────────────────────────────────────
+  // Used for BOTH 429 (out-of-treats) and 403 (self-treat nudge).
+  // Surfaces as a centered banner — the narrow in-rail transient can't fit
+  // either message without clipping, so all rejection copy routes here.
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const [toastMsg, setToastMsg] = useState('');
+  const showToast = useCallback((message: string) => {
+    setToastMsg(message);
+    toastOpacity.setValue(0);
     Animated.sequence([
-      Animated.timing(outOfTreatsOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
-      Animated.timing(outOfTreatsOpacity, { toValue: 1, duration: 2200, useNativeDriver: true }),
-      Animated.timing(outOfTreatsOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
+      Animated.timing(toastOpacity, { toValue: 1, duration: 250, useNativeDriver: true }),
+      Animated.timing(toastOpacity, { toValue: 1, duration: 2200, useNativeDriver: true }),
+      Animated.timing(toastOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
-  }, [outOfTreatsOpacity]);
+  }, [toastOpacity]);
 
   // ── Caption ───────────────────────────────────────────────────────────────
   // Always truncated to 2 lines in the feed; full caption lives on the detail screen.
@@ -412,7 +415,7 @@ export default function FeedPage({
           onSharePress={onOpenShareSheet}
           onBoopFired={spawnBoopPop}
           onTreatFired={spawnTreatPop}
-          onOutOfTreats={showOutOfTreatsToast}
+          onToast={showToast}
           onTransientChange={handleTransientChange}
           onBoopTeaching={spawnBoopTeachingPop}
           onTreatTeaching={spawnTreatTeachingPop}
@@ -486,18 +489,17 @@ export default function FeedPage({
         />
       ))}
 
-      {/* Out-of-treats toast — centered banner, wide enough for the full copy */}
+      {/* Treat-rejection toast — centered banner, wide enough for any rejection copy.
+          Handles both 429 (out-of-treats) and 403 (self-treat nudge). */}
       <Animated.View
         style={[
           styles.outOfTreatsToast,
-          { bottom: bottomOffset + 80, opacity: outOfTreatsOpacity },
+          { bottom: bottomOffset + 80, opacity: toastOpacity },
         ]}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         pointerEvents={'none' as any}
       >
-        <Text style={styles.outOfTreatsText}>
-          You're all out of treats for today 🐾
-        </Text>
+        <Text style={styles.outOfTreatsText}>{toastMsg}</Text>
       </Animated.View>
     </View>
   );
