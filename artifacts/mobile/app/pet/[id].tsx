@@ -482,7 +482,7 @@ export default function PetProfileScreen() {
   if (isError || !pet) {
     return (
       <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginBottom: 16 }}>
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/profile')} style={{ marginBottom: 16 }}>
           <Ionicons name="chevron-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>
@@ -578,7 +578,7 @@ export default function PetProfileScreen() {
             style={styles.heroGradient}
           />
           <TouchableOpacity
-            onPress={() => router.back()}
+            onPress={() => router.canGoBack() ? router.back() : router.replace('/(tabs)/profile')}
             style={[
               styles.backBtn,
               { top: topInset + 8, backgroundColor: "rgba(6,11,16,0.5)" },

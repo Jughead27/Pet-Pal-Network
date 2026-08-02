@@ -1,0 +1,45 @@
+BUG — Pet profile back button does nothing
+
+REPRO: On a pet's profile page, tapping the back arrow does nothing — 
+should return to the user's (owner's) profile page. Found immediately 
+after the edit-post-modal fix (nested Pressable added to claim touch 
+inside the modal card), so check for a connection before assuming this 
+is unrelated.
+
+INVESTIGATE:
+1. First check whether this is a REGRESSION from the edit-post-modal fix 
+   — e.g. does opening and closing the edit-post modal leave some touch-
+   responder state, overlay, or z-index element lingering on the pet 
+   profile screen that's now intercepting the back button's tap? Test: 
+   does the back button work correctly if you navigate to a pet's 
+   profile WITHOUT ever opening the edit-post modal first? If it works 
+   fine there but breaks after opening/closing edit-post, that confirms 
+   the connection.
+2. If unrelated to the modal fix, check the pet profile screen's back 
+   button handler directly — same class of bug as the earlier admin 
+   back-nav issue: confirm it's not relying purely on 
+   `router.canGoBack()` in a way that silently no-ops when there's no 
+   history (e.g. deep link, refresh, or a navigation stack state that 
+   doesn't include the expected previous screen).
+
+FIX: Back button on pet profile should reliably navigate to the user's 
+own profile page — same "always resolve to a known destination" pattern 
+already used for the Admin hub back button fix, rather than depending 
+solely on nav history.
+
+DO NOT MODIFY: the edit-post modal fix itself (Pressable/backdrop 
+behavior), other back-button implementations elsewhere, anything outside 
+this specific bug.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. From the user's own profile, tap into a pet's profile, then tap 
+   back — confirm it returns to the user's profile.
+2. Repeat after opening and closing the edit-post modal on that pet's 
+   profile first — confirm back still works (this is the regression 
+   check).
+3. Test from a fresh page load/refresh directly on a pet's profile (no 
+   prior navigation history) — confirm back still resolves correctly 
+   rather than no-op'ing.
+4. Confirm the edit-post modal fix itself still works (caption 
+   focusable, Save works, backdrop dismiss works).
+5. Golden path unaffected.
