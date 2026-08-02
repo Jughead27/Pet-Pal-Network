@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { ArrowLeft, ArrowClockwise } from 'phosphor-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { customFetch } from '@workspace/api-client-react';
@@ -119,11 +119,11 @@ export default function AdminInvitesScreen() {
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topInset + 8, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} accessibilityRole="button">
-          <Feather name="arrow-left" size={18} color={colors.mutedForeground} />
+          <ArrowLeft size={18} color={colors.mutedForeground} weight="regular" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Invite Requests</Text>
         <TouchableOpacity onPress={() => refetch()} style={styles.refreshBtn} accessibilityRole="button">
-          <Feather name="refresh-cw" size={16} color={colors.mutedForeground} />
+          <ArrowClockwise size={16} color={colors.mutedForeground} weight="regular" />
         </TouchableOpacity>
       </View>
 

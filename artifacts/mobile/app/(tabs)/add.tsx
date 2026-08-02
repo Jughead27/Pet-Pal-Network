@@ -31,7 +31,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Feather } from '@expo/vector-icons';
+import { CameraSlash, Crop, ArrowClockwise, Camera, CaretRight, ImageSquare } from 'phosphor-react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import Button from '@/components/Button';
@@ -348,7 +348,7 @@ export default function AddScreen() {
   if (pets.length === 0) {
     return (
       <View style={[s.fill, s.centered, { backgroundColor: colors.background, paddingTop: topInset }]}>
-        <Feather name="camera-off" size={36} color={colors.mutedForeground} style={{ marginBottom: 16 }} />
+        <CameraSlash size={36} color={colors.mutedForeground} weight="regular" style={{ marginBottom: 16 }} />
         <Text style={[s.emptyTitle, { color: colors.foreground }]}>No pets yet</Text>
         <Text style={[s.emptySub, { color: colors.mutedForeground }]}>
           Create a pet profile before posting.
@@ -467,7 +467,7 @@ export default function AddScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Adjust framing"
               >
-                <Feather name="crop" size={13} color={colors.mutedForeground} />
+                <Crop size={13} color={colors.mutedForeground} weight="regular" />
                 <Text style={[s.previewControlText, { color: colors.mutedForeground }]}>Adjust</Text>
               </TouchableOpacity>
               <View style={[s.previewControlDivider, { backgroundColor: colors.border }]} />
@@ -482,7 +482,7 @@ export default function AddScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Change photo"
               >
-                <Feather name="refresh-cw" size={13} color={colors.mutedForeground} />
+                <ArrowClockwise size={13} color={colors.mutedForeground} weight="regular" />
                 <Text style={[s.previewControlText, { color: colors.mutedForeground }]}>Change</Text>
               </TouchableOpacity>
             </View>
@@ -499,9 +499,9 @@ export default function AddScreen() {
                   accessibilityRole="button"
                   accessibilityLabel="Take a photo"
                 >
-                  <Feather name="camera" size={22} color={colors.foreground} />
+                  <Camera size={22} color={colors.foreground} weight="regular" />
                   <Text style={[s.sourceRowText, { color: colors.foreground }]}>Take a photo</Text>
-                  <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+                  <CaretRight size={18} color={colors.mutedForeground} weight="regular" />
                 </TouchableOpacity>
                 <View style={[s.sourceDivider, { backgroundColor: colors.border }]} />
               </>
@@ -513,9 +513,9 @@ export default function AddScreen() {
               accessibilityRole="button"
               accessibilityLabel="Add a photo / video"
             >
-              <Feather name="image" size={22} color={colors.foreground} />
+              <ImageSquare size={22} color={colors.foreground} weight="regular" />
               <Text style={[s.sourceRowText, { color: colors.foreground }]}>Add a photo / video</Text>
-              <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+              <CaretRight size={18} color={colors.mutedForeground} weight="regular" />
             </TouchableOpacity>
           </View>
         )}

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { ArrowLeft, CaretRight } from 'phosphor-react-native';
 import { useColors } from '@/hooks/useColors';
 
 const SECTIONS = [
@@ -71,7 +71,7 @@ export default function AdminIndexScreen() {
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
-          <Feather name="arrow-left" size={18} color={colors.mutedForeground} />
+          <ArrowLeft size={18} color={colors.mutedForeground} weight="regular" />
           <Text style={[styles.backText, { color: colors.mutedForeground }]}>back</Text>
         </TouchableOpacity>
 
@@ -95,7 +95,7 @@ export default function AdminIndexScreen() {
               <Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text>
               <Text style={[styles.rowDesc,  { color: colors.mutedForeground }]}>{description}</Text>
             </View>
-            <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+            <CaretRight size={16} color={colors.mutedForeground} weight="regular" />
           </TouchableOpacity>
         ))}
       </ScrollView>

@@ -2,8 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@clerk/clerk-expo';
-import { Feather } from '@expo/vector-icons';
-import { House, Dog, BabyCarriage, User } from 'phosphor-react-native';
+import { House, Dog, BabyCarriage, User, Plus } from 'phosphor-react-native';
 import { BlurView } from 'expo-blur';
 import { Redirect, Tabs, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -307,7 +306,7 @@ export default function TabLayout() {
                   zIndex: 20,
                 }}
               >
-                <Feather name="plus" size={20} color={colors.background} />
+                <Plus size={20} color={colors.background} weight="light" />
               </View>
             </View>
           ),

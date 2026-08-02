@@ -25,7 +25,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
+
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import Button from '@/components/Button';
@@ -34,6 +34,7 @@ import {
   usePatchMe,
   getGetMeQueryKey,
 } from '@workspace/api-client-react';
+import { ArrowLeft } from 'phosphor-react-native';
 
 // ── Field error state ─────────────────────────────────────────────────────────
 
@@ -140,7 +141,7 @@ export default function EditProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Go back"
           >
-            <Feather name="arrow-left" size={20} color={colors.foreground} />
+            <ArrowLeft size={20} color={colors.foreground} weight="regular" />
           </TouchableOpacity>
           <Text style={[styles.screenTitle, { color: colors.foreground }]}>Edit profile</Text>
           <View style={styles.backBtn} /> {/* spacer to centre title */}

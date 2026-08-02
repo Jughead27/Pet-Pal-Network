@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useColors } from '@/hooks/useColors';
-import { Feather } from '@expo/vector-icons';
+import { WarningCircle, X } from 'phosphor-react-native';
 import { reloadAppAsync } from 'expo';
 
 export type ErrorFallbackProps = {
@@ -63,7 +63,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
             },
           ]}
         >
-          <Feather name="alert-circle" size={20} color={colors.foreground} />
+          <WarningCircle size={20} color={colors.foreground} weight="regular" />
         </Pressable>
       ) : null}
 
@@ -127,7 +127,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
                     { opacity: pressed ? 0.6 : 1 },
                   ]}
                 >
-                  <Feather name="x" size={24} color={colors.foreground} />
+                  <X size={24} color={colors.foreground} weight="regular" />
                 </Pressable>
               </View>
 

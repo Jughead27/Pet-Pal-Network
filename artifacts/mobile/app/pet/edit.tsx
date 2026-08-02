@@ -33,7 +33,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Ionicons, Feather } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { CaretRight, X, MagnifyingGlass, PencilSimple } from 'phosphor-react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import Button from '@/components/Button';
@@ -393,7 +394,7 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
                   >
                     {useCustomBreed ? 'Custom (see below)' : selectedBreedName ?? 'Not selected'}
                   </Text>
-                  <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+                  <CaretRight size={16} color={colors.mutedForeground} weight="regular" />
                 </TouchableOpacity>
 
                 {/* Custom breed input — only shown when "Not listed" is active */}
@@ -562,14 +563,14 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
               accessibilityRole="button"
               accessibilityLabel="Close"
             >
-              <Feather name="x" size={22} color={colors.foreground} />
+              <X size={22} color={colors.foreground} weight="regular" />
             </TouchableOpacity>
           </View>
 
           {/* Search */}
           <View style={[s.breedModalSearch, { borderBottomColor: colors.border }]}>
             <View style={[s.searchBox, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-              <Feather name="search" size={15} color={colors.mutedForeground} style={s.searchIcon} />
+              <MagnifyingGlass size={15} color={colors.mutedForeground} weight="regular" style={s.searchIcon} />
               <TextInput
                 style={[s.searchInput, { color: colors.foreground }]}
                 value={breedSearch}
@@ -586,7 +587,7 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
                   onPress={() => setBreedSearch('')}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Feather name="x" size={14} color={colors.mutedForeground} />
+                  <X size={14} color={colors.mutedForeground} weight="regular" />
                 </TouchableOpacity>
               )}
             </View>
@@ -636,7 +637,7 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
                 <Text style={[s.breedRowText, { color: colors.mutedForeground, fontFamily: 'Inter_400Regular' }]}>
                   Not listed — enter my own
                 </Text>
-                <Feather name="edit-2" size={14} color={colors.mutedForeground} />
+                <PencilSimple size={14} color={colors.mutedForeground} weight="regular" />
               </TouchableOpacity>
             )}
           />

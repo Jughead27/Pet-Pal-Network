@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { ArrowLeft, ArrowClockwise, ImageSquare, ChatCircle } from 'phosphor-react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { customFetch } from '@workspace/api-client-react';
@@ -112,11 +112,10 @@ export default function AdminReportsScreen() {
             />
           ) : (
             <View style={[styles.thumbnailPlaceholder, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
-              <Feather
-                name={preview.type === 'post' ? 'image' : 'message-circle'}
-                size={18}
-                color={colors.mutedForeground}
-              />
+              {preview.type === 'post'
+                ? <ImageSquare size={18} color={colors.mutedForeground} weight="regular" />
+                : <ChatCircle size={18} color={colors.mutedForeground} weight="regular" />
+              }
             </View>
           )}
           <View style={styles.previewMeta}>
@@ -197,7 +196,7 @@ export default function AdminReportsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Back"
         >
-          <Feather name="arrow-left" size={18} color={colors.mutedForeground} />
+          <ArrowLeft size={18} color={colors.mutedForeground} weight="regular" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Reports</Text>
         <TouchableOpacity
@@ -206,7 +205,7 @@ export default function AdminReportsScreen() {
           accessibilityRole="button"
           accessibilityLabel="Refresh"
         >
-          <Feather name="refresh-cw" size={16} color={colors.mutedForeground} />
+          <ArrowClockwise size={16} color={colors.mutedForeground} weight="regular" />
         </TouchableOpacity>
       </View>
 

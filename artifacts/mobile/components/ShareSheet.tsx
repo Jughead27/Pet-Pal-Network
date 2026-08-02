@@ -11,7 +11,8 @@ import {
   StyleSheet,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { Link, PlusCircle, DownloadSimple, CaretRight } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import Button from '@/components/Button';
@@ -40,7 +41,7 @@ export default function ShareSheet({ visible, onClose }: Props) {
     {
       id: 'copy',
       label: 'Copy Link',
-      icon: <Feather name="link" size={20} color={colors.foreground} />,
+      icon: <Link size={20} color={colors.foreground} weight="regular" />,
     },
     {
       id: 'message',
@@ -50,12 +51,12 @@ export default function ShareSheet({ visible, onClose }: Props) {
     {
       id: 'story',
       label: 'Share to Story',
-      icon: <Feather name="circle" size={20} color={colors.foreground} />,
+      icon: <PlusCircle size={20} color={colors.foreground} weight="regular" />,
     },
     {
       id: 'save',
       label: 'Save to Camera Roll',
-      icon: <Feather name="download" size={20} color={colors.foreground} />,
+      icon: <DownloadSimple size={20} color={colors.foreground} weight="regular" />,
     },
   ];
 
@@ -106,7 +107,7 @@ export default function ShareSheet({ visible, onClose }: Props) {
               <Text style={[styles.optionLabel, { color: colors.foreground }]}>
                 {opt.label}
               </Text>
-              <Feather name="chevron-right" size={16} color={colors.mutedForeground} />
+              <CaretRight size={16} color={colors.mutedForeground} weight="regular" />
             </TouchableOpacity>
           ))}
         </View>

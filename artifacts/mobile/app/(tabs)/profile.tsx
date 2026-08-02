@@ -33,8 +33,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Feather } from '@expo/vector-icons';
-import { PawPrint } from 'phosphor-react-native';
+
+import { PawPrint, Heart, Users, SignOut, CaretRight } from 'phosphor-react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
@@ -376,7 +376,7 @@ export default function ProfileScreen() {
 
         {pets.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Feather name="heart" size={32} color={colors.mutedForeground} style={{ marginBottom: 12 }} />
+            <Heart size={32} color={colors.mutedForeground} weight="regular" style={{ marginBottom: 12 }} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>No pets yet</Text>
             <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
               Add your first pet and start sharing their story.
@@ -474,7 +474,7 @@ export default function ProfileScreen() {
           </View>
         ) : !hasFollows ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Feather name="users" size={28} color={colors.mutedForeground} style={{ marginBottom: 10 }} />
+            <Users size={28} color={colors.mutedForeground} weight="regular" style={{ marginBottom: 10 }} />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Nothing followed yet</Text>
             <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
               Follow pets, species, and breeds from their profiles.
@@ -743,7 +743,7 @@ export default function ProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Sign out"
           >
-            <Feather name="log-out" size={16} color={colors.mutedForeground} />
+            <SignOut size={16} color={colors.mutedForeground} weight="regular" />
             <Text style={[styles.signOutText, { color: colors.mutedForeground }]}>Sign out</Text>
           </TouchableOpacity>
         )}
@@ -770,7 +770,7 @@ interface PetRowProps {
 }
 
 function PetRow({ pet, colors, onPress }: PetRowProps) {
-  const subtitle = pet.breed ? `${pet.species} · ${pet.breed}` : pet.species;
+  const subtitle = pet.breed ?? '';
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -784,7 +784,7 @@ function PetRow({ pet, colors, onPress }: PetRowProps) {
         <Text style={[styles.petName, { color: colors.foreground }]}>{pet.name}</Text>
         <Text style={[styles.petSubtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
       </View>
-      <Feather name="chevron-right" size={18} color={colors.mutedForeground} />
+      <CaretRight size={18} color={colors.mutedForeground} weight="regular" />
     </TouchableOpacity>
   );
 }

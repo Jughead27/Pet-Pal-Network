@@ -23,7 +23,8 @@ import {
 } from 'react-native';
 import ReportFlow from '@/components/ReportFlow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { ChatCircle } from 'phosphor-react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import {
@@ -179,7 +180,7 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
             nestedScrollEnabled
             ListEmptyComponent={
               <View style={styles.emptyState}>
-                <Feather name="message-circle" size={32} color={colors.mutedForeground} />
+                <ChatCircle size={32} color={colors.mutedForeground} weight="regular" />
                 <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
                   No comments yet.{'\n'}Be the first to say something.
                 </Text>

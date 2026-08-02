@@ -26,7 +26,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { X } from 'phosphor-react-native';
 import type { CropRect } from '@/utils/computeAutoFrame';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -253,7 +253,7 @@ export default function FrameRefiner({
       {/* Top bar */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={onCancel} style={styles.iconBtn} accessibilityRole="button" accessibilityLabel="Cancel" hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-          <Feather name="x" size={22} color="#F0F4F8" />
+          <X size={22} color="#F0F4F8" weight="regular" />
         </TouchableOpacity>
         <Text style={styles.title}>Adjust framing</Text>
         <View style={styles.iconBtn} />

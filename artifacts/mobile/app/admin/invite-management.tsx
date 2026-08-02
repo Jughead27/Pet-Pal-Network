@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { ArrowLeft } from 'phosphor-react-native';
 import { useColors } from '@/hooks/useColors';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
@@ -128,7 +128,7 @@ export default function AdminInviteManagementScreen() {
           style={styles.backRow}
           accessibilityRole="button"
         >
-          <Feather name="arrow-left" size={18} color={colors.mutedForeground} />
+          <ArrowLeft size={18} color={colors.mutedForeground} weight="regular" />
           <Text style={[styles.backText, { color: colors.mutedForeground }]}>back</Text>
         </TouchableOpacity>
 

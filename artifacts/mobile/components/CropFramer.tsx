@@ -31,7 +31,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { ArrowLeft } from 'phosphor-react-native';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -244,7 +244,7 @@ export default function CropFramer({
           accessibilityLabel="Back"
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Feather name="arrow-left" size={22} color="#F0F4F8" />
+          <ArrowLeft size={22} color="#F0F4F8" weight="regular" />
         </TouchableOpacity>
 
         <Text style={styles.title}>Frame your photo</Text>

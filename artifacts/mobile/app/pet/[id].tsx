@@ -31,7 +31,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams } from "expo-router";
-import { Ionicons, Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { Camera, PencilSimple, UserPlus, Heart, Star, SquaresFour } from 'phosphor-react-native';
 import Svg, { Path } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 import {
@@ -583,7 +584,7 @@ export default function PetProfileScreen() {
               accessibilityLabel="Edit profile photo"
               activeOpacity={0.8}
             >
-              <Feather name="camera" size={13} color="#F0F4F8" />
+              <Camera size={13} color="#F0F4F8" weight="regular" />
               <Text style={styles.editPhotoBadgeText}>Edit photo</Text>
             </TouchableOpacity>
           )}
@@ -607,7 +608,7 @@ export default function PetProfileScreen() {
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 activeOpacity={0.6}
               >
-                <Feather name="edit-2" size={16} color={colors.mutedForeground} />
+                <PencilSimple size={16} color={colors.mutedForeground} weight="regular" />
               </TouchableOpacity>
             )}
             {/* Add co-owner — primary owner only */}
@@ -624,7 +625,7 @@ export default function PetProfileScreen() {
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 activeOpacity={0.6}
               >
-                <Feather name="user-plus" size={16} color={colors.mutedForeground} />
+                <UserPlus size={16} color={colors.mutedForeground} weight="regular" />
               </TouchableOpacity>
             )}
             <AddToPackLink
@@ -684,7 +685,7 @@ export default function PetProfileScreen() {
             </TouchableOpacity>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.stat}>
-              <Feather name="heart" size={16} color={colors.accent} style={{ marginBottom: 4 }} />
+              <Heart size={16} color={colors.accent} weight="regular" style={{ marginBottom: 4 }} />
               <Text style={[styles.statValue, { color: colors.foreground }]}>
                 {formatCount(totalBoops)}
               </Text>
@@ -692,7 +693,7 @@ export default function PetProfileScreen() {
             </View>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.stat}>
-              <Feather name="star" size={16} color="#F4C542" style={{ marginBottom: 4 }} />
+              <Star size={16} color="#F4C542" weight="regular" style={{ marginBottom: 4 }} />
               <Text style={[styles.statValue, { color: colors.foreground }]}>
                 {formatCount(totalTreats)}
               </Text>
@@ -700,7 +701,7 @@ export default function PetProfileScreen() {
             </View>
             <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
             <View style={styles.stat}>
-              <Feather name="grid" size={16} color={colors.mutedForeground} style={{ marginBottom: 4 }} />
+              <SquaresFour size={16} color={colors.mutedForeground} weight="regular" style={{ marginBottom: 4 }} />
               <Text style={[styles.statValue, { color: colors.foreground }]}>
                 {pet.posts.length}
               </Text>
