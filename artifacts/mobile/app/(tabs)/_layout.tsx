@@ -230,10 +230,17 @@ export default function TabLayout() {
               style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(6,11,16,0.75)', backdropFilter: 'blur(20px)' } as any]}
             />
           ) : null,
+        tabBarItemStyle: {
+          justifyContent: 'center',
+          alignItems: 'center',
+          paddingTop: 6,
+          paddingBottom: 6,
+        },
         tabBarLabelStyle: {
           fontSize: 10,
           fontWeight: '500',
-          marginBottom: 2,
+          marginTop: 2,
+          marginBottom: 0,
         },
       }}
     >
@@ -242,7 +249,7 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           tabBarIcon: ({ color, focused }) => (
-            <House color={color} weight={focused ? 'fill' : 'light'} size={22} />
+            <House color={color} weight={focused ? 'fill' : 'light'} size={26} />
           ),
         }}
       />
@@ -253,7 +260,7 @@ export default function TabLayout() {
           title: 'Sniff',
           tabBarAccessibilityLabel: 'Sniff',
           tabBarIcon: ({ color, focused }) => (
-            <Dog color={color} weight={focused ? 'fill' : 'light'} size={22} />
+            <Dog color={color} weight={focused ? 'fill' : 'light'} size={26} />
           ),
         }}
       />
@@ -312,7 +319,7 @@ export default function TabLayout() {
         options={{
           title: 'Nursery',
           tabBarIcon: ({ color, focused }) => (
-            <BabyCarriage color={color} weight={focused ? 'fill' : 'light'} size={22} />
+            <BabyCarriage color={color} weight={focused ? 'fill' : 'light'} size={26} />
           ),
         }}
       />
@@ -322,7 +329,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, focused }) => (
-            <User color={color} weight={focused ? 'fill' : 'light'} size={22} />
+            <User color={color} weight={focused ? 'fill' : 'light'} size={26} />
           ),
         }}
       />

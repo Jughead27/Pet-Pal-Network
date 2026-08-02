@@ -1,0 +1,29 @@
+SCOPE (one change): Icon polish only — enlarge/center the bottom-nav icons, give the right-rail icons more presence over photos, and update the Sniff and Nursery page-header mastheads to the new glyphs. No new behavior.
+
+NAV BAR (app/(tabs)/_layout.tsx):
+- Increase the four tab icon sizes from 22 to 26.
+- Vertically center the icon + label within the tab bar so they aren't top-weighted — balance top/bottom padding (remove the excess gap under the labels) so the icon+label group sits centered in the bar's height. Keep the "+" add button aligned with the others.
+- Keep weight={focused ? 'fill' : 'light'} and the existing active/inactive color tokens.
+
+RIGHT RAIL (components/ActionRail.tsx):
+- Change all four rail icons from weight="light" to weight="regular" (more contrast over busy photos). Nav stays light — the heavier rail weight is intentional for the over-photo context only.
+- Bump sizes: Boop (HandTap) and Treat (Bone) 24 → 28; Comment (ChatCircle) and Share (ShareNetwork) 20 → 24 (keep boop/treat louder than comment/share — that emphasis hierarchy is intentional).
+- Add a soft shadow behind the rail icons for legibility over bright photos (subtle dark drop shadow on the icon container: shadowColor black, low opacity, small radius, matching elevation on Android), OR strengthen the existing rail scrim if one exists. Just enough that white/gold/coral glyphs stay readable over a light background.
+- Colors, counts, handlers, toasts, and the pop/scatter system stay untouched.
+
+PAGE MASTHEADS (Sniff and Nursery screen headers):
+- The Sniff page header still shows the OLD sniff glyph, and the Nursery page header still shows the OLD nursery glyph. Swap them to the new Phosphor glyphs: Sniff masthead → Dog, Nursery masthead → BabyCarriage (from phosphor-react-native), matching the nav tabs.
+- Keep each masthead's existing layout, wordmark, position, and glyph size — swap only the glyph. Use weight="regular" so it reads cleanly at the larger masthead size.
+- These are the leftover uses of the old SniffIcon / HatchlingIcon glyphs.
+
+DO NOT MODIFY: any tap behavior, the reaction/pop system, counts, toasts, the follow paw, the avatar placeholders, the API, or the schema. NO schema change. No new dependencies.
+
+PRESERVATION CLAUSE: only sizes, weights, padding/centering, the rail shadow, and the two masthead glyphs change. Everything else byte-identical. Web, iOS, and Android render identically.
+
+ACCEPTANCE TEST (golden path):
+1. Sign in → Home: the four tabs are visibly larger and centered in the nav bar; active = filled teal, inactive = light.
+2. On a post over a busy/bright photo: all four rail icons read clearly (HandTap coral, Bone gold, ChatCircle, ShareNetwork); boop still pops and persists, treat works, toasts fire.
+3. Open Sniff → its header masthead shows the Dog glyph. Open Nursery → its header masthead shows the BabyCarriage glyph. Both match the tab icons.
+4. Post flow → sign out.
+
+Commit your changes locally.

@@ -53,7 +53,7 @@ import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
 import CommentSheet from '@/components/CommentSheet';
 import ShareSheet from '@/components/ShareSheet';
 import SectionMasthead from '@/components/SectionMasthead';
-import SniffIcon from '@/components/SniffIcon';
+import { Dog } from 'phosphor-react-native';
 
 // ─── Layout constants ──────────────────────────────────────────────────────────
 
@@ -324,15 +324,7 @@ export default function SniffScreen() {
   // ── Section masthead — pinned above chip/sort row, grid mode only ─────────
   const sniffMasthead = (
     <SectionMasthead
-      icon={
-        // SniffIcon's visual mass sits ~1.5 px below the SVG box centre
-        // (tail tip at y=3, everything else y=9–22 in a 24-unit viewBox).
-        // translateY:-1.5 corrects that optical low-hang; size:20 (+11%)
-        // matches the stroke weight of HatchlingIcon at the same render size.
-        <View style={{ transform: [{ translateY: -1.5 }] }}>
-          <SniffIcon size={20} color={colors.foreground} />
-        </View>
-      }
+      icon={<Dog size={20} color={colors.foreground} weight="regular" />}
       title="Sniff"
       style={[styles.mastheadSniff, { top: topInset, backgroundColor: colors.background }]}
     />

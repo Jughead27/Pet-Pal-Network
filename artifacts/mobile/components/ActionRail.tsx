@@ -37,11 +37,11 @@ const TEACHING_KEY_TREAT = 'fishbook:teaching:treat';
 // ─── Icon helpers ─────────────────────────────────────────────────────────────
 
 function BoopIcon({ color, size }: { color: string; size: number }) {
-  return <HandTap color={color} weight="light" size={size} />;
+  return <HandTap color={color} weight="regular" size={size} />;
 }
 
 function TreatIcon({ color, size }: { color: string; size: number }) {
-  return <Bone color={color} weight="light" size={size} />;
+  return <Bone color={color} weight="regular" size={size} />;
 }
 
 // ─── BoopRipple ───────────────────────────────────────────────────────────────
@@ -189,7 +189,7 @@ function BoopRailItem({
             />
           ))}
           <Animated.View style={{ transform: [{ scale }] }}>
-            <BoopIcon color={iconColor} size={24} />
+            <BoopIcon color={iconColor} size={28} />
           </Animated.View>
         </View>
         <Text style={styles.count}>{countText}</Text>
@@ -250,7 +250,7 @@ function ActionItem({
         accessibilityRole="button"
       >
         <Animated.View style={{ transform: [{ scale }] }}>
-          {renderIcon(iconColor, 24)}
+          {renderIcon(iconColor, 24 /* size arg unused — each icon sets its own */)}
         </Animated.View>
         {countText !== undefined && (
           <Text style={styles.count}>{countText}</Text>
@@ -498,7 +498,7 @@ export default function ActionRail({
         {/* Bone-shake wrapper */}
         <Animated.View style={{ transform: [{ translateX: treatShakeX }] }}>
           <ActionItem
-            renderIcon={(color, size) => <TreatIcon color={color} size={size} />}
+            renderIcon={(color) => <TreatIcon color={color} size={28} />}
             count={treatCount}
             onPress={handleTreatPress}
             accessibilityLabel="Treat"
@@ -512,7 +512,7 @@ export default function ActionRail({
       {/* 3. Comment */}
       <ActionItem
         renderIcon={(color) => (
-          <ChatCircle color={color} weight="light" size={20} />
+          <ChatCircle color={color} weight="regular" size={24} />
         )}
         count={commentCount}
         onPress={onCommentPress}
@@ -522,7 +522,7 @@ export default function ActionRail({
       {/* 4. Share */}
       <ActionItem
         renderIcon={(color) => (
-          <ShareNetwork color={color} weight="light" size={20} />
+          <ShareNetwork color={color} weight="regular" size={24} />
         )}
         onPress={onSharePress}
         testID="share-button"
@@ -576,6 +576,12 @@ const styles = StyleSheet.create({
     position: 'relative',
     // Must be visible on iOS — default is hidden, which clips the ripple ring.
     overflow: 'visible',
+    // Soft drop-shadow so coral/gold/white glyphs stay readable over bright photos.
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
   },
   itemTouchable: {
     alignItems: 'center',

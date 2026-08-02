@@ -44,7 +44,7 @@ import { useGetFeed } from '@workspace/api-client-react';
 import type { FeedPost } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import FocalImage from '@/components/FocalImage';
-import HatchlingIcon from '@/components/HatchlingIcon';
+import { BabyCarriage } from 'phosphor-react-native';
 import SectionMasthead from '@/components/SectionMasthead';
 import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
 import CommentSheet from '@/components/CommentSheet';
@@ -259,13 +259,13 @@ export default function NurseryScreen() {
     return (
       <View style={containerStyle}>
         <SectionMasthead
-          icon={<HatchlingIcon size={18} color={colors.foreground} />}
+          icon={<BabyCarriage size={18} color={colors.foreground} weight="regular" />}
           title="Nursery"
           style={{ paddingTop: topInset }}
         />
         <View style={[styles.fill, styles.centered]}>
           <View style={styles.emptyContent}>
-            <HatchlingIcon size={72} color={colors.mutedForeground} />
+            <BabyCarriage size={72} color={colors.mutedForeground} weight="regular" />
             <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
               No nursery posts yet
             </Text>
@@ -369,7 +369,7 @@ export default function NurseryScreen() {
   return (
     <View style={containerStyle} onLayout={handleContainerLayout}>
       <SectionMasthead
-        icon={<HatchlingIcon size={18} color={colors.foreground} />}
+        icon={<BabyCarriage size={18} color={colors.foreground} weight="regular" />}
         title="Nursery"
         style={{ paddingTop: topInset }}
       />
