@@ -154,6 +154,36 @@ export default function ProfileScreen() {
   const [revokeToast, setRevokeToast]       = useState(false);
   const revokeToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Quota-request status — drives the "request more" affordance at remaining=0
+  // isAdmin is derived early so it can gate the admin-badge query below.
+  const isAdmin = (meData as unknown as { role?: string } | undefined)?.role === 'admin';
+
+  const { data: quotaRequestData, refetch: refetchQuotaRequest } = useQuery({
+    queryKey: ['my-quota-request'],
+    queryFn:  () => customFetch<{ pendingRequest: { id: string } | null }>('/api/quota-requests/mine'),
+  });
+  const [quotaRequestSending,   setQuotaRequestSending]   = useState(false);
+  const [quotaRequestConfirmed, setQuotaRequestConfirmed] = useState(false);
+
+  // Admin badge — pending quota-request count, only fetched for admin users
+  const { data: quotaCountData } = useQuery({
+    queryKey: ['admin-quota-count'],
+    queryFn:  () => customFetch<{ pending: number }>('/api/admin/quota-requests/count'),
+    enabled:  isAdmin,
+  });
+
+  const handleRequestMoreInvites = useCallback(async () => {
+    if (quotaRequestSending || quotaRequestData?.pendingRequest) return;
+    setQuotaRequestSending(true);
+    try {
+      await customFetch('/api/quota-requests', { method: 'POST' });
+      setQuotaRequestConfirmed(true);
+      refetchQuotaRequest();
+    } catch { /* silent */ } finally {
+      setQuotaRequestSending(false);
+    }
+  }, [quotaRequestSending, quotaRequestData, refetchQuotaRequest]);
+
   const handleUnblock = useCallback(async (userId: string) => {
     if (pendingBlockIds.has(userId)) return;
     addPendingBlock(userId);
@@ -284,7 +314,9 @@ export default function ProfileScreen() {
   // Invite derived values
   const effectiveQuota   = inviteData?.effectiveQuota ?? 0;
   const nonRevokedCount  = inviteData?.nonRevokedCount ?? 0;
-  const remaining        = effectiveQuota - nonRevokedCount;
+  const remaining              = effectiveQuota - nonRevokedCount;
+  const hasPendingQuotaRequest = Boolean(quotaRequestData?.pendingRequest);
+  const quotaPendingCount      = quotaCountData?.pending ?? 0;
   const pendingInvites   = (inviteData?.invites ?? []).filter((i) => i.status === 'active');
   const friendsWhoJoined = inviteData?.friendsWhoJoined ?? [];
 
@@ -355,8 +387,8 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Admin link — only visible to admins; quiet, no decoration */}
-        {(meData as unknown as { role?: string } | undefined)?.role === 'admin' && (
+        {/* Admin link — only visible to admins; badge shows pending quota requests */}
+        {isAdmin && (
           <TouchableOpacity
             onPress={() => router.push('/admin')}
             activeOpacity={0.7}
@@ -364,9 +396,16 @@ export default function ProfileScreen() {
             accessibilityRole="link"
             accessibilityLabel="Admin area"
           >
-            <Text style={[styles.editProfileText, { color: colors.mutedForeground }]}>
-              admin
-            </Text>
+            <View style={styles.adminLinkRow}>
+              <Text style={[styles.editProfileText, { color: colors.mutedForeground }]}>
+                admin
+              </Text>
+              {quotaPendingCount > 0 && (
+                <View style={[styles.adminBadge, { backgroundColor: colors.accent }]}>
+                  <Text style={styles.adminBadgeText}>{quotaPendingCount}</Text>
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
         )}
 
@@ -599,6 +638,30 @@ export default function ProfileScreen() {
               >
                 {creatingInvite && <ActivityIndicator size={14} color={colors.foreground} />}
               </Button>
+            )}
+            {/* Request more — shown only when all quota is used up */}
+            {remaining === 0 && (
+              <View style={{ marginTop: 12 }}>
+                {(hasPendingQuotaRequest || quotaRequestConfirmed) ? (
+                  <Text style={[styles.quietActionText, { color: colors.mutedForeground, opacity: 0.7 }]}>
+                    {quotaRequestConfirmed ? "we'll take a look 🐾" : 'request pending'}
+                  </Text>
+                ) : (
+                  <TouchableOpacity
+                    onPress={handleRequestMoreInvites}
+                    disabled={quotaRequestSending}
+                    activeOpacity={0.7}
+                    style={[styles.quietAction, { opacity: quotaRequestSending ? 0.4 : 1, paddingLeft: 0 }]}
+                    accessibilityRole="button"
+                    accessibilityLabel="Request more invites"
+                  >
+                    {quotaRequestSending
+                      ? <ActivityIndicator size={12} color={colors.mutedForeground} />
+                      : <Text style={[styles.quietActionText, { color: colors.mutedForeground }]}>request more</Text>
+                    }
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
           </>
         )}
@@ -1203,5 +1266,25 @@ const styles = StyleSheet.create({
   signOutBtnText: {
     fontFamily: 'Inter_500Medium',
     fontSize:   14,
+  },
+
+  // Admin link badge
+  adminLinkRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           8,
+  },
+  adminBadge: {
+    minWidth:          18,
+    height:            18,
+    borderRadius:      9,
+    paddingHorizontal: 5,
+    alignItems:        'center',
+    justifyContent:    'center',
+  },
+  adminBadgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize:   11,
+    color:      '#FFFFFF',
   },
 });

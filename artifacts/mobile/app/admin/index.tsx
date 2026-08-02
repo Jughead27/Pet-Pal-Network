@@ -1,5 +1,6 @@
 /**
  * Admin hub — boring-utility navigation to moderation surfaces.
+ * Fetches the pending quota-request count to show a badge on that item.
  */
 
 import React from 'react';
@@ -14,7 +15,9 @@ import {
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, CaretRight } from 'phosphor-react-native';
+import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import { customFetch } from '@workspace/api-client-react';
 
 const SECTIONS = [
   {
@@ -26,6 +29,11 @@ const SECTIONS = [
     route:       '/admin/invites' as const,
     label:       'Invite Requests',
     description: 'Mark contacted or close invite request submissions.',
+  },
+  {
+    route:       '/admin/quota-requests' as const,
+    label:       'Quota Requests',
+    description: 'Approve or dismiss members requesting more invite slots.',
   },
   {
     route:       '/admin/breeds' as const,
@@ -53,6 +61,13 @@ export default function AdminIndexScreen() {
   const colors  = useColors();
   const insets  = useSafeAreaInsets();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
+
+  // Pending quota-request count for the badge on the Quota Requests row
+  const { data: quotaCountData } = useQuery({
+    queryKey: ['admin-quota-count'],
+    queryFn:  () => customFetch<{ pending: number }>('/api/admin/quota-requests/count'),
+  });
+  const quotaPendingCount = quotaCountData?.pending ?? 0;
 
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
@@ -82,22 +97,32 @@ export default function AdminIndexScreen() {
 
         <View style={[styles.divider, { borderTopColor: colors.border }]} />
 
-        {SECTIONS.map(({ route, label, description }) => (
-          <TouchableOpacity
-            key={route}
-            onPress={() => router.push(route)}
-            activeOpacity={0.7}
-            style={[styles.row, { borderBottomColor: colors.border }]}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-          >
-            <View style={styles.rowContent}>
-              <Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text>
-              <Text style={[styles.rowDesc,  { color: colors.mutedForeground }]}>{description}</Text>
-            </View>
-            <CaretRight size={16} color={colors.mutedForeground} weight="regular" />
-          </TouchableOpacity>
-        ))}
+        {SECTIONS.map(({ route, label, description }) => {
+          const pendingCount = route === '/admin/quota-requests' ? quotaPendingCount : 0;
+          return (
+            <TouchableOpacity
+              key={route}
+              onPress={() => router.push(route)}
+              activeOpacity={0.7}
+              style={[styles.row, { borderBottomColor: colors.border }]}
+              accessibilityRole="button"
+              accessibilityLabel={label}
+            >
+              <View style={styles.rowContent}>
+                <View style={styles.rowLabelRow}>
+                  <Text style={[styles.rowLabel, { color: colors.foreground }]}>{label}</Text>
+                  {pendingCount > 0 && (
+                    <View style={[styles.badge, { backgroundColor: colors.accent }]}>
+                      <Text style={styles.badgeText}>{pendingCount}</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={[styles.rowDesc, { color: colors.mutedForeground }]}>{description}</Text>
+              </View>
+              <CaretRight size={16} color={colors.mutedForeground} weight="regular" />
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -137,7 +162,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     gap: 12,
   },
-  rowContent: { flex: 1, gap: 3 },
-  rowLabel:   { fontFamily: 'Inter_600SemiBold', fontSize: 16 },
-  rowDesc:    { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
+  rowContent:  { flex: 1, gap: 3 },
+  rowLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  rowLabel:    { fontFamily: 'Inter_600SemiBold', fontSize: 16 },
+  rowDesc:     { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 18 },
+
+  badge: {
+    minWidth:          18,
+    height:            18,
+    borderRadius:      9,
+    paddingHorizontal: 5,
+    alignItems:        'center',
+    justifyContent:    'center',
+  },
+  badgeText: {
+    fontFamily: 'Inter_700Bold',
+    fontSize:   11,
+    color:      '#FFFFFF',
+  },
 });

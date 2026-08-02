@@ -1,0 +1,32 @@
+SCOPE: Admin invite-quota request flow. Schema change — follow the standard flow (dev → deployment preview → publish, no drizzle-kit push --force).
+
+CONTEXT: Members can run out of invites. Admin already has a lineage-based quota editor per the Invites V2 work. We need: (1) a way for a member to request more invites with a single tap, (2) admin visibility into pending requests via the existing admin hub pattern, (3) a quiet badge count alerting admin to pending requests.
+
+SCHEMA:
+Add a `quota_requests` table: uuid pk, user_id FK, status enum (pending/granted/dismissed), created_at, resolved_at nullable, resolved_by FK nullable. No note/reason field — request is a bare signal.
+
+API:
+- POST /api/quota-requests (auth'd) — creates a pending request for the current user. Idempotent-ish: if the user already has a pending request, don't create a duplicate (return the existing one / a friendly no-op).
+- GET /api/admin/quota-requests (admin-only, requireRole pattern already established) — pending-first list, joined with user info (username/display name), newest or oldest first (match the existing admin queue convention — reports queue is cruelty-first/oldest-first, so default to oldest-first here for fairness).
+- POST /api/admin/quota-requests/:id/grant (admin-only) — bumps the user's invite quota by the existing default increment (reuse whatever default grant amount the quota editor already uses, or a sensible default like +5 if none exists) and marks the request granted; wrap in a transaction with an audit_log insert (matches the existing admin-action audit pattern).
+- POST /api/admin/quota-requests/:id/dismiss (admin-only) — marks dismissed, audited, no quota change.
+- GET /api/admin/quota-requests/count (admin-only) — returns pending count for the badge (or fold this into the existing GET /me or admin-hub-loading call if that's a cleaner fit).
+
+UI:
+1. Profile page: when a user's invite quota is fully used (0 remaining, matching the existing "hidden at 0" hero block condition), replace or supplement that state with a quiet "request more" tap target. On tap → POST the request, then show a brief confirmation state (e.g. "we'll take a look 🐾" in the same register as other confirmation copy in the app) and disable/hide the button while a request is pending (don't let them spam it).
+2. Admin hub: add "Invite Requests" as a new item in the existing admin section, following the exact visual/list pattern already used for reports/breed-suggestions/invite-requests(pre-signup). Each row shows the requesting user, a "grant" action and a "dismiss" action (verb-labeled, no generic OK).
+3. Admin entry point (wherever the quiet "admin" profile link renders): add a small badge showing the pending quota_requests count, same visual treatment as any existing pending-count indicators in admin, or a simple minimal badge if none exists yet.
+
+DO NOT MODIFY: the existing lineage-based quota editor, invite redemption/signup flow, invite_requests (pre-signup) table/flow — these are a SEPARATE existing table from the new quota_requests table, don't conflate them. Also don't touch boop/treat/reaction systems, icon family, tab-reset behavior, Nursery/Sniff filters.
+
+PRESERVATION CLAUSE: existing "Your Invites" profile section (remaining count / pending / friends who joined) stays exactly as-is except for the new request-more affordance appearing only at 0 remaining. Existing admin queues (reports, breed-suggestions, pre-signup invite-requests) stay unchanged in behavior.
+
+ACCEPTANCE TEST (golden path):
+- Sign in as a user with 0 invites remaining → profile shows "request more" tap target
+- Tap it → confirmation shown, button becomes disabled/hidden (pending state)
+- Sign in as admin → admin hub shows a badge with pending count → open Invite Requests → see the request → tap Grant → quota bumped, audit log entry created, request cleared from pending list
+- Repeat with Dismiss on a second test request → request cleared, no quota change, audited
+- Home loads, boop persists
+- Nursery pager works
+- Post flow works
+- Sign out
