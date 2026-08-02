@@ -420,6 +420,7 @@ export default function FeedPage({
           onBoopTeaching={spawnBoopTeachingPop}
           onTreatTeaching={spawnTreatTeachingPop}
           reducedMotion={reducedMotion}
+          petSpecies={post.pet.species}
         />
       </Animated.View>
 

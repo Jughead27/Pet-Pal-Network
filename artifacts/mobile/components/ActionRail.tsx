@@ -25,7 +25,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { HandTap, Bone, ChatCircle, ShareNetwork } from 'phosphor-react-native';
+import { HandTap, Bone, Fish, Carrot, Cookie, ChatCircle, ShareNetwork } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useBoopPost, useTreatPost } from '@workspace/api-client-react';
@@ -90,8 +90,28 @@ function BoopIcon({ color, size }: { color: string; size: number }) {
   return <WithGlyphShadow icon={HandTap} color={color} size={size} />;
 }
 
-function TreatIcon({ color, size }: { color: string; size: number }) {
-  return <WithGlyphShadow icon={Bone} color={color} size={size} />;
+// ─── Species → treat glyph mapping ───────────────────────────────────────────
+// Maps the posting pet's species string (case-insensitive) to a Phosphor icon.
+// Cookie is the default fallback for any unmapped species.
+// Add entries here to extend coverage without touching the component.
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const SPECIES_TREAT_ICON: Record<string, React.ComponentType<any>> = {
+  dog:          Bone,
+  cat:          Fish,
+  rabbit:       Carrot,
+  'guinea pig': Carrot,
+  horse:        Carrot,
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function treatIconForSpecies(species: string | undefined): React.ComponentType<any> {
+  if (!species) return Cookie;
+  return SPECIES_TREAT_ICON[species.trim().toLowerCase()] ?? Cookie;
+}
+
+function TreatIcon({ color, size, species }: { color: string; size: number; species?: string }) {
+  return <WithGlyphShadow icon={treatIconForSpecies(species)} color={color} size={size} />;
 }
 
 // ─── BoopSpark ────────────────────────────────────────────────────────────────
@@ -404,6 +424,12 @@ interface ActionRailProps {
    * skips the spring and ripple ring (haptics are unchanged per spec).
    */
   reducedMotion?: boolean;
+  /**
+   * Species of the posting pet (case-insensitive free text, e.g. "Dog", "cat").
+   * Drives the treat glyph: Dog→Bone, Cat→Fish, Rabbit/Guinea pig/Horse→Carrot,
+   * everything else→Cookie.  Undefined falls back to Cookie.
+   */
+  petSpecies?: string;
 }
 
 export default function ActionRail({
@@ -424,6 +450,7 @@ export default function ActionRail({
   onBoopTeaching,
   onTreatTeaching,
   reducedMotion = false,
+  petSpecies,
 }: ActionRailProps) {
   const colors = useColors();
 
@@ -592,7 +619,7 @@ export default function ActionRail({
         {/* Bone-shake wrapper */}
         <Animated.View style={{ transform: [{ translateX: treatShakeX }] }}>
           <ActionItem
-            renderIcon={(color) => <TreatIcon color={color} size={28} />}
+            renderIcon={(color) => <TreatIcon color={color} size={28} species={petSpecies} />}
             count={treatCount}
             onPress={handleTreatPress}
             accessibilityLabel="Treat"

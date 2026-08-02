@@ -265,132 +265,127 @@ export default function SniffScreen() {
   // so the sort control has space even when no species chips are present.
   const chipRowHeight = topInset + MASTHEAD_HEIGHT + CHIP_HEIGHT;
 
-  // ── Sort toggle — right-aligned in the chip row band ──────────────────────
-  // Same typographic state language as chips: active = bold foreground,
-  // inactive = muted, no pill/container, no react-native-reanimated.
-  const sortControl = (
-    <View
-      style={[
-        styles.sortControl,
-        { top: topInset + MASTHEAD_HEIGHT, backgroundColor: colors.background },
-      ]}
-      accessibilityRole="toolbar"
-      accessibilityLabel="Sort order"
-    >
-      <Pressable
-        onPress={() => { setSort(GetFeedSort.fresh); gridScrollY.current = 0; }}
-        style={styles.sortPressable}
-        accessibilityRole="button"
-        accessibilityLabel="Sort by Fresh"
-        accessibilityState={{ selected: sort === GetFeedSort.fresh }}
-        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-      >
-        <Text
-          style={[
-            styles.sortText,
-            sort === GetFeedSort.fresh
-              ? [styles.chipTextActive,   { color: colors.foreground }]
-              : [styles.chipTextInactive, { color: colors.mutedForeground }],
-          ]}
-        >
-          Fresh
-        </Text>
-      </Pressable>
+  // ── Sniff header — single opaque bar in normal document flow ─────────────
+  // All three header elements (masthead, chip row, sort toggle) live inside one
+  // solid View so there are no background gaps and no z-index fights with the
+  // FlatList.  The grid scrolls naturally underneath because this View is a
+  // flex sibling ABOVE the FlatList, not an absolute overlay.
+  const sniffHeader = (
+    <View style={[styles.headerBar, { backgroundColor: colors.background }]}>
+      {/* Masthead row */}
+      <SectionMasthead
+        icon={<Dog size={20} color={colors.foreground} weight="regular" />}
+        title="Sniff"
+        style={{ paddingTop: topInset }}
+      />
 
-      <Text style={[styles.sortSep, { color: colors.mutedForeground }]}>|</Text>
+      {/* Chip + sort band — fixed height, sort control floats right */}
+      <View style={styles.chipSortBand}>
+        {chips.length > 0 ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipScroll}
+            contentContainerStyle={[styles.chipContent, { paddingRight: SORT_CTRL_WIDTH }]}
+          >
+            {/* "All" chip */}
+            <Pressable
+              onPress={() => { setActiveSpeciesId(null); gridScrollY.current = 0; }}
+              style={styles.chipPressable}
+              accessibilityRole="button"
+              accessibilityLabel="Show all species"
+              accessibilityState={{ selected: activeSpeciesId === null }}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  activeSpeciesId === null
+                    ? [styles.chipTextActive,   { color: colors.foreground }]
+                    : [styles.chipTextInactive, { color: colors.mutedForeground }],
+                ]}
+              >
+                All
+              </Text>
+            </Pressable>
 
-      <Pressable
-        onPress={() => { setSort(GetFeedSort.popular); gridScrollY.current = 0; }}
-        style={styles.sortPressable}
-        accessibilityRole="button"
-        accessibilityLabel="Sort by Popular"
-        accessibilityState={{ selected: sort === GetFeedSort.popular }}
-        hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
-      >
-        <Text
-          style={[
-            styles.sortText,
-            sort === GetFeedSort.popular
-              ? [styles.chipTextActive,   { color: colors.foreground }]
-              : [styles.chipTextInactive, { color: colors.mutedForeground }],
-          ]}
+            {chips.map((chip) => (
+              <Pressable
+                key={chip.id}
+                onPress={() => { setActiveSpeciesId(chip.id); gridScrollY.current = 0; }}
+                style={styles.chipPressable}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${chip.name}`}
+                accessibilityState={{ selected: activeSpeciesId === chip.id }}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    activeSpeciesId === chip.id
+                      ? [styles.chipTextActive,   { color: colors.foreground }]
+                      : [styles.chipTextInactive, { color: colors.mutedForeground }],
+                  ]}
+                >
+                  {chip.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : (
+          // No chips yet — placeholder keeps the band height consistent
+          <View style={styles.chipScrollPlaceholder} />
+        )}
+
+        {/* Sort toggle — absolutely positioned within the band, right-aligned */}
+        <View
+          style={[styles.sortControl, { backgroundColor: colors.background }]}
+          accessibilityRole="toolbar"
+          accessibilityLabel="Sort order"
         >
-          Popular
-        </Text>
-      </Pressable>
+          <Pressable
+            onPress={() => { setSort(GetFeedSort.fresh); gridScrollY.current = 0; }}
+            style={styles.sortPressable}
+            accessibilityRole="button"
+            accessibilityLabel="Sort by Fresh"
+            accessibilityState={{ selected: sort === GetFeedSort.fresh }}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          >
+            <Text
+              style={[
+                styles.sortText,
+                sort === GetFeedSort.fresh
+                  ? [styles.chipTextActive,   { color: colors.foreground }]
+                  : [styles.chipTextInactive, { color: colors.mutedForeground }],
+              ]}
+            >
+              Fresh
+            </Text>
+          </Pressable>
+
+          <Text style={[styles.sortSep, { color: colors.mutedForeground }]}>|</Text>
+
+          <Pressable
+            onPress={() => { setSort(GetFeedSort.popular); gridScrollY.current = 0; }}
+            style={styles.sortPressable}
+            accessibilityRole="button"
+            accessibilityLabel="Sort by Popular"
+            accessibilityState={{ selected: sort === GetFeedSort.popular }}
+            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+          >
+            <Text
+              style={[
+                styles.sortText,
+                sort === GetFeedSort.popular
+                  ? [styles.chipTextActive,   { color: colors.foreground }]
+                  : [styles.chipTextInactive, { color: colors.mutedForeground }],
+              ]}
+            >
+              Popular
+            </Text>
+          </Pressable>
+        </View>
+      </View>
     </View>
   );
-
-  // ── Section masthead — pinned above chip/sort row, grid mode only ─────────
-  const sniffMasthead = (
-    <SectionMasthead
-      icon={<Dog size={20} color={colors.foreground} weight="regular" />}
-      title="Sniff"
-      style={[styles.mastheadSniff, { top: topInset, backgroundColor: colors.background }]}
-    />
-  );
-
-  // ── Species chip row — horizontal ScrollView with right-padding to clear
-  //    the sort control overlay.
-  const chipRow = chips.length > 0 ? (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      style={[styles.chipScroll, { backgroundColor: colors.background, top: topInset + MASTHEAD_HEIGHT }]}
-      contentContainerStyle={[
-        styles.chipContent,
-        { paddingRight: SORT_CTRL_WIDTH },
-      ]}
-    >
-      {/* "All" chip */}
-      <Pressable
-        onPress={() => {
-          setActiveSpeciesId(null);
-          gridScrollY.current = 0;
-        }}
-        style={styles.chipPressable}
-        accessibilityRole="button"
-        accessibilityLabel="Show all species"
-        accessibilityState={{ selected: activeSpeciesId === null }}
-      >
-        <Text
-          style={[
-            styles.chipText,
-            activeSpeciesId === null
-              ? [styles.chipTextActive,   { color: colors.foreground }]
-              : [styles.chipTextInactive, { color: colors.mutedForeground }],
-          ]}
-        >
-          All
-        </Text>
-      </Pressable>
-
-      {chips.map((chip) => (
-        <Pressable
-          key={chip.id}
-          onPress={() => {
-            setActiveSpeciesId(chip.id);
-            gridScrollY.current = 0;
-          }}
-          style={styles.chipPressable}
-          accessibilityRole="button"
-          accessibilityLabel={`Filter by ${chip.name}`}
-          accessibilityState={{ selected: activeSpeciesId === chip.id }}
-        >
-          <Text
-            style={[
-              styles.chipText,
-              activeSpeciesId === chip.id
-                ? [styles.chipTextActive,   { color: colors.foreground }]
-                : [styles.chipTextInactive, { color: colors.mutedForeground }],
-            ]}
-          >
-            {chip.name}
-          </Text>
-        </Pressable>
-      ))}
-    </ScrollView>
-  ) : null;
 
   // ══════════════════════════════════════════════════════════════════════════
   // Early exits: loading / error
@@ -476,10 +471,8 @@ export default function SniffScreen() {
   if ((allData?.posts ?? []).length === 0) {
     return (
       <View style={containerStyle}>
-        {sniffMasthead}
-        {chipRow}
-        {sortControl}
-        <View style={[styles.fill, styles.centered, { paddingTop: chipRowHeight }]}>
+        {sniffHeader}
+        <View style={[styles.fill, styles.centered]}>
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
             Nothing here yet
           </Text>
@@ -496,10 +489,8 @@ export default function SniffScreen() {
     const chipName = chips.find((c) => c.id === activeSpeciesId)?.name ?? 'this species';
     return (
       <View style={containerStyle}>
-        {sniffMasthead}
-        {chipRow}
-        {sortControl}
-        <View style={[styles.fill, styles.centered, { paddingTop: chipRowHeight }]}>
+        {sniffHeader}
+        <View style={[styles.fill, styles.centered]}>
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
             No posts for {chipName}
           </Text>
@@ -537,9 +528,7 @@ export default function SniffScreen() {
 
   return (
     <View style={containerStyle} onLayout={handleContainerLayout}>
-      {sniffMasthead}
-      {chipRow}
-      {sortControl}
+      {sniffHeader}
       <FlatList
         key="sniff-grid"
         ref={gridListRef}
@@ -555,8 +544,8 @@ export default function SniffScreen() {
         scrollEventThrottle={16}
         contentContainerStyle={
           Platform.OS === 'web'
-            ? { paddingTop: chipRowHeight, paddingBottom: 84 }
-            : { paddingTop: chipRowHeight, paddingBottom: insets.bottom + 80 }
+            ? { paddingBottom: 84 }
+            : { paddingBottom: insets.bottom + 80 }
         }
       />
     </View>
@@ -570,14 +559,29 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   errorText: { fontSize: 14, textAlign: 'center' },
 
+  // ── Header bar — solid opaque wrapper in normal flex flow above the grid ───
+  // No position:absolute; the FlatList is a sibling below this, so grid content
+  // can never paint through or above the header.
+  headerBar: {
+    // backgroundColor set inline from colors.background
+  },
+
+  // ── Chip + sort band ───────────────────────────────────────────────────────
+  chipSortBand: {
+    height: CHIP_HEIGHT,
+    // Sort control is position:absolute within this container, so it needs
+    // a defined height for the absolute child to stretch against.
+  },
+  chipScrollPlaceholder: {
+    flex:   1,
+    height: CHIP_HEIGHT,
+  },
+
   // ── Chip row ───────────────────────────────────────────────────────────────
   chipScroll: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-    maxHeight: 200,
+    // Not absolutely positioned — flows inside chipSortBand
+    flex:      1,
+    maxHeight: CHIP_HEIGHT,
   },
   chipContent: {
     flexDirection: 'row',
@@ -601,32 +605,33 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
   },
 
-  // ── Sort toggle — right-aligned, baseline-aligned with species chips ────────
-  // alignItems:'flex-end' + paddingBottom:8 mirror chipContent exactly so both
-  // rows share one visual baseline. fontSize/letterSpacing identical to chipText.
+  // ── Sort toggle — right-aligned within chipSortBand ───────────────────────
+  // position:absolute here is relative to chipSortBand (its nearest positioned
+  // parent), NOT the full screen — so no topInset/MASTHEAD_HEIGHT offset needed.
+  // alignItems:'flex-end' + paddingBottom:8 baseline-aligns with the chip row.
   sortControl: {
     position:      'absolute',
     right:         16,
-    height:        CHIP_HEIGHT,
-    zIndex:        11, // above chip row (10)
+    top:           0,
+    bottom:        0,
     flexDirection: 'row',
-    alignItems:    'flex-end',  // ← was 'center'; now baseline-aligned with chips
+    alignItems:    'flex-end',
     gap:           6,
-    paddingLeft:   14, // background scrim so scrolled chips don't bleed through
-    paddingBottom: 8,  // ← added; matches chipContent paddingBottom
+    paddingLeft:   14, // scrim so scrolled chips don't bleed through
+    paddingBottom: 8,
   },
   sortPressable: {
-    paddingVertical: 4, // same as chipPressable — unchanged
+    paddingVertical: 4,
   },
   sortText: {
-    fontSize:      15,  // ← was 14; now identical to chipText
+    fontSize:      15,
     letterSpacing: -0.2,
   },
   sortSep: {
-    fontSize:        15,   // ← was 13; same metric as chip/sort labels
+    fontSize:        15,
     letterSpacing:  -0.2,
-    paddingVertical: 4,    // sit on the same baseline as the adjacent pressables
-    opacity:         0.3,  // hairline weight so it doesn't outweigh the labels
+    paddingVertical: 4,
+    opacity:         0.3,
   },
 
   // ── Grid ───────────────────────────────────────────────────────────────────
@@ -673,11 +678,4 @@ const styles = StyleSheet.create({
     justifyContent:  'center',
   },
 
-  // ── Sniff masthead — absolutely positioned above chip/sort row, grid only ──
-  mastheadSniff: {
-    position: 'absolute',
-    left:     0,
-    right:    0,
-    zIndex:   12, // above chipScroll (10) and sortControl (11)
-  },
 });

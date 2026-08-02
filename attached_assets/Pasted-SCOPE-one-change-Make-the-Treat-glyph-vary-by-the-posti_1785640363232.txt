@@ -1,0 +1,21 @@
+SCOPE (one change): Make the Treat glyph vary by the posting pet's species. The rail's treat icon swaps to match the pet, with the gold color, rail position, and count unchanged. Client-side glyph mapping only.
+
+components/ActionRail.tsx (treat button):
+- Choose the treat glyph from the POSTING PET's species (the post already knows its pet/species — pass the species into ActionRail if it isn't already available there). Match against the app's existing species values (case-insensitive):
+  - dog → Bone
+  - cat → Fish (Phosphor Fish or FishSimple — whichever reads cleaner at rail size)
+  - rabbit / guinea pig / horse (and any other clear grazing herbivores you have) → Carrot
+  - everything else (bird, reptile, fish, small mammal, etc.) → Cookie (default fallback)
+- All from phosphor-react-native, weight="regular" (matching the current rail), color #F4C542 (gold), same size as the current Bone (28), same rail slot, same soft drop-shadow as the other rail icons. Keep the treat tap handler, the 5/day cap, the self-treat toast, counts, and the "Yum!" pop system untouched.
+- Implement the mapping as a small config lookup (species string → icon component) with Cookie as the default, so unmapped species fall back cleanly and it's easy to extend later.
+
+DO NOT MODIFY: the treat tap logic / cap / toasts / counts, the boop button, the pop system, nav, avatars, the follow paw, or the schema. NO schema change (species is already known per pet — do not add columns). No new dependencies.
+
+PRESERVATION CLAUSE: only the treat GLYPH selection changes (by species). Gold color, position, count, size, shadow, and all behavior stay identical. Web, iOS, and Android render identically.
+
+ACCEPTANCE TEST (golden path):
+1. On a Dog's post the treat icon is a Bone; on a Cat's post a Fish; on a Rabbit/guinea pig/horse post a Carrot; on any other species a Cookie. Gold, same slot, same shadow.
+2. Treat still works (accept / 5-day cap / self-treat toast), "Yum!" still pops, count persists.
+3. Boop, nav, avatars unchanged → post flow → sign out.
+
+Commit your changes locally.

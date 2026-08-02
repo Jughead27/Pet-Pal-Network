@@ -371,7 +371,7 @@ export default function NurseryScreen() {
       <SectionMasthead
         icon={<BabyCarriage size={18} color={colors.foreground} weight="regular" />}
         title="Nursery"
-        style={{ paddingTop: topInset }}
+        style={{ paddingTop: topInset, backgroundColor: colors.background }}
       />
       <FlatList
         key="grid"

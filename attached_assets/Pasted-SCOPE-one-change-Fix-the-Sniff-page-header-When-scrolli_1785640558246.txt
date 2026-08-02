@@ -1,0 +1,18 @@
+SCOPE (one change): Fix the Sniff page header. When scrolling the Sniff grid, images scroll UP into the header area (the "Sniff" masthead + the All/Cat/Fish and Fresh/Popular filter row) — grid content appears above/through the header, which reads as a broken layout. The header must be a fixed, OPAQUE bar that the grid scrolls cleanly underneath.
+
+Sniff screen:
+- Make the Sniff header — the glyph+wordmark masthead AND the filter row (All/Cat/Fish + Fresh/Popular) — a pinned/sticky bar with a SOLID opaque background in the app ground color (the same dark #060B10 used elsewhere), layered ABOVE the grid (higher z-order / rendered on top / sticky header).
+- The scrollable grid must start BELOW this header and scroll UNDERNEATH it, so any content that scrolls up is hidden behind the opaque header — never visible above it or bleeding into it.
+- Ensure the grid's top content inset/padding accounts for the header height so the first row isn't hidden on initial load, and nothing renders in the gap between the status bar and the header.
+- If the Nursery grid uses the same masthead+filter header pattern and shows the same bleed, apply the identical fix there.
+
+DO NOT MODIFY: the grid content/data, the filter behavior (All/Cat/Fish, Fresh/Popular still work), tap-to-open a post, the nav bar, the rail, avatars, the API, or the schema. NO schema change. No new dependencies. This is a header layering/opacity/inset fix only.
+
+PRESERVATION CLAUSE: only the Sniff (and matching Nursery) header layering, background opacity, and grid top-inset change. Everything else byte-identical. Web, iOS, and Android render identically.
+
+ACCEPTANCE TEST (golden path):
+1. Open Sniff → scroll the grid up and down: no image ever appears above or through the "Sniff" masthead or the filter row; the header stays put with a solid background and the grid scrolls cleanly beneath it.
+2. The first grid row is fully visible on load (not tucked under the header); filters (All/Cat/Fish, Fresh/Popular) still switch correctly; tapping a photo opens the post.
+3. Home/nav, rail, avatars unchanged → sign out.
+
+Commit your changes locally.
