@@ -90,11 +90,11 @@ const styles = StyleSheet.create({
     alignItems:      'center',
     paddingLeft:     8,
   },
-  // Logo tile — standalone icon, ~75% of footer height, full opacity
+  // Logo tile — standalone icon, ~88% of footer height so the cat reads clearly
   logoTile: {
-    width:        Math.round(FOOTER_H * 0.75), // 56 px
-    height:       Math.round(FOOTER_H * 0.75),
-    borderRadius: 8,
+    width:        Math.round(FOOTER_H * 0.88), // 66 px
+    height:       Math.round(FOOTER_H * 0.88),
+    borderRadius: 10,
   },
   // Text column — fills remaining space; slogan + wordmark stacked & centered
   textColumn: {

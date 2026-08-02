@@ -129,12 +129,12 @@ async function webShareCard(
     ctx.fillRect(0, PHOTO_H, CARD_W, FOOTER_H);
 
     // ── Logo tile — standalone, far left, full opacity ─────────────────────────
-    // Sized to ~75% of the footer height so it reads as a clear tile, not a badge.
-    const TILE_SZ  = Math.round(FOOTER_H * 0.75); // 120 px
-    const TILE_PAD = 20;
+    // Sized to ~88% of the footer height so the cat icon reads clearly at a glance.
+    const TILE_SZ  = Math.round(FOOTER_H * 0.88); // 141 px
+    const TILE_PAD = 24;
     const TILE_X   = TILE_PAD;
     const TILE_Y   = PHOTO_H + Math.round((FOOTER_H - TILE_SZ) / 2); // vertically centered
-    const TILE_R   = 16; // rounded-square corner radius
+    const TILE_R   = 18; // rounded-square corner radius (scales with tile)
 
     // Clip to rounded-square before drawing so the icon's black bg blends cleanly
     ctx.save();
@@ -158,8 +158,8 @@ async function webShareCard(
     // Right zone: from (TILE_PAD + TILE_SZ + gap) to CARD_W.
     // Centering text within this zone keeps it balanced without colliding with
     // the tile even at the wider slogan width.
-    const TEXT_ZONE_LEFT  = TILE_PAD + TILE_SZ + 20; // 160 px
-    const TEXT_CENTER_X   = TEXT_ZONE_LEFT + (CARD_W - TEXT_ZONE_LEFT) / 2; // 620 px
+    const TEXT_ZONE_LEFT  = TILE_PAD + TILE_SZ + 24; // 189 px — clears the larger tile
+    const TEXT_CENTER_X   = TEXT_ZONE_LEFT + (CARD_W - TEXT_ZONE_LEFT) / 2; // ~635 px
 
     ctx.textBaseline = 'alphabetic';
 
