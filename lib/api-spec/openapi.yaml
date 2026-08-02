@@ -582,6 +582,96 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /pets/{id}/co-ownership-requests:
+    get:
+      operationId: getPetCoOwnershipRequests
+      tags: [pets]
+      summary: Get pending co-owner invites for a pet
+      description: Returns all pending co-ownership requests sent for this pet. Caller must be an owner.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoOwnershipRequestsResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden — caller is not an owner of this pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /pets/{id}/co-ownership-requests/{requestId}:
+    delete:
+      operationId: cancelCoOwnershipRequest
+      tags: [pets]
+      summary: Cancel (withdraw) a pending co-owner invite
+      description: Any owner of the pet can cancel a pending outgoing invite. The request is marked declined.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required:
+                  - ok
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Forbidden — caller is not an owner of this pet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Request not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "409":
+          description: Request already resolved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /posts/{id}/boops:
     post:
       operationId: boopPost
@@ -2397,6 +2487,39 @@ components:
             $ref: "#/components/schemas/PackMemberItem"
       required:
         - members
+
+    CoOwnershipRequestItem:
+      type: object
+      description: A single pending co-ownership invite sent for a pet
+      properties:
+        id:
+          type: string
+        inviteeId:
+          type: string
+        inviteeUsername:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - inviteeId
+        - inviteeUsername
+        - status
+        - createdAt
+
+    CoOwnershipRequestsResponse:
+      type: object
+      description: Pending co-ownership invites for a pet
+      properties:
+        requests:
+          type: array
+          items:
+            $ref: "#/components/schemas/CoOwnershipRequestItem"
+      required:
+        - requests
 
     MeProfile:
       type: object

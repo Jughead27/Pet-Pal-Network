@@ -1,0 +1,51 @@
+CO-OWNERSHIP — show pending outgoing invites on the pet profile
+
+CONTEXT: Once an owner sends a co-owner invite ("+ add owner" → 
+username → send), there's currently no lasting visibility into it — 
+just a brief "invite sent ✓" that replaces the link momentarily. If you 
+navigate away and come back, there's no way to see that an invite is 
+still pending, who it's pending for, or to cancel it. The 
+co_ownership_requests table already tracks pending/accepted/declined 
+status — this just needs to be surfaced in the UI.
+
+FIX: On the pet profile's Owners section, show any PENDING outgoing 
+invites (sent by the viewer, for this pet) as a visible sub-list — 
+something like a "pending" row per invited username, sitting alongside 
+or just below the confirmed owners list. Same typographic register as 
+the rest of the Owners section (not a whisper, but doesn't need to be 
+as prominent as "+ add owner" either — informational status, not a 
+primary action).
+
+Each pending invite should have a way to CANCEL it — a quiet "cancel" 
+action next to the pending username. Add a DELETE/cancel endpoint for 
+this if one doesn't already exist (check co-owners.ts first — the 
+accept/decline logic may already have something close to reuse; a 
+cancel is functionally the same as the pet owner declining their own 
+sent invite, so consider whether the existing decline logic can be 
+reused with an ownership check instead of building a new endpoint from 
+scratch).
+
+Also add basic duplicate-prevention feedback: if you try to invite a 
+username that already has a pending invite for this pet, the server 
+should already reject this per the earlier dedup logic — confirm the 
+client shows a clear message ("already invited") rather than a generic 
+error in that case.
+
+DO NOT MODIFY: the accept/decline flow on the INVITEE's side (their 
+"Co-ownership requests" list stays as-is), the add-owner send flow 
+itself, self-removal, anything else in the Owners section.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Send a co-owner invite, then navigate away and back to the pet 
+   profile — confirm the pending invite is still visibly shown (not 
+   just a momentary confirmation).
+2. Confirm you can cancel a pending invite — confirm it disappears from 
+   your pending list AND from the invitee's "Co-ownership requests" 
+   list (i.e. actually cancelled, not just hidden client-side).
+3. Try inviting the same username again while their invite is still 
+   pending — confirm a clear "already invited" message, not a generic 
+   error.
+4. Confirm accepted invites correctly disappear from "pending" and the 
+   person shows up as a confirmed owner instead.
+5. Confirm this doesn't affect the invitee's own accept/decline flow.
+6. Golden path unaffected.

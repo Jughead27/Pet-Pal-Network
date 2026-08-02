@@ -290,6 +290,50 @@ router.post("/co-ownership-requests/:id/decline", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ─── DELETE /pets/:id/co-ownership-requests/:requestId ───────────────────────
+// Any owner of the pet can cancel (withdraw) a pending outgoing invite.
+router.delete("/pets/:id/co-ownership-requests/:requestId", async (req, res) => {
+  const { id: petId, requestId } = req.params;
+  const userId = (req as any).auth.userId as string;
+
+  // Caller must be an owner of this pet
+  if (!(await isPetOwner(userId, petId))) {
+    res.status(403).json({ error: "Only owners can cancel co-owner invites" });
+    return;
+  }
+
+  const [request] = await db
+    .select()
+    .from(coOwnershipRequestsTable)
+    .where(
+      and(
+        eq(coOwnershipRequestsTable.id, requestId),
+        eq(coOwnershipRequestsTable.petId, petId),
+      ),
+    )
+    .limit(1);
+
+  if (!request) { res.status(404).json({ error: "Request not found" }); return; }
+  if (request.status !== "pending") {
+    res.status(409).json({ error: "Request already resolved" });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(coOwnershipRequestsTable)
+      .set({ status: "declined", resolvedAt: new Date() })
+      .where(eq(coOwnershipRequestsTable.id, requestId));
+
+    await writeAudit(tx, userId, "co_owner.invite_cancelled", "pet", petId, {
+      requestId,
+      cancelledByOwnerId: userId,
+    });
+  });
+
+  res.json({ ok: true });
+});
+
 // ─── DELETE /pets/:id/co-owners/me ───────────────────────────────────────────
 // Any owner can remove themselves.  Blocked if they are the last owner —
 // a pet must always have at least one owner.

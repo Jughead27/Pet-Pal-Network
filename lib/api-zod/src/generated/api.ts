@@ -411,6 +411,39 @@ export const GetPetPackMembersResponse = zod.object({
 
 
 /**
+ * Returns all pending co-ownership requests sent for this pet. Caller must be an owner.
+ * @summary Get pending co-owner invites for a pet
+ */
+export const GetPetCoOwnershipRequestsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetPetCoOwnershipRequestsResponse = zod.object({
+  "requests": zod.array(zod.object({
+  "id": zod.string(),
+  "inviteeId": zod.string(),
+  "inviteeUsername": zod.string(),
+  "status": zod.string(),
+  "createdAt": zod.coerce.date()
+}).describe('A single pending co-ownership invite sent for a pet'))
+}).describe('Pending co-ownership invites for a pet')
+
+
+/**
+ * Any owner of the pet can cancel a pending outgoing invite. The request is marked declined.
+ * @summary Cancel (withdraw) a pending co-owner invite
+ */
+export const CancelCoOwnershipRequestParams = zod.object({
+  "id": zod.coerce.string(),
+  "requestId": zod.coerce.string()
+})
+
+export const CancelCoOwnershipRequestResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * Inserts one boop event (unlimited, no dedupe). Returns the new boop count.
  * @summary Boop a post
  */

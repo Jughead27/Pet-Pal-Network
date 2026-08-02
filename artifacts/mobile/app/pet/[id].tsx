@@ -59,6 +59,8 @@ import {
   getGetMyPetsQueryKey,
   getGetMyFollowsQueryKey,
   customFetch,
+  useGetPetCoOwnershipRequests,
+  getGetPetCoOwnershipRequestsQueryKey,
 } from "@workspace/api-client-react";
 import type { FeedPost, PackResult } from "@workspace/api-client-react";
 import { resolveMediaKey } from "@/utils/mediaKey";
@@ -125,6 +127,7 @@ export default function PetProfileScreen() {
   const [coOwnerSending,  setCoOwnerSending]  = useState(false);
   const [coOwnerError,    setCoOwnerError]    = useState<string | null>(null);
   const [coOwnerSent,     setCoOwnerSent]     = useState(false);
+  const [cancellingId,    setCancellingId]    = useState<string | null>(null);
 
   // ── Self-removal state (co-owner leaves a shared pet) ─────────────────────
   const [leaveConfirm, setLeaveConfirm] = useState(false);
@@ -442,6 +445,16 @@ export default function PetProfileScreen() {
   // Pack members — fetched when component mounts; React Query caches the result
   const { data: membersData, isLoading: membersLoading } = useGetPetPackMembers(petId ?? "");
 
+  // ── Pending outgoing co-owner invites (owner view) ────────────────────────
+  const { data: pendingInvitesData } = useGetPetCoOwnershipRequests(
+    petId ?? "",
+    { query: {
+      enabled: !!(petId && pet?.viewerOwnsPet),
+      queryKey: getGetPetCoOwnershipRequestsQueryKey(petId ?? ""),
+    } },
+  );
+  const pendingInvites = pendingInvitesData?.requests ?? [];
+
   // ── Co-ownership request check (invitee view) ─────────────────────────────
   // Check whether the viewer has a pending co-ownership request for this pet.
   useEffect(() => {
@@ -489,20 +502,38 @@ export default function PetProfileScreen() {
       setCoOwnerOpen(false);
       setCoOwnerUsername('');
       queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
+      queryClient.invalidateQueries({ queryKey: getGetPetCoOwnershipRequestsQueryKey(petId ?? "") });
     } catch (e: any) {
-      const msg = typeof e?.message === 'string' ? e.message : 'Something went wrong.';
-      if (msg === 'User not found') {
+      if (e?.status === 404 && e?.data?.error === 'User not found') {
         setCoOwnerError(
           `No pshpsh account found for @${uname}. ` +
           `They'll need to join pshpsh first — share your invite link from your profile.`
         );
+      } else if (e?.status === 409 && e?.data?.error === 'A pending request for this user already exists') {
+        setCoOwnerError(`@${uname} already has a pending invite for this pet.`);
       } else {
-        setCoOwnerError(msg);
+        setCoOwnerError(typeof e?.message === 'string' ? e.message : 'Something went wrong.');
       }
     } finally {
       setCoOwnerSending(false);
     }
   }, [coOwnerUsername, petId, queryClient]);
+
+  // ── Cancel a pending outgoing co-owner invite ─────────────────────────────
+  const handleCancelInvite = useCallback(async (requestId: string) => {
+    if (cancellingId) return;
+    setCancellingId(requestId);
+    try {
+      await customFetch(`/api/pets/${petId}/co-ownership-requests/${requestId}`, {
+        method: 'DELETE',
+      });
+      queryClient.invalidateQueries({ queryKey: getGetPetCoOwnershipRequestsQueryKey(petId ?? "") });
+    } catch {
+      // silently ignore — the list will stay as-is and the user can retry
+    } finally {
+      setCancellingId(null);
+    }
+  }, [cancellingId, petId, queryClient]);
 
   const topInset = Platform.OS === "web" ? 67 : insets.top;
 
@@ -901,6 +932,37 @@ export default function PetProfileScreen() {
                   @{o.username}
                 </Text>
               ))}
+
+              {/* Pending outgoing invites — shown to owners */}
+              {pet.viewerOwnsPet && pendingInvites.length > 0 && (
+                <View style={styles.ownerPendingSection}>
+                  {pendingInvites.map((inv) => (
+                    <View key={inv.id} style={styles.ownerPendingRow}>
+                      <Text style={[styles.ownerPendingUsername, { color: colors.foreground }]}>
+                        @{inv.inviteeUsername}
+                      </Text>
+                      <Text style={[styles.ownerPendingBadge, { color: colors.mutedForeground }]}>
+                        pending
+                      </Text>
+                      {cancellingId === inv.id ? (
+                        <ActivityIndicator size="small" color={colors.mutedForeground} />
+                      ) : (
+                        <TouchableOpacity
+                          onPress={() => handleCancelInvite(inv.id)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Cancel invite for @${inv.inviteeUsername}`}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={[styles.ownerPendingCancel, { color: colors.mutedForeground }]}>
+                            cancel
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
 
               {/* Leave as owner — shown to owners when the invite form is closed */}
               {pet.viewerOwnsPet && !coOwnerOpen && (
@@ -2300,6 +2362,32 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_500Medium",
     fontSize: 15,
   },
+  ownerPendingSection: {
+    gap: 4,
+    marginTop: 2,
+  },
+  ownerPendingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 2,
+  },
+  ownerPendingUsername: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 14,
+    flex: 1,
+  },
+  ownerPendingBadge: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    opacity: 0.7,
+  },
+  ownerPendingCancel: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    opacity: 0.8,
+  },
+
   ownerInviteForm: {
     marginTop: 8,
     gap: 8,

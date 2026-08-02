@@ -358,8 +358,8 @@ async function main() {
   if (petOwnersCheck.rows[0]?.exists) {
     console.log("Backfilling pet_owners primary rows from existing pets…");
     const coOwnerResult = await db.execute(sql`
-      INSERT INTO pet_owners (pet_id, user_id, role)
-      SELECT id, owner_id, 'primary'
+      INSERT INTO pet_owners (pet_id, user_id)
+      SELECT id, owner_id
       FROM   pets
       ON CONFLICT DO NOTHING
     `);

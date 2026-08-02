@@ -26,6 +26,8 @@ import type {
   AvatarPatchResponse,
   BoopResult,
   BreedListResponse,
+  CancelCoOwnershipRequest200,
+  CoOwnershipRequestsResponse,
   CommentBody,
   CreatePetBody,
   CreatePostBody,
@@ -1287,6 +1289,158 @@ export function useGetPetPackMembers<TData = Awaited<ReturnType<typeof getPetPac
 
 
 
+
+export const getGetPetCoOwnershipRequestsUrl = (id: string,) => {
+
+
+
+
+  return `/api/pets/${id}/co-ownership-requests`
+}
+
+/**
+ * Returns all pending co-ownership requests sent for this pet. Caller must be an owner.
+ * @summary Get pending co-owner invites for a pet
+ */
+export const getPetCoOwnershipRequests = async (id: string, options?: RequestInit): Promise<CoOwnershipRequestsResponse> => {
+
+  return customFetch<CoOwnershipRequestsResponse>(getGetPetCoOwnershipRequestsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPetCoOwnershipRequestsQueryKey = (id: string,) => {
+    return [
+    `/api/pets/${id}/co-ownership-requests`
+    ] as const;
+    }
+
+
+export const getGetPetCoOwnershipRequestsQueryOptions = <TData = Awaited<ReturnType<typeof getPetCoOwnershipRequests>>, TError = ErrorType<ErrorResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPetCoOwnershipRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPetCoOwnershipRequestsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPetCoOwnershipRequests>>> = ({ signal }) => getPetCoOwnershipRequests(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPetCoOwnershipRequests>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPetCoOwnershipRequestsQueryResult = NonNullable<Awaited<ReturnType<typeof getPetCoOwnershipRequests>>>
+export type GetPetCoOwnershipRequestsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get pending co-owner invites for a pet
+ */
+
+export function useGetPetCoOwnershipRequests<TData = Awaited<ReturnType<typeof getPetCoOwnershipRequests>>, TError = ErrorType<ErrorResponse>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPetCoOwnershipRequests>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPetCoOwnershipRequestsQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCancelCoOwnershipRequestUrl = (id: string,
+    requestId: string,) => {
+
+
+
+
+  return `/api/pets/${id}/co-ownership-requests/${requestId}`
+}
+
+/**
+ * Any owner of the pet can cancel a pending outgoing invite. The request is marked declined.
+ * @summary Cancel (withdraw) a pending co-owner invite
+ */
+export const cancelCoOwnershipRequest = async (id: string,
+    requestId: string, options?: RequestInit): Promise<CancelCoOwnershipRequest200> => {
+
+  return customFetch<CancelCoOwnershipRequest200>(getCancelCoOwnershipRequestUrl(id,requestId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getCancelCoOwnershipRequestMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelCoOwnershipRequest>>, TError,{id: string;requestId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelCoOwnershipRequest>>, TError,{id: string;requestId: string}, TContext> => {
+
+const mutationKey = ['cancelCoOwnershipRequest'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelCoOwnershipRequest>>, {id: string;requestId: string}> = (props) => {
+          const {id,requestId} = props ?? {};
+
+          return  cancelCoOwnershipRequest(id,requestId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelCoOwnershipRequestMutationResult = NonNullable<Awaited<ReturnType<typeof cancelCoOwnershipRequest>>>
+
+    export type CancelCoOwnershipRequestMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Cancel (withdraw) a pending co-owner invite
+ */
+export const useCancelCoOwnershipRequest = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelCoOwnershipRequest>>, TError,{id: string;requestId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelCoOwnershipRequest>>,
+        TError,
+        {id: string;requestId: string},
+        TContext
+      > => {
+      return useMutation(getCancelCoOwnershipRequestMutationOptions(options));
+    }
 
 export const getBoopPostUrl = (id: string,) => {
 

@@ -546,6 +546,24 @@ export interface PackMembersResponse {
 }
 
 /**
+ * A single pending co-ownership invite sent for a pet
+ */
+export interface CoOwnershipRequestItem {
+  id: string;
+  inviteeId: string;
+  inviteeUsername: string;
+  status: string;
+  createdAt: string;
+}
+
+/**
+ * Pending co-ownership invites for a pet
+ */
+export interface CoOwnershipRequestsResponse {
+  requests: CoOwnershipRequestItem[];
+}
+
+/**
  * The signed-in owner's profile fields
  */
 export interface MeProfile {
@@ -617,6 +635,10 @@ export const GetFeedSort = {
   fresh: 'fresh',
   popular: 'popular',
 } as const;
+
+export type CancelCoOwnershipRequest200 = {
+  ok: boolean;
+};
 
 export type VerifyUpload200 = {
   ok: boolean;
