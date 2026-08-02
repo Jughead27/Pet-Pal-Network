@@ -1,0 +1,58 @@
+SHARE CARD — fix two-bubble share + personalize caption + flip footer hierarchy (slogan-led, brand as signature)
+
+PROBLEM 1: The share currently passes the pshpsh.net link as a separate 
+`url` item to the share call. On iOS this makes Messages render it as its 
+own rich-link bubble, sent as a second, separate message — with no room 
+to add a caption.
+
+FIX 1: Remove the separate `url` field from the share payload entirely. 
+Instead, build a single `text` string that includes the link as plain 
+text, using the tagged pet's name(s):
+  - 1 pet:   `Check out my ${petName} on pshpsh 🐾 pshpsh.net`
+  - 2 pets:  `Check out my ${petName1} and ${petName2} on pshpsh 🐾 pshpsh.net`
+  - 3+ pets: `Check out my pets on pshpsh 🐾 pshpsh.net`
+  Today every post has exactly one tagged pet, so only the 1-pet branch 
+  will actually run — write it as a small name-list formatter so no 
+  further change is needed once multi-pet posts ship.
+Pass only `files` (the composed image) + this `text` to the share call — 
+no `url` key. This should produce ONE message: image attached, caption 
+pre-filled and editable before send. Apply on both the web share path 
+and the native path (whichever API each uses for message text — 
+navigator.share `text` on web; the equivalent message param on native).
+
+PROBLEM 2: The share card's footer band (#060B10, below the untouched 
+photo) currently gets the hierarchy backwards — "pshpsh" is set large/bold 
+as the dominant line, with "follow pets, not people." small and quiet 
+underneath it as a subtitle. The slogan should be the hook that earns 
+attention; the brand mark should read as a quiet signature, not a headline.
+
+FIX 2: Flip the hierarchy and add the logo glyph, stacked layout:
+  - TOP (dominant): "follow pets, not people." — large/bold, centered, 
+    takes over the visual weight "pshpsh" currently has.
+  - BELOW (small, centered, directly beneath): a compact inline lockup — 
+    the pshpsh icon glyph immediately to the left of the "pshpsh" 
+    wordmark, both set noticeably smaller and lighter-weight than the 
+    slogan above, reading like a signature/credit line rather than a 
+    second headline.
+  Reuse the existing shared LOGO constant (assets/icon.png) for the icon 
+  — do not introduce a new image asset. Keep the lockup sized so it stays 
+  legible at iMessage-preview scale without competing with the slogan.
+
+DO NOT MODIFY: ShareCard photo-fit behavior, the ?inline=1 media 
+passthrough route, the existing normal-image-load 302-redirect path, 
+error/toast handling, or anything outside ShareCard.tsx / 
+shareCardAction.ts.
+
+ACCEPTANCE TEST (live on pshpsh.net only — Replit Simulate on Web won't 
+render this app):
+1. Share a post from web — confirm ONE Messages compose opens with the 
+   image attached and the caption text pre-filled/editable (no separate 
+   link bubble).
+2. Confirm the caption correctly uses the tagged pet's name.
+3. Confirm the footer band on the generated image now leads with "follow 
+   pets, not people." large/bold, with a small icon+"pshpsh" lockup 
+   centered beneath it — screenshot at both a portrait and a landscape 
+   source photo to confirm it holds up across aspect ratios.
+4. Confirm native share path (iOS app, if testable) still works and 
+   golden path (sign in → Home → boop persists → Nursery pager → post 
+   flow → sign out) is unaffected.

@@ -376,7 +376,7 @@ export default function FeedPage({
           new Promise<void>(resolve => setTimeout(resolve, 2000)),
         ]);
       }
-      await executeShareCard({ mediaUri, cardRef, showToast });
+      await executeShareCard({ mediaUri, cardRef, showToast, petNames: [post.pet.name] });
     } catch (err) {
       // User dismissed the share sheet — not an error worth surfacing.
       // Any other failure (fetch, canvas, sharing API) gets a toast so the

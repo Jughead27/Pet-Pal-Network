@@ -9,15 +9,16 @@
  * invisible to the user.  It must be given explicit pixel dimensions so that
  * the viewshot capture has a real size to work with.
  *
- * Layout:
- *   ┌──────────────────────────┐
- *   │                          │
- *   │    full-bleed photo      │ PHOTO_H
- *   │   (cover / centered)     │
- *   │                          │
- *   ├──────────────────────────┤
- *   │   pshpsh    slogan       │ FOOTER_H  (#060B10)
- *   └──────────────────────────┘
+ * Footer hierarchy (slogan-led, brand as signature):
+ *   ┌──────────────────────────────┐
+ *   │                              │
+ *   │    full-bleed photo          │ PHOTO_H
+ *   │   (cover / centered)         │
+ *   │                              │
+ *   ├──────────────────────────────┤
+ *   │  follow pets, not people.    │ ← dominant hook (large, white, bold)
+ *   │   [icon]  pshpsh             │ ← signature lockup (small, muted)
+ *   └──────────────────────────────┘ FOOTER_H  (#060B10)
  */
 
 import React, { forwardRef } from 'react';
@@ -29,6 +30,11 @@ export const CARD_W       = 390;
 export const PHOTO_H      = 693;   // ≈ 390 × 16/9
 export const FOOTER_H     = 75;
 export const CARD_H       = PHOTO_H + FOOTER_H;
+
+// App icon — used as the brand glyph in the signature lockup.
+// Loaded via require() so Metro bundles it correctly on native.
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const LOGO = require('../assets/icon.png') as ImageSourcePropType;
 
 interface Props {
   /** Resolved image source (from resolveMediaKey — already absolute on native). */
@@ -46,8 +52,13 @@ const ShareCard = forwardRef<View, Props>(({ source, onImageLoaded }, ref) => (
       onLoad={onImageLoaded}
     />
     <View style={styles.footer}>
-      <Text style={styles.wordmark}>pshpsh</Text>
+      {/* Dominant hook — earns attention */}
       <Text style={styles.slogan}>follow pets, not people.</Text>
+      {/* Signature lockup — icon glyph + wordmark, reads as a credit line */}
+      <View style={styles.lockup}>
+        <Image source={LOGO} style={styles.icon} />
+        <Text style={styles.wordmark}>pshpsh</Text>
+      </View>
     </View>
   </View>
 ));
@@ -79,16 +90,30 @@ const styles = StyleSheet.create({
     justifyContent:  'center',
     gap:             5,
   },
-  wordmark: {
-    color:       '#FFFFFF',
-    fontSize:    15,
-    fontFamily:  'Inter_600SemiBold',
-    letterSpacing: 1.5,
-  },
+  // Dominant hook — large, white, full weight
   slogan: {
-    color:      'rgba(255,255,255,0.50)',
-    fontSize:   11,
-    fontFamily: 'Inter_400Regular',
-    letterSpacing: 0.2,
+    color:         '#FFFFFF',
+    fontSize:      14,
+    fontFamily:    'Inter_600SemiBold',
+    letterSpacing: 0.1,
+  },
+  // Signature lockup — icon + wordmark side by side, muted
+  lockup: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           5,
+    opacity:       0.55,
+  },
+  // Icon sized to match the wordmark cap-height
+  icon: {
+    width:        10,
+    height:       10,
+    borderRadius: 2,
+  },
+  wordmark: {
+    color:         '#FFFFFF',
+    fontSize:      10,
+    fontFamily:    'Inter_500Medium',
+    letterSpacing: 1.2,
   },
 });

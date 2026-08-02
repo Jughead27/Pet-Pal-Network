@@ -1,0 +1,42 @@
+SHARE CARD — restore the real logo mark in the footer (replace 🐾 emoji stand-in)
+
+CONTEXT: The previous delivery swapped the logo image for a 🐾 emoji in 
+the footer signature line ("🐾 pshpsh") on both the web canvas 
+(shareCardAction.ts) and the native offscreen view (ShareCard.tsx), citing 
+bundled-asset path/hash issues when loading the image into the web canvas.
+
+FIX — WEB (shareCardAction.ts): Load the pshpsh icon as a base64 data URI 
+instead of a file path. Generate/inline the data URI for the existing 
+icon asset (assets/icon.png) as a constant, and use that directly as the 
+canvas Image source — this loads synchronously with no network fetch, 
+sidestepping the path/hash resolution problem entirely. Replace the 🐾 
+emoji in the footer signature line with this icon, positioned immediately 
+to the left of the "pshpsh" wordmark, sized to match the small/55%-opacity 
+signature treatment already shipped (icon should visually match that 
+subdued weight — dim it or reduce its opacity to match the wordmark 
+rather than rendering full-strength).
+
+FIX — NATIVE (ShareCard.tsx): This path renders through a real React 
+Native `<Image>` component in an offscreen view, not a canvas — it should 
+not have the same asset-loading problem the web path had. Replace the 🐾 
+emoji here with the actual shared LOGO constant (assets/icon.png) via a 
+normal `<Image source={LOGO} />`, sized/positioned to match the web 
+version, at the same reduced-opacity signature weight.
+
+DO NOT MODIFY: the "follow pets, not people." dominant slogan line, its 
+size/weight/position, the two-line footer hierarchy, the buildShareText 
+caption logic, the single-message share fix, or anything outside the 
+footer's icon/wordmark rendering in ShareCard.tsx / shareCardAction.ts.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Share a post from web — confirm the footer now shows the actual pshpsh 
+   icon glyph (not an emoji) immediately left of "pshpsh", both dimmed to 
+   match the signature-line treatment, beneath the bold slogan line.
+2. Confirm across a couple of posts/aspect ratios that the icon renders 
+   correctly every time (no flash of missing image, no broken image icon, 
+   no layout shift).
+3. If testable, confirm the native iOS app share path also now shows the 
+   real icon instead of the emoji.
+4. Confirm the single-message share fix (image + editable caption, no 
+   separate link bubble) is unaffected.
+5. Quick golden-path sanity check.
