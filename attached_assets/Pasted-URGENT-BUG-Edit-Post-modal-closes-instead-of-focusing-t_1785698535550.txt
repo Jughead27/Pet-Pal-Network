@@ -1,0 +1,45 @@
+URGENT BUG — Edit Post modal closes instead of focusing text input
+
+REPRO: From a pet's profile page, tap "edit post" on an existing post → 
+edit modal opens showing caption text and Nursery toggle → tapping into 
+the caption text box immediately exits the edit screen and returns to 
+the pet profile page, instead of focusing the input for editing. Post 
+editing is completely broken as a result — no field can be edited.
+
+LIKELY CAUSE TO INVESTIGATE FIRST: the app has a documented pattern of 
+tap-to-toggle-chrome with "exclusion zones" for interactive elements 
+elsewhere in the app (immersive feed screens use this to distinguish 
+taps meant to reveal/hide UI from taps meant to hit a button). Check 
+whether the Edit Post modal has a backdrop/overlay dismiss handler (tap 
+outside modal = close) that is incorrectly capturing taps on the caption 
+TextInput itself — e.g. missing stopPropagation/onStartShouldSetResponder 
+handling, or the TextInput not being properly registered as "inside" the 
+modal's hit-testing boundary — causing a tap into the input to be 
+misread as a tap-outside-to-dismiss.
+
+ALSO CHECK: whether this is specific to the EDIT flow (as opposed to the 
+NEW POST flow, which reportedly works correctly with its caption input) 
+— if New Post's caption input works fine and Edit Post's doesn't, compare 
+the two implementations directly for what's different in how the modal/
+backdrop/input are structured.
+
+FIX: whatever the root cause, the caption text input (and Nursery toggle, 
+and any other interactive field in the Edit Post modal) must be tappable/
+focusable without dismissing the modal. Only Cancel, the backdrop OUTSIDE 
+the modal card, or an explicit close action should dismiss it.
+
+DO NOT MODIFY: the New Post creation flow, other modals unless the same 
+root cause is confirmed to affect them, anything outside Edit Post modal 
+behavior.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. From a pet's profile, edit an existing post — tap into the caption 
+   text box — confirm it focuses for editing and does NOT close the 
+   modal.
+2. Actually edit the caption text and tap Save — confirm the change 
+   persists.
+3. Confirm the Nursery toggle is tappable without closing the modal.
+4. Confirm Cancel and the backdrop still correctly close the modal when 
+   that IS the intent.
+5. Confirm New Post creation flow (if unrelated) is unaffected.
+6. Golden path unaffected.

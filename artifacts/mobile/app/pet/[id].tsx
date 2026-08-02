@@ -1151,7 +1151,8 @@ export default function PetProfileScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
         <Pressable style={styles.modalOverlay} onPress={closePostModal}>
-          <View style={[styles.modalContent, { width: columnWidth - 32 }]}>
+          {/* Inner Pressable stops taps on the card from bubbling to the backdrop dismiss handler. */}
+          <Pressable style={[styles.modalContent, { width: columnWidth - 32 }]} onPress={() => {}}>
             {selectedPost && (
               <>
                 <MediaImage
@@ -1439,7 +1440,7 @@ export default function PetProfileScreen() {
                 </TouchableOpacity>
               </>
             )}
-          </View>
+          </Pressable>
         </Pressable>
         </KeyboardAvoidingView>
       </Modal>
