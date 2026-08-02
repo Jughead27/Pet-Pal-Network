@@ -6,11 +6,8 @@
  *   Drift   — up 70px over 650ms (Easing.out quad)
  *   Opacity — appear 80ms, hold 170ms, fade 400ms → ~650ms total
  *
- * Each pop carries its own stable sizeFactor (±15%) generated on mount,
- * so rapid-fire boops produce varied sizes rather than identical stamps.
- * The caller may supply sizeMult (>1) for rapid-fire escalation — each
- * successive boop within a window gets slightly bigger, compounding the
- * applause feel on a physical phone.
+ * Each pop carries its own stable sizeFactor (0.8–1.4×) generated on mount,
+ * producing varied sizes across a rapid-fire burst without any external input.
  *
  * Base font size is 44px on native (clearly legible at arm's length) and
  * 32px on web (web viewports are typically further from the user's eyes).
@@ -26,12 +23,13 @@ import { Animated, Easing, Platform, StyleSheet, Text } from 'react-native';
 
 // Base font size — larger on native where the phone is held close and the
 // pop needs to read at arm's length; slightly smaller on web.
-// Effective native range with ±15% sizeFactor: 44 × [0.85, 1.15] ≈ 37–51px.
 const BASE_FONT_SIZE = Platform.OS === 'web' ? 32 : 44;
 
 interface PopTextProps {
   word: string;
-  /** Degrees of random tilt, -8 to +8 */
+  /** Accent color for the pop text — coral for boop, gold for treat. */
+  color: string;
+  /** Degrees of random tilt, ±15 */
   rotation: number;
   onDone: () => void;
   reducedMotion: boolean;
@@ -39,30 +37,24 @@ interface PopTextProps {
   right: number;
   /** Absolute position from bottom edge of the page (px) */
   bottom: number;
-  /**
-   * Rapid-fire escalation multiplier (default 1.0).
-   * Each successive boop within the combo window passes a larger value
-   * (e.g. 1.07, 1.14, 1.20) so enthusiasm visibly compounds.
-   */
-  sizeMult?: number;
 }
 
 export default function PopText({
   word,
+  color,
   rotation,
   onDone,
   reducedMotion,
   right,
   bottom,
-  sizeMult = 1,
 }: PopTextProps) {
   const opacity    = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(0)).current;
   const scale      = useRef(new Animated.Value(reducedMotion ? 1 : 0)).current;
 
-  // Stable random size multiplier: 0.85–1.15.
-  // Generated once on mount via useRef — never causes re-renders.
-  const sizeFactor = useRef(0.85 + Math.random() * 0.30).current;
+  // Stable random size factor in 0.8–1.4× — wider range than before for
+  // more visual variety across a burst. Generated once on mount via useRef.
+  const sizeFactor = useRef(0.8 + Math.random() * 0.60).current;
 
   useEffect(() => {
     if (reducedMotion) {
@@ -120,8 +112,7 @@ export default function PopText({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Final font size = base × per-instance size variance × rapid-fire multiplier
-  const fontSize = BASE_FONT_SIZE * sizeFactor * sizeMult;
+  const fontSize = BASE_FONT_SIZE * sizeFactor;
 
   return (
     <Animated.View
@@ -138,7 +129,7 @@ export default function PopText({
         },
       ]}
     >
-      <Text style={[styles.text, { fontSize }]}>{word}</Text>
+      <Text style={[styles.text, { fontSize, color }]}>{word}</Text>
     </Animated.View>
   );
 }
@@ -153,18 +144,17 @@ const styles = StyleSheet.create({
     // Inter Bold loaded via expo-google-fonts in the root layout
     fontFamily: 'Inter_700Bold',
     fontWeight: '700',
-    color: '#FFFFFF',
     // Strong shadow so chunky text holds against bright media.
     //
     // Platform split is required: React Native Web understands the CSS
     // shorthand string, but the iOS/Android native bridge silently drops any
-    // style key it doesn't recognise — so white text on a bright photo becomes
-    // invisible without the three-prop form on native.
+    // style key it doesn't recognise — so colored text on a bright photo
+    // becomes invisible without the three-prop form on native.
     ...(Platform.OS === 'web'
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? ({ textShadow: '0px 2px 12px rgba(0,0,0,0.95)' } as any)
+      ? ({ textShadow: '0px 2px 12px rgba(0,0,0,0.90)' } as any)
       : ({
-          textShadowColor: 'rgba(0,0,0,0.95)',
+          textShadowColor: 'rgba(0,0,0,0.90)',
           textShadowOffset: { width: 0, height: 2 },
           textShadowRadius: 12,
         } as any)),

@@ -1,0 +1,36 @@
+PROMPT — Boop!/Yum! reaction system: controlled-mayhem scatter + word variety. ONE shared component (boop=coral, treat=gold). Feed overlay / rail. NO schema change.
+
+CONTEXT: Make the boop AND treat reactions genuinely fun via playful randomness — replace the static single label with a scattered, varied "controlled mayhem." Web-only, species-agnostic (no sound/haptics/snout). Build ONE shared reaction-pop system used by both, parameterized by word-set + accent color. Preserve the just-shipped treat-feedback fixes (the Yum reaction clears the button; the out-of-treats toast).
+
+SCOPE:
+1) SHARED REACTION-POP SYSTEM:
+   - One component/hook renders a "reaction pop" (a short word label) that spawns → springs IN (overshoot scale, then settle) → floats up + fades out. Built-in Animated ONLY (NO Reanimated). Handle overflow so pops don't clip awkwardly.
+   - Parameterized by word-set + accent color: boop → coral, treat → gold (locked accent semantics — do not change).
+
+2) CONTROLLED-MAYHEM RANDOMNESS — on EACH press, randomize within CURATED bounds (tasteful, not buggy):
+   - POSITION: scatter across the IMAGE region (biased toward center/upper), CLEAR of the bottom caption zone, the rail buttons, and the nav (a defined safe area). Not always dead center.
+   - SIZE: random scale within a pleasing range (~0.8×–1.4× base — never dominating or lost).
+   - ROTATION: slight random tilt (~±15°).
+   - Each pop still springs in and floats/fades individually.
+
+3) RAPID-FIRE SCATTER:
+   - Mashing spawns multiple pops that coexist briefly and scatter — a little burst. CAP the count on screen (recycle a pool, ≤ ~8) so it stays snappy and uncluttered.
+
+4) WORD VARIETY — pick a word per pop from a small curated set, WEIGHTED toward the primary (mostly primary, occasional variant = surprise, not noise):
+   - BOOP set: "Boop!" (primary), "Boop boop!", "Booped!".
+   - TREAT set: "Yum!" (primary), "Yummy!", "Tasty!", "Nom nom!".
+   - Keep both sets in a small config array so they're easy to tune.
+
+DO NOT MODIFY:
+- The icon GLYPHS themselves (icon-family redesign is separate) — this is the reaction POP only.
+- The boop/treat BACKEND (counts, daily-treat limit, the coral ring around the boop button, count colors) — visual pop only.
+- The treat-feedback fixes just shipped (Yum clears the button; out-of-treats toast) — preserve them; the new scatter must still keep pops clear of the button, caption, and nav.
+- Compose, feed rendering, the follow-label, other rail icons.
+- Schema, R2, auth, other screens.
+
+ACCEPTANCE TEST (live on pshpsh.net, mobile Safari):
+1. Boop a post rapidly → multiple "Boop!" pops scatter across the image at varied sizes/positions/tilts, each springing in and floating away; capped so it stays snappy; mostly "Boop!" with an occasional "Boop boop!"/"Booped!". Coral.
+2. Treat a post → same behavior with the treat words ("Yum!"/"Yummy!"/"Tasty!"/"Nom nom!"), gold; the Yum still clears the button (no overlap), including the first treat of the day.
+3. Pops never cover the caption or nav and never clip off-screen awkwardly.
+4. Out-of-treats toast unchanged; boop ring + counts unchanged.
+5. Golden path.

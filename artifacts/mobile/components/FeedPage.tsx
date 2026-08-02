@@ -12,10 +12,10 @@
  *   Double tap anywhere                 → boop
  *   Vertical swipe                      → FlatList pager (FeedPage doesn't see it)
  *
- * Pop anchoring:
- *   Pops spawn at right: POP_RIGHT (175 px) which is well to the left of both
- *   the rail column (right: 14–54 px) and the treat countdown transient text
- *   (right: 50–170 px). They drift upward and never overlap either.
+ * Pop system:
+ *   Reaction pops scatter across the image area (word + accent color vary by
+ *   reaction type). They spring in, float up, and fade. Capped at POP_MAX_COUNT
+ *   simultaneous pops; oldest is recycled when the cap is hit.
  *
  * All animations use React Native's built-in Animated API — no Reanimated.
  */
@@ -54,28 +54,47 @@ const RAIL_TOUCH_WIDTH   = 40;
 const RAIL_RIGHT_INSET   = 14;
 const RAIL_MARGIN        = 24;
 
-// Pop anchor constants — proportional to the measured page width.
-//
-// Reference geometry (402 px wide, rail at right:14):
-//   Rail column right edge          →  right: 54   from right
-//   Transient label right edge      →  right: 64
-//   Transient label left  edge      →  right: 184  (width ≈ 120 px)
-//   POP_RIGHT_BASE was 200 px      →  200 / 402 ≈ 0.498 of page width
-//   POP_RIGHT_TRANSIENT_EXTRA 30   →   30 / 402 ≈ 0.075 of page width
-//
-// Using fractions instead of fixed pixels keeps pops clear of the rail on any
-// viewport width (narrow web frame, iPhone, tablet). A clamp then guarantees:
-//   • right edge stays left of the transient zone (fraction handles this)
-//   • left  edge stays ≥ POP_MIN_LEFT_MARGIN from the left edge at all widths
-//   • right edge stays ≥ POP_MIN_RAIL_CLEARANCE from the right edge at all widths
-const POP_RIGHT_FRACTION        = 200 / 402; // ≈ 0.498 — base offset from right
-const POP_TRANSIENT_FRACTION    =  30 / 402; // ≈ 0.075 — extra when transient visible
-// Max estimated pop width — recomputed for the new 44px native base size:
-//   44px base × 1.15 sizeFactor × 1.20 sizeMult cap = 60.7px font
-//   "Boop!" at 60px Inter Bold ≈ 5 chars × ~38px ≈ 190px; add margin → 220px.
-const POP_MAX_EST_WIDTH         = 220;       // generous max for any word at peak scale
-const POP_MIN_LEFT_MARGIN       =  12;       // px — minimum gap from the left screen edge
-const POP_MIN_RAIL_CLEARANCE    = RAIL_RIGHT_INSET + RAIL_TOUCH_WIDTH + 16; // px from right
+// ─── Reaction pop — scatter geometry ─────────────────────────────────────────
+// Right clearance: rail at right:14, touch width 40px, 12px margin.
+const POP_RAIL_CLEARANCE     = RAIL_RIGHT_INSET + RAIL_TOUCH_WIDTH + 12; // ~66px from right
+// Max pop text width — generous for "Boop boop!" at largest size (44×1.4).
+const POP_EST_MAX_WIDTH      = 210;
+// Min gap from the left screen edge.
+const POP_LEFT_MARGIN        = 12;
+// How far above `bottomOffset` the scatter floor sits (clears petInfo + caption).
+const POP_SCATTER_FLOOR      = 160;
+// How far below the top edge pops are kept (status bar / nav clearance).
+const POP_SCATTER_TOP_MARGIN = 90;
+// Max simultaneous pops; oldest is recycled when the cap is hit.
+const POP_MAX_COUNT          = 8;
+
+// Accent colors — locked semantics: boop = coral, treat = gold.
+const BOOP_COLOR  = '#FF7A5C'; // matches colors.accent
+const TREAT_COLOR = '#F4C542'; // matches ActionRail treat activeColor
+
+// Word sets — weighted toward primary word; variants add surprise, not noise.
+const BOOP_WORDS = [
+  { word: 'Boop!',      weight: 7 },
+  { word: 'Boop boop!', weight: 2 },
+  { word: 'Booped!',    weight: 1 },
+] as const;
+const TREAT_WORDS = [
+  { word: 'Yum!',      weight: 7 },
+  { word: 'Yummy!',    weight: 1 },
+  { word: 'Tasty!',    weight: 1 },
+  { word: 'Nom nom!',  weight: 1 },
+] as const;
+
+/** Weighted random pick from a word set. */
+function pickWord(words: ReadonlyArray<{ word: string; weight: number }>): string {
+  const total = words.reduce((s, w) => s + w.weight, 0);
+  let r = Math.random() * total;
+  for (const w of words) {
+    r -= w.weight;
+    if (r <= 0) return w.word;
+  }
+  return words[0].word;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const TEXT_SHADOW: any = { textShadow: '0px 1px 3px rgba(0,0,0,0.4)' };
@@ -85,15 +104,14 @@ const TEXT_SHADOW: any = { textShadow: '0px 1px 3px rgba(0,0,0,0.4)' };
 interface Pop {
   id: number;
   word: string;
+  /** Accent color — coral for boop, gold for treat. */
+  color: string;
   rotation: number;
   right: number;
   bottom: number;
-  /** Rapid-fire escalation multiplier (1.0 = no escalation). */
-  sizeMult: number;
 }
 
 let popCounter = 0;
-const randRotation = () => Math.round((Math.random() * 16 - 8) * 10) / 10;
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -157,12 +175,9 @@ export default function FeedPage({
 
   // ── Pop animations ────────────────────────────────────────────────────────
   const [pops, setPops] = useState<Pop[]>([]);
-  // Measured page width — updated on every layout change so the pop anchor
-  // is always proportional to the actual rendered width, not a stale module-
-  // level Dimensions.get() snapshot that doesn't track web resize.
-  // Initial value: COLUMN_MAX_WIDTH is a safe default (430 px) for both web
-  // (the column is ≤ 430) and native (corrected immediately by the first onLayout
-  // callback before any user interaction can spawn a pop).
+  // Measured page width — updated on every layout change so scatter positions
+  // are proportional to the actual rendered width, not a stale snapshot.
+  // Initial value: COLUMN_MAX_WIDTH is a safe default (430 px).
   const pageWidthRef = useRef(COLUMN_MAX_WIDTH);
   const bottomOffset = insets.bottom + 110;
 
@@ -174,38 +189,56 @@ export default function FeedPage({
     ? bottomOffset + FIT_RAIL_LIFT
     : bottomOffset;
 
-  // Pops spawn to the left of the rail column and transient label.
-  // Boop icon is item 1 in the rail (higher up); treat is item 2.
-  const BOOP_BOTTOM  = railBottom + 210;
-  const TREAT_BOTTOM = railBottom + 143;
+  // Live refs for values used inside the stable spawnPop callback.
+  // Written every render so the callback always reads the current value.
+  const bottomOffsetRef = useRef(bottomOffset);
+  bottomOffsetRef.current = bottomOffset;
+  const pageHeightRef = useRef(height);
+  pageHeightRef.current = height;
 
   // Tracks whether ActionRail has a transient label visible right now.
-  // Stored in a ref (not state) so spawnPop's useCallback never needs to
-  // re-create, yet always reads the current value at call time.
+  // Kept for ActionRail wiring — no longer affects pop scatter position.
   const isTransientVisibleRef = useRef(false);
   const handleTransientChange = useCallback((visible: boolean) => {
     isTransientVisibleRef.current = visible;
   }, []);
 
+  // ── Scatter pop spawner ───────────────────────────────────────────────────
+  // Each pop lands at a random position within the safe image zone:
+  //   Horizontal — between rail clearance (right side) and left-edge margin.
+  //   Vertical   — above the caption/petInfo zone, below the top edge.
+  // Word and accent color are caller-supplied (boop=coral, treat=gold).
+  // Recycles the oldest pop when the cap is hit so the screen stays snappy.
   const spawnPop = useCallback(
-    (word: string, bottom: number, sizeMult = 1) => {
-      const pw       = pageWidthRef.current;
-      // Proportional base offset + transient bias, both scaling with page width.
-      const base     = pw * POP_RIGHT_FRACTION;
-      const extra    = isTransientVisibleRef.current ? pw * POP_TRANSIENT_FRACTION : 0;
-      // Clamp: keep the pop's left edge ≥ POP_MIN_LEFT_MARGIN from the left
-      // edge (maxRight), and its right edge clear of the rail (minRight).
-      const maxRight = pw - POP_MAX_EST_WIDTH - POP_MIN_LEFT_MARGIN;
-      const right    = Math.max(POP_MIN_RAIL_CLEARANCE, Math.min(maxRight, base + extra));
+    (word: string, color: string) => {
+      const pw = pageWidthRef.current;
+      const ph = pageHeightRef.current;
+
+      // Horizontal: pop can land anywhere from just left of the rail to near
+      // the left edge. right = distance from the right edge of the page.
+      const minRight = POP_RAIL_CLEARANCE;
+      const maxRight = Math.max(minRight, pw - POP_EST_MAX_WIDTH - POP_LEFT_MARGIN);
+      const right = minRight + Math.random() * (maxRight - minRight);
+
+      // Vertical: safe zone between bottom exclusion and top exclusion.
+      const safeFloor = bottomOffsetRef.current + POP_SCATTER_FLOOR;
+      const safeCeil  = ph - POP_SCATTER_TOP_MARGIN;
+      const bottom    = safeFloor + Math.random() * Math.max(0, safeCeil - safeFloor);
+
       const pop: Pop = {
         id: ++popCounter,
         word,
-        rotation: randRotation(),
+        color,
+        rotation: Math.round((Math.random() * 30 - 15) * 10) / 10, // ±15°
         right,
         bottom,
-        sizeMult,
       };
-      setPops((prev) => [...prev, pop]);
+
+      // Cap: drop oldest when at limit so the screen never looks cluttered.
+      setPops((prev) => {
+        const trimmed = prev.length >= POP_MAX_COUNT ? prev.slice(1) : prev;
+        return [...trimmed, pop];
+      });
     },
     [],
   );
@@ -214,33 +247,18 @@ export default function FeedPage({
     setPops((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
-  // ── Boop rapid-fire escalation tracker ───────────────────────────────────
-  // Consecutive boops within 1.5 s each add +7% pop size, capped at +20%.
-  // Resets when the gap exceeds the window. Stored in a ref so the callback
-  // stays stable and never triggers re-renders.
-  const boopComboRef = useRef({ count: 0, lastTime: 0 });
-
-  const spawnBoopPop = useCallback(() => {
-    const now     = Date.now();
-    const elapsed = now - boopComboRef.current.lastTime;
-    if (elapsed < 1500) {
-      boopComboRef.current.count += 1;
-    } else {
-      boopComboRef.current.count = 1;
-    }
-    boopComboRef.current.lastTime = now;
-    // +7% per successive rapid boop after the first, capped at +20%
-    const sizeMult = Math.min(1.2, 1.0 + (boopComboRef.current.count - 1) * 0.07);
-    spawnPop('Boop!', BOOP_BOTTOM, sizeMult);
-  }, [spawnPop, BOOP_BOTTOM]);
-
-  const spawnTreatPop = useCallback(() => spawnPop('Yum!',  TREAT_BOTTOM), [spawnPop, TREAT_BOTTOM]);
-
-  // Teaching pops — shown once per device (AsyncStorage flag in ActionRail).
-  // Use the same spawnPop so they get the transient-aware right offset, the
-  // same size variance, and the same overshoot animation as reaction pops.
-  const spawnBoopTeachingPop  = useCallback(() => spawnPop('Boop',  BOOP_BOTTOM),  [spawnPop, BOOP_BOTTOM]);
-  const spawnTreatTeachingPop = useCallback(() => spawnPop('Treat', TREAT_BOTTOM), [spawnPop, TREAT_BOTTOM]);
+  // ── Reaction spawners — word variety + accent color ───────────────────────
+  const spawnBoopPop = useCallback(
+    () => spawnPop(pickWord(BOOP_WORDS), BOOP_COLOR),
+    [spawnPop],
+  );
+  const spawnTreatPop = useCallback(
+    () => spawnPop(pickWord(TREAT_WORDS), TREAT_COLOR),
+    [spawnPop],
+  );
+  // Teaching pops — first-ever interaction per device. Same scatter; plain word.
+  const spawnBoopTeachingPop  = useCallback(() => spawnPop('Boop',  BOOP_COLOR),  [spawnPop]);
+  const spawnTreatTeachingPop = useCallback(() => spawnPop('Treat', TREAT_COLOR), [spawnPop]);
 
   // ── Reaction callbacks (passed to ActionRail) ─────────────────────────────
 
@@ -459,10 +477,10 @@ export default function FeedPage({
         <PopText
           key={pop.id}
           word={pop.word}
+          color={pop.color}
           rotation={pop.rotation}
           right={pop.right}
           bottom={pop.bottom}
-          sizeMult={pop.sizeMult}
           reducedMotion={reducedMotion}
           onDone={() => removePop(pop.id)}
         />
