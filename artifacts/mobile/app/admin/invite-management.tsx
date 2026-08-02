@@ -124,7 +124,7 @@ export default function AdminInviteManagementScreen() {
       >
         {/* Back */}
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.push('/admin')}
           style={styles.backRow}
           accessibilityRole="button"
         >

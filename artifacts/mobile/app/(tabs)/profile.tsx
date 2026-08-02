@@ -137,6 +137,7 @@ export default function ProfileScreen() {
     queryKey: ['my-invites'],
     queryFn:  () => customFetch<{
       effectiveQuota:    number;
+      isAdmin:           boolean;        // server-sourced; no /me race
       invitedByUsername: string | null;
       nonRevokedCount:   number;
       invites: {
@@ -154,9 +155,9 @@ export default function ProfileScreen() {
   const [revokeToast, setRevokeToast]       = useState(false);
   const revokeToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Quota-request status — drives the "request more" affordance at remaining=0
-  // isAdmin is derived early so it can gate the admin-badge query below.
-  const isAdmin = (meData as unknown as { role?: string } | undefined)?.role === 'admin';
+  // isAdmin comes from inviteData (same fetch as effectiveQuota) — no /me race.
+  // The server includes isAdmin: role === "admin" in every GET /api/invites/mine response.
+  const isAdmin = inviteData?.isAdmin ?? false;
 
   const { data: quotaRequestData, refetch: refetchQuotaRequest } = useQuery({
     queryKey: ['my-quota-request'],

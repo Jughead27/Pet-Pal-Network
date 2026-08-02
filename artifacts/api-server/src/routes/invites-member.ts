@@ -177,10 +177,12 @@ router.post("/invites", async (req, res) => {
 router.get("/invites/mine", async (req, res) => {
   const { userId } = (req as Express.RequestWithAuth).auth!;
 
-  // Get user info + config default in parallel
+  // Get user info + config default in parallel.
+  // `role` is fetched here so `isAdmin` can be included in the response —
+  // the client derives admin state from this same payload (no separate /me race).
   const [[meRow], [cfg]] = await Promise.all([
     db
-      .select({ inviteQuota: usersTable.inviteQuota, invitedById: usersTable.invitedBy })
+      .select({ inviteQuota: usersTable.inviteQuota, invitedById: usersTable.invitedBy, role: usersTable.role })
       .from(usersTable)
       .where(eq(usersTable.id, userId))
       .limit(1),
@@ -269,6 +271,7 @@ router.get("/invites/mine", async (req, res) => {
 
   res.json({
     effectiveQuota,
+    isAdmin:          meRow?.role === "admin",
     invitedByUsername,
     nonRevokedCount,
     invites: myInvites,

@@ -134,7 +134,7 @@ export default function AdminFeedbackScreen() {
       >
         {/* Back */}
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.push('/admin')}
           style={styles.backRow}
           accessibilityRole="button"
           accessibilityLabel="Back"

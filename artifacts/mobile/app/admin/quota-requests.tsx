@@ -103,7 +103,7 @@ export default function AdminQuotaRequestsScreen() {
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topInset + 8, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} accessibilityRole="button">
+        <TouchableOpacity onPress={() => router.canGoBack() ? router.back() : router.push('/admin')} style={styles.backBtn} accessibilityRole="button">
           <ArrowLeft size={18} color={colors.mutedForeground} weight="regular" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: colors.foreground }]}>Quota Requests</Text>

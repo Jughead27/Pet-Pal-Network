@@ -1,0 +1,25 @@
+SCOPE: Two admin-area bugs — diagnose and fix both.
+
+BUG 1 — Admin unlimited-quota display not showing:
+The server-side admin-bypass for invite quota was already shipped (invites-member.ts checks role !== 'admin' before enforcing quota) and confirmed working — admin can create unlimited invites via the API. But the profile UI's "∞ friends to call in" display is NOT rendering for the admin's own account; the numeric countdown still shows instead.
+DIAGNOSE FIRST: check whether the profile screen's `isAdmin` determination is reading role correctly (is it from a stale/cached GET /me response? a different role field than what the invites endpoint checks? a client-side check that never got wired to the actual admin condition?). Confirm what value the profile component is actually receiving before assuming the fix — this exact prompt already specified `isAdmin || remaining > 0` and `∞ friends to call in`, so the flaw is likely in HOW isAdmin gets computed/passed on this screen, not the display logic itself. Fix the root cause once found.
+
+BUG 2 — Admin section back-button broken:
+- Navigating into /admin, the back button (or back gesture/nav) does not return to the profile page.
+- Within any admin submenu (reports, invite-requests, breed-suggestions, quota-requests, etc.), the back button does not work at all.
+DIAGNOSE FIRST: check the navigation structure for the admin routes — likely a missing/misconfigured stack navigator entry, a header back-button override, or admin screens not nested properly under the existing navigation stack the rest of the app uses. Fix so admin screens participate in normal back navigation like every other screen in the app.
+
+DO NOT MODIFY: the underlying quota-request flow, grant/dismiss logic, non-admin invite behavior, any non-admin screen's navigation.
+
+PRESERVATION CLAUSE: all admin functionality (reports, invite-requests, breed-suggestions, quota-requests grant/dismiss, audit log) must continue to work exactly as before — only the back-navigation wiring and the admin quota display are in scope.
+
+ACCEPTANCE TEST (golden path):
+- Sign in as admin
+- Profile shows "∞ friends to call in" (no numeric countdown)
+- Navigate to /admin → back button returns to profile
+- Open any admin submenu (e.g. Quota Requests) → back button returns to /admin (not stuck, not broken)
+- Repeat back-navigation from 2-3 different admin submenus to confirm it's consistent, not just fixed for one screen
+- Home loads, boop persists
+- Nursery pager works
+- Post flow works
+- Sign out

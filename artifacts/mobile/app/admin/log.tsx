@@ -101,7 +101,7 @@ export default function AdminLogScreen() {
         ]}
       >
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.push('/admin')}
           style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Back"

@@ -191,7 +191,7 @@ export default function AdminReportsScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: topInset + 8, borderBottomColor: colors.border }]}>
         <TouchableOpacity
-          onPress={() => router.back()}
+          onPress={() => router.canGoBack() ? router.back() : router.push('/admin')}
           style={styles.backBtn}
           accessibilityRole="button"
           accessibilityLabel="Back"
