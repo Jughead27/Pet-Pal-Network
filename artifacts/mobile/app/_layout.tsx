@@ -133,6 +133,36 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, fontError]);
 
+  // ── Chrome autofill background override (web only) ──────────────────────────
+  // Chrome replaces the input background with its own light fill when autofilling
+  // a saved credential.  The only reliable cross-browser fix is the inset
+  // box-shadow trick: a large inset shadow paints over Chrome's fill while leaving
+  // the real background (transparent / dark ground) visible underneath.
+  // -webkit-text-fill-color overrides Chrome's tendency to force black text on the
+  // autofill background.  The long transition delays Chrome's own background-color
+  // animation so the override holds visually.
+  // Injected once as a <style> tag so it applies to every input globally without
+  // touching individual screen stylesheets.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const style = document.createElement('style');
+    style.id = 'pshpsh-autofill-override';
+    style.textContent = `
+      input:-webkit-autofill,
+      input:-webkit-autofill:hover,
+      input:-webkit-autofill:focus,
+      textarea:-webkit-autofill,
+      textarea:-webkit-autofill:hover,
+      textarea:-webkit-autofill:focus {
+        -webkit-box-shadow: 0 0 0px 1000px #060B10 inset !important;
+        -webkit-text-fill-color: #FFFFFF !important;
+        transition: background-color 5000s ease-in-out 0s !important;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => { style.remove(); };
+  }, []);
+
   if (!fontsLoaded && !fontError) return null;
 
   return (

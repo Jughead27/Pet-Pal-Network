@@ -1,0 +1,42 @@
+CHROME AUTOFILL — fix input fill color override
+
+CONTEXT: Chrome's autofill feature applies its own light background fill 
+to text inputs when it autofills a field (e.g. saved email/password), 
+overriding the app's styling. Per the design system, inputs should stay 
+transparent with a thin hairline border — no filled background. This is 
+Chrome-specific; Safari and Firefox Focus don't have this issue.
+
+FIX: Apply the standard Chrome autofill override to all app text inputs 
+site-wide (portal/auth screens, profile-edit, comment input, any other 
+form fields) using the CSS `-webkit-autofill` box-shadow trick — force 
+the autofilled background to match the app's actual input background 
+(transparent/dark ground) instead of Chrome's default light fill, and 
+force the text color to remain legible against that dark background 
+(autofill also sometimes overrides text color to black). Something like:
+
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0px 1000px <app-input-background> inset;
+    -webkit-text-fill-color: <app-text-color>;
+    transition: background-color 5000s ease-in-out 0s;
+  }
+
+Apply this globally (once, in the app's base/global stylesheet) rather 
+than per-screen, so it covers every input without needing to touch each 
+screen individually.
+
+DO NOT MODIFY: input layout, border styles, placeholder behavior, or 
+anything unrelated to the autofill fill-color override.
+
+ACCEPTANCE TEST (live on pshpsh.net only, tested in CHROME specifically 
+— Safari/Focus won't show this bug either way):
+1. On a portal/auth screen, trigger Chrome's autofill on an input (e.g. 
+   saved email) — confirm the input background stays transparent/matches 
+   the app ground instead of Chrome's default light fill.
+2. Confirm autofilled text is still legible (not black-on-dark).
+3. Spot-check one or two other text inputs elsewhere in the app (e.g. 
+   profile-edit) to confirm the fix applies globally, not just to auth 
+   screens.
+4. Confirm normal (non-autofilled) input styling is unchanged.
+5. Golden path unaffected.

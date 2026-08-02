@@ -81,7 +81,7 @@ export default function AdminIndexScreen() {
       >
         {/* Back */}
         <TouchableOpacity
-          onPress={() => router.canGoBack() ? router.back() : router.push('/(tabs)/profile')}
+          onPress={() => router.push('/(tabs)/profile')}
           style={styles.backRow}
           accessibilityRole="button"
           accessibilityLabel="Back"
