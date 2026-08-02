@@ -145,7 +145,19 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      <View style={[styles.container, { backgroundColor: colors.card }]}>
+      {/*
+       * On web (iOS Safari), the container must use 100dvh so it tracks the
+       * VISUAL viewport — which does shrink when the keyboard opens — rather
+       * than the layout viewport (100vh / flex:1), which does not shrink.
+       * flex:1 is preserved for native where the OS handles keyboard avoidance.
+       */}
+      <View
+        style={[
+          styles.container,
+          { backgroundColor: colors.card },
+          Platform.OS === 'web' && (styles.containerWeb as object),
+        ]}
+      >
 
         {/*
          * ── PINNED HEADER ──────────────────────────────────────────────────
@@ -290,6 +302,10 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  // Web-only: ties height to the dynamic viewport so the container shrinks
+  // with the visual viewport when the iOS keyboard opens.  dvh is not a valid
+  // RN type so cast through unknown — it's applied only on web at runtime.
+  containerWeb: { height: '100dvh' as unknown as number },
   fill:      { flex: 1 },
 
   // ── Pinned header ────────────────────────────────────────────────────────

@@ -1,0 +1,29 @@
+SCOPE: Fix CommentSheet so the header (Cancel/Post) never disappears off-screen when the keyboard opens on iOS Safari. This is a CRITICAL user-facing bug — the previous fix (consolidating into one header row) did not resolve it because it used position:fixed, which has a known iOS Safari issue with the on-screen keyboard.
+
+ROOT CAUSE: position:fixed is calculated against the browser's LAYOUT viewport, which does NOT shrink when the iOS keyboard opens — only the VISUAL viewport shrinks. This causes fixed-position elements to render above what's actually visible on screen (only reachable by pinch-zooming out, which is not an acceptable UX).
+
+FIX (preferred approach): restructure the comment sheet as a full-height flex COLUMN that itself resizes with the keyboard, rather than using position:fixed for the header.
+- Container: height should be tied to the dynamic viewport (100dvh, or React Native's equivalent safe/keyboard-aware sizing — NOT 100vh, which has the same stale-viewport problem as position:fixed on iOS Safari).
+- The header (Cancel left / Post right) should be the FIRST CHILD of this flex column, in normal document flow — NOT position:fixed or position:absolute. Because it's a normal-flow flex child at the top of a container that itself shrinks with the visible viewport, it will always stay at the top of what's actually visible, without needing to track keyboard state manually.
+- The comment list / empty state fills the middle (flex: 1, scrollable).
+- The text input sits at the bottom, using standard KeyboardAvoidingView behavior (or platform equivalent) so it sits directly above the keyboard.
+- If this codebase is RN-Web via Expo, confirm whatever this component renders to on web (a View/div) actually receives a height tied to the visual viewport — RN Web's default height handling may need an explicit dvh-based style override for the web target specifically, since native (iOS/Android app) keyboard-avoidance behaves differently than web Safari and may not need the same fix.
+- IF the flex-column restructure genuinely cannot be done cleanly given this component's structure, fall back to actively repositioning the header using the window.visualViewport API (listen for 'resize' and 'scroll' events on window.visualViewport, set the header's top offset to visualViewport.offsetTop) — but prefer the flex-column approach first since it's simpler and doesn't require JS viewport tracking.
+
+TEST SPECIFICALLY ON MOBILE SAFARI (iOS) since that's where this bug manifests — a desktop browser or Android test alone will NOT catch this.
+
+DO NOT MODIFY: comment list rendering, empty state, handleSend/onClose logic, data flow, Post button color/state logic, any other screen.
+
+PRESERVATION CLAUSE: only the sheet's outer layout structure and header positioning change — button behavior, submission logic, and visual styling (colors, fonts) of Post/Cancel stay as already fixed.
+
+ACCEPTANCE TEST (golden path, test on actual iOS Safari / iPhone):
+- Sign in
+- Open a post with zero comments, tap comment
+- Type a comment (enough to trigger keyboard + some scroll) — confirm "Cancel" and "Post" remain visible at the top AT ALL TIMES, at default (non-zoomed) scale — no pinching required, no disappearing
+- Submit the comment → appears in the list
+- Open comment input again, type something, tap Cancel → dismisses without posting
+- Repeat with a longer comment to stress-test
+- Home loads, boop persists
+- Nursery pager works
+- Post flow works
+- Sign out
