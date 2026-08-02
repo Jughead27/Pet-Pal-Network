@@ -1,0 +1,57 @@
+CRITICAL — pet profile navigation broken app-wide, fix immediately
+
+REPRO: Tapping into ANY pet's profile — from the Home feed, or from the 
+user's own profile pet list — results in a "Something went wrong / 
+Please reload the app to continue" error screen. This is NOT limited to 
+tagged posts or posts involving the new multi-pet feature — it affects 
+pet profile navigation entirely, for every pet. This is currently 
+blocking a core function of the app.
+
+CONTEXT: Surfaced immediately after today's multi-pet tagging + 
+retroactive-tagging delivery, which rewrote the pet-profile grid query 
+to use EXISTS(post_pets ...) instead of the prior direct pet_id 
+relationship. Given the scope (ALL pets broken, not just tagged ones), 
+this points to something more fundamental than a tagging-specific edge 
+case — likely a bug in the rewritten query itself, a bad join, a syntax 
+issue, or a schema mismatch that breaks EVERY pet-profile fetch 
+regardless of whether that pet has ever been tagged.
+
+INVESTIGATE IMMEDIATELY:
+1. Check server logs for the actual error being thrown on a pet-profile 
+   fetch request — the client's generic error screen is catching 
+   something specific; find the real stack trace/error message.
+2. Review the exact EXISTS(post_pets ...) query change made today in 
+   the pet-profile endpoint(s) — check for a malformed query, a missing 
+   join condition, a column name mismatch, or anything that would fail 
+   for ALL pets rather than just tagged ones (e.g. a query that's 
+   structurally broken regardless of whether post_pets has matching 
+   rows for that pet).
+3. Confirm whether this is a SERVER error (500, query failure) or a 
+   CLIENT-side error (e.g. the response shape changed and the client 
+   can't parse it) — check network tab / response status on a failed 
+   pet-profile request if possible.
+
+FIX: This needs to be treated as urgent — pet profiles are a core, 
+constantly-used feature. Root-cause and fix the actual query/response 
+issue rather than a workaround. If the fix isn't immediately obvious, 
+consider whether reverting today's EXISTS(post_pets ...) query change 
+back to the previous working query (while keeping the rest of the 
+tagging feature intact) is the faster safe path to restore basic pet 
+profile access, with the query improvement re-attempted separately once 
+root-caused properly.
+
+DO NOT MODIFY: anything outside pet-profile fetching/navigation — do 
+not touch the tagging feature's core add/remove logic, Edit Post modal, 
+or block guard unless directly implicated.
+
+ACCEPTANCE TEST (live on pshpsh.net only) — test broadly, not just one 
+pet:
+1. From Home feed, tap into several different pets' profiles (tagged 
+   and untagged posts) — confirm all navigate cleanly, no error screen.
+2. From the user's own profile, tap into each of their own pets — 
+   confirm all navigate cleanly.
+3. Confirm pet-profile grids (Posts, tagged posts) display correctly 
+   once profiles load again.
+4. Confirm this fix didn't break the tagging feature itself — quickly 
+   re-verify adding/removing a tag still works.
+5. Golden path unaffected.

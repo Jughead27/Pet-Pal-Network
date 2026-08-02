@@ -227,6 +227,12 @@ export default function PetProfileScreen() {
   const { mutateAsync: addTagMutation }        = useAddPostPetTag();
   const { mutateAsync: removeTagMutation }     = useRemovePostPetTag();
 
+  // selectedPost must be declared BEFORE the hooks that reference it (TDZ guard).
+  // Uses optional chaining on pet?.posts because pet may still be loading here.
+  const selectedPost: FeedPost | undefined =
+    (pet?.posts ?? []).find((p) => p.id === selectedPostId) ??
+    (pet?.archivedPosts ?? []).find((p) => p.id === selectedPostId);
+
   // Search for cross-owner pets to add (only fires when ≥1 char typed)
   const editTagExclude = (selectedPost as any)?.taggedPets?.map((tp: any) => tp.id).join(',') ?? '';
   const { data: editSearchData } = useSearchPets(
@@ -569,10 +575,6 @@ export default function PetProfileScreen() {
   const heroSeedSource = (!hasAvatar && pet.posts.length === 0)
     ? resolveMediaKey("seed:hero")
     : null;
-
-  const selectedPost: FeedPost | undefined =
-    pet.posts.find((p) => p.id === selectedPostId) ??
-    pet.archivedPosts?.find((p) => p.id === selectedPostId);
 
   // True when the open post is currently archived (drives Archive ↔ Unarchive label)
   const isSelectedPostArchived = !!selectedPost?.archivedAt;
