@@ -620,15 +620,19 @@ export default function ProfileScreen() {
         <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
         <Text style={[styles.heading, { color: colors.foreground }]}>Your Invites</Text>
 
-        {/* (a) COUNT — hero: remaining slots + hairline CTA */}
-        {effectiveQuota > 0 && (
+        {/* (a) COUNT — hero: remaining slots + hairline CTA
+              Admins bypass quota entirely: show ∞ and always-on CTA.
+              Non-admin behavior is byte-identical to before.              */}
+        {(effectiveQuota > 0 || isAdmin) && (
           <>
             <Text style={[styles.inviteHeroText, { color: colors.foreground }]}>
-              {remaining > 0
-                ? `you can call in ${remaining} ${remaining === 1 ? 'friend' : 'friends'}`
-                : 'all your friends are in'}
+              {isAdmin
+                ? '∞ friends to call in'
+                : remaining > 0
+                  ? `you can call in ${remaining} ${remaining === 1 ? 'friend' : 'friends'}`
+                  : 'all your friends are in'}
             </Text>
-            {remaining > 0 && (
+            {(isAdmin || remaining > 0) && (
               <Button
                 variant="primary"
                 label={creatingInvite ? undefined : 'call in a friend'}
@@ -639,8 +643,8 @@ export default function ProfileScreen() {
                 {creatingInvite && <ActivityIndicator size={14} color={colors.foreground} />}
               </Button>
             )}
-            {/* Request more — shown only when all quota is used up */}
-            {remaining === 0 && (
+            {/* Request more — non-admins only, when all quota is used up */}
+            {!isAdmin && remaining === 0 && (
               <View style={{ marginTop: 12 }}>
                 {(hasPendingQuotaRequest || quotaRequestConfirmed) ? (
                   <Text style={[styles.quietActionText, { color: colors.mutedForeground, opacity: 0.7 }]}>

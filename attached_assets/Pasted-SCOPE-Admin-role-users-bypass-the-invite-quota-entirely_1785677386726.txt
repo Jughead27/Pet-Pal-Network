@@ -1,0 +1,22 @@
+SCOPE: Admin-role users bypass the invite quota entirely — server-enforced, not just hidden in the UI.
+
+CONTEXT: Currently every user, including admin, is subject to the standard invite quota (default 5, adjustable via the admin quota editor). Admin accounts should never be blocked by the quota.
+
+CHANGE:
+1. Server-side: wherever invite creation checks remaining quota (active + used count against invite_quota), bypass that check entirely when the requesting user's role is 'admin'. This must be enforced in the API layer, not just hidden client-side — an admin hitting the create-invite endpoint directly should never get a quota-exceeded rejection.
+2. Client-side: on the profile "Your Invites" section, when the signed-in user is an admin, show the remaining-count hero as unlimited (e.g. an infinity glyph or "unlimited" in the same growth-positive register as existing copy — never "no limit" phrased negatively) instead of a numeric countdown. The "call in a friend" hairline CTA stays visible and always enabled for admins (never hidden at a threshold, since there is no 0 state for them).
+3. Do NOT change quota behavior for non-admin users in any way — this is admin-role-only.
+
+DO NOT MODIFY: the invite creation/redemption flow itself, the quota editor for adjusting non-admin users' quotas, the new quota-request flow (if already delivered/in-flight — this is a separate, additive change), invite states (active/used/revoked), any other profile section.
+
+PRESERVATION CLAUSE: non-admin invite behavior — quota counting, "remaining/pending/friends who joined" — stays byte-identical to current behavior. This change only removes the quota ceiling for role='admin'.
+
+ACCEPTANCE TEST (golden path):
+- Sign in as admin (James's account)
+- Profile "Your Invites" shows unlimited/no countdown, CTA always available
+- Create several invites in a row past what the old quota of 5 would have allowed — all succeed, no quota-exceeded error
+- Sign in as a non-admin test account — quota behavior unchanged (still counts down from their existing quota, still blocked at 0)
+- Home loads, boop persists
+- Nursery pager works
+- Post flow works
+- Sign out

@@ -111,10 +111,10 @@ router.post("/invites/redeem", async (req, res) => {
 router.post("/invites", async (req, res) => {
   const { userId } = (req as Express.RequestWithAuth).auth!;
 
-  // Get effective quota in parallel
+  // Get effective quota in parallel; also fetch role for admin bypass
   const [[meRow], [cfg]] = await Promise.all([
     db
-      .select({ inviteQuota: usersTable.inviteQuota })
+      .select({ inviteQuota: usersTable.inviteQuota, role: usersTable.role })
       .from(usersTable)
       .where(eq(usersTable.id, userId))
       .limit(1),
@@ -125,24 +125,27 @@ router.post("/invites", async (req, res) => {
       .limit(1),
   ]);
 
-  const effectiveQuota = meRow?.inviteQuota ?? parseInt(cfg?.value ?? "5");
+  // Admins are never subject to the invite quota — skip all quota checks.
+  if (meRow?.role !== "admin") {
+    const effectiveQuota = meRow?.inviteQuota ?? parseInt(cfg?.value ?? "5");
 
-  // Count non-revoked invites (active + used) — revoked don't count
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(invitesTable)
-    .where(
-      and(
-        eq(invitesTable.inviterId, userId),
-        ne(invitesTable.status, "revoked"),
-      ),
-    );
+    // Count non-revoked invites (active + used) — revoked don't count
+    const [countRow] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(invitesTable)
+      .where(
+        and(
+          eq(invitesTable.inviterId, userId),
+          ne(invitesTable.status, "revoked"),
+        ),
+      );
 
-  const nonRevokedCount = countRow?.count ?? 0;
+    const nonRevokedCount = countRow?.count ?? 0;
 
-  if (nonRevokedCount >= effectiveQuota) {
-    res.status(429).json({ ok: false, quota_exceeded: true });
-    return;
+    if (nonRevokedCount >= effectiveQuota) {
+      res.status(429).json({ ok: false, quota_exceeded: true });
+      return;
+    }
   }
 
   const code = generateCode();
