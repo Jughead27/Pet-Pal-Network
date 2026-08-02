@@ -1,0 +1,52 @@
+SHARE CARD — promote the logo to a standalone tile (footer redesign, keep text as-is)
+
+CONTEXT: The current footer has "follow pets, not people." large/bold on 
+top, with a small icon+"pshpsh" lockup centered beneath it at 55% opacity 
+— the icon in that lockup is too small and too dim to read as an actual 
+logo. James likes the slogan/wordmark text hierarchy exactly as it is — 
+only the icon treatment needs to change.
+
+FIX: Pull the icon OUT of the small inline lockup and give it its own 
+space as a standalone tile:
+  - Position: pinned to the FAR LEFT edge of the footer band, vertically 
+    centered.
+  - Size: large enough to take up MOST of the footer band's vertical 
+    height (e.g. ~70-80% of the band height) — should read as a clear, 
+    recognizable tile, not a small badge.
+  - Opacity: full/high opacity (not the 55% dimmed treatment) — it needs 
+    to be legible as the actual nest-cat icon, not a faint watermark. 
+    Rounded-square mask if that reads cleaner against the dark band; 
+    otherwise raw icon edges are fine — use judgment on whichever renders 
+    more cleanly at this size.
+  - The "follow pets, not people." slogan and "pshpsh" wordmark text stay 
+    exactly as currently laid out (same sizes, same stacked hierarchy, 
+    same weights) — just shift their horizontal position/centering as 
+    needed so they don't collide with the new logo tile on the left 
+    (e.g. center them in the remaining space to the right of the tile, or 
+    keep them centered in the full band if there's enough clearance — 
+    your call on whichever looks more balanced).
+
+Apply on BOTH paths:
+  - shareCardAction.ts (web canvas): the icon is already loaded as a 
+    base64 data URI (ICON_DATA_URI) — reuse it, just change the 
+    drawImage size/position/opacity, don't reload or re-encode it.
+  - ShareCard.tsx (native): reuse the existing `<Image source={LOGO}>` — 
+    change its size/position/opacity in the lockup View, remove it from 
+    the small inline lockup it currently shares with the wordmark text.
+
+DO NOT MODIFY: the slogan/wordmark copy, sizes, or weights themselves; 
+the buildShareText caption logic; the single-message share fix; photo-fit 
+behavior; anything outside the footer band layout in ShareCard.tsx / 
+shareCardAction.ts.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Share a post from web — confirm the footer now shows a clearly 
+   readable logo tile pinned to the far left, sized to most of the band's 
+   height, at full opacity — recognizable as the pshpsh icon at a glance.
+2. Confirm "follow pets, not people." and "pshpsh" text are still 
+   readable, unclipped, and well-balanced in the remaining space.
+3. Check across a couple of posts/aspect ratios (portrait + landscape) 
+   that nothing overlaps or clips.
+4. If testable, confirm native iOS app share path shows the same tile 
+   treatment.
+5. Confirm the single-message caption fix is unaffected.

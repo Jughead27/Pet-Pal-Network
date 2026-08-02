@@ -52,11 +52,11 @@ const ShareCard = forwardRef<View, Props>(({ source, onImageLoaded }, ref) => (
       onLoad={onImageLoaded}
     />
     <View style={styles.footer}>
-      {/* Dominant hook — earns attention */}
-      <Text style={styles.slogan}>follow pets, not people.</Text>
-      {/* Signature lockup — icon glyph + wordmark, reads as a credit line */}
-      <View style={styles.lockup}>
-        <Image source={LOGO} style={styles.icon} />
+      {/* Logo tile — standalone, pinned left, full opacity */}
+      <Image source={LOGO} style={styles.logoTile} />
+      {/* Text column — slogan + wordmark centered in the remaining right zone */}
+      <View style={styles.textColumn}>
+        <Text style={styles.slogan}>follow pets, not people.</Text>
         <Text style={styles.wordmark}>pshpsh</Text>
       </View>
     </View>
@@ -86,9 +86,21 @@ const styles = StyleSheet.create({
     width:           CARD_W,
     height:          FOOTER_H,
     backgroundColor: '#060B10',
+    flexDirection:   'row',
     alignItems:      'center',
-    justifyContent:  'center',
-    gap:             5,
+    paddingLeft:     8,
+  },
+  // Logo tile — standalone icon, ~75% of footer height, full opacity
+  logoTile: {
+    width:        Math.round(FOOTER_H * 0.75), // 56 px
+    height:       Math.round(FOOTER_H * 0.75),
+    borderRadius: 8,
+  },
+  // Text column — fills remaining space; slogan + wordmark stacked & centered
+  textColumn: {
+    flex:        1,
+    alignItems:  'center',
+    gap:         4,
   },
   // Dominant hook — large, white, full weight
   slogan: {
@@ -97,21 +109,9 @@ const styles = StyleSheet.create({
     fontFamily:    'Inter_600SemiBold',
     letterSpacing: 0.1,
   },
-  // Signature lockup — icon + wordmark side by side, muted
-  lockup: {
-    flexDirection: 'row',
-    alignItems:    'center',
-    gap:           5,
-    opacity:       0.55,
-  },
-  // Icon sized to match the wordmark cap-height
-  icon: {
-    width:        10,
-    height:       10,
-    borderRadius: 2,
-  },
+  // Wordmark credit line — subdued
   wordmark: {
-    color:         '#FFFFFF',
+    color:         'rgba(255,255,255,0.55)',
     fontSize:      10,
     fontFamily:    'Inter_500Medium',
     letterSpacing: 1.2,

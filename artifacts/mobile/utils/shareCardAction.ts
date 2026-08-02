@@ -128,6 +128,39 @@ async function webShareCard(
     ctx.fillStyle = '#060B10';
     ctx.fillRect(0, PHOTO_H, CARD_W, FOOTER_H);
 
+    // ── Logo tile — standalone, far left, full opacity ─────────────────────────
+    // Sized to ~75% of the footer height so it reads as a clear tile, not a badge.
+    const TILE_SZ  = Math.round(FOOTER_H * 0.75); // 120 px
+    const TILE_PAD = 20;
+    const TILE_X   = TILE_PAD;
+    const TILE_Y   = PHOTO_H + Math.round((FOOTER_H - TILE_SZ) / 2); // vertically centered
+    const TILE_R   = 16; // rounded-square corner radius
+
+    // Clip to rounded-square before drawing so the icon's black bg blends cleanly
+    ctx.save();
+    ctx.beginPath();
+    if (typeof ctx.roundRect === 'function') {
+      ctx.roundRect(TILE_X, TILE_Y, TILE_SZ, TILE_SZ, TILE_R);
+    } else {
+      // Polyfill for browsers without roundRect (Safari < 16)
+      ctx.moveTo(TILE_X + TILE_R, TILE_Y);
+      ctx.arcTo(TILE_X + TILE_SZ, TILE_Y,          TILE_X + TILE_SZ, TILE_Y + TILE_SZ, TILE_R);
+      ctx.arcTo(TILE_X + TILE_SZ, TILE_Y + TILE_SZ, TILE_X,          TILE_Y + TILE_SZ, TILE_R);
+      ctx.arcTo(TILE_X,           TILE_Y + TILE_SZ, TILE_X,          TILE_Y,           TILE_R);
+      ctx.arcTo(TILE_X,           TILE_Y,           TILE_X + TILE_SZ, TILE_Y,          TILE_R);
+      ctx.closePath();
+    }
+    ctx.clip();
+    ctx.drawImage(iconImg, TILE_X, TILE_Y, TILE_SZ, TILE_SZ); // full opacity
+    ctx.restore();
+
+    // ── Text — centered in the right zone (right of the logo tile) ────────────
+    // Right zone: from (TILE_PAD + TILE_SZ + gap) to CARD_W.
+    // Centering text within this zone keeps it balanced without colliding with
+    // the tile even at the wider slogan width.
+    const TEXT_ZONE_LEFT  = TILE_PAD + TILE_SZ + 20; // 160 px
+    const TEXT_CENTER_X   = TEXT_ZONE_LEFT + (CARD_W - TEXT_ZONE_LEFT) / 2; // 620 px
+
     ctx.textBaseline = 'alphabetic';
 
     // Slogan — dominant hook (large, white, full weight)
@@ -135,32 +168,13 @@ async function webShareCard(
     ctx.textAlign     = 'center';
     ctx.font          = '600 52px Inter, system-ui, -apple-system, sans-serif';
     ctx.letterSpacing = '0.5px';
-    ctx.fillText('follow pets, not people.', CARD_W / 2, PHOTO_H + 70);
+    ctx.fillText('follow pets, not people.', TEXT_CENTER_X, PHOTO_H + 70);
 
-    // Signature lockup — [icon] [pshpsh] centered together, subdued.
-    // Icon: 28×28 px drawn at 55% opacity to match the wordmark treatment.
-    // Text width is measured first so the composite lockup can be centered.
-    const ICON_SZ  = 28;
-    const ICON_GAP = 10;
+    // Wordmark — standalone "pshpsh" credit line, subdued
+    ctx.fillStyle     = 'rgba(255,255,255,0.55)';
     ctx.font          = '500 28px Inter, system-ui, -apple-system, sans-serif';
     ctx.letterSpacing = '2px';
-    // measureText does not include letterSpacing in all browsers;
-    // add a fixed offset (numChars × spacing) to compensate.
-    const textW   = ctx.measureText('pshpsh').width + 6 * 2;
-    const lockupW = ICON_SZ + ICON_GAP + textW;
-    const startX  = (CARD_W - lockupW) / 2;
-    const sigY    = PHOTO_H + 120; // alphabetic baseline
-
-    // Draw icon at signature opacity; icon has black bg which blends with #060B10
-    ctx.globalAlpha = 0.55;
-    const iconY = sigY - ICON_SZ * 0.88; // align to cap-height
-    ctx.drawImage(iconImg, startX, iconY, ICON_SZ, ICON_SZ);
-    ctx.globalAlpha = 1.0;
-
-    // Draw wordmark
-    ctx.fillStyle = 'rgba(255,255,255,0.55)';
-    ctx.textAlign = 'left';
-    ctx.fillText('pshpsh', startX + ICON_SZ + ICON_GAP, sigY);
+    ctx.fillText('pshpsh', TEXT_CENTER_X, PHOTO_H + 120);
 
     // ── Export PNG ─────────────────────────────────────────────────────────────
     const dataUri  = canvas.toDataURL('image/png');
