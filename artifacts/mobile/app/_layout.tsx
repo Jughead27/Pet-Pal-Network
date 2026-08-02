@@ -21,6 +21,7 @@ import {
 
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { PackProvider } from '@/context/PackContext';
@@ -125,6 +126,7 @@ export default function RootLayout() {
 
     ...MaterialCommunityIcons.font,
     ...Ionicons.font,
+    ...FontAwesome5.font,
   });
 
   useEffect(() => {

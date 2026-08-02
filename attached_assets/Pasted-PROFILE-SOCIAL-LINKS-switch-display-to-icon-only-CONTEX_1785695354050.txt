@@ -1,0 +1,42 @@
+PROFILE SOCIAL LINKS — switch display to icon-only
+
+CONTEXT: SocialLinks currently renders filled-in platforms as tappable 
+underlined text labels. Switching to icon-only — expected convention for 
+social links, and recognizable without needing the platform name spelled 
+out.
+
+FIX: Replace the text-label rendering with icon-only glyphs for each 
+filled-in platform (Instagram, Facebook, LinkedIn, X, TikTok), still 
+inside the "About the Owner" block, still filtering to only 
+platforms that actually have a value, still tappable via 
+Linking.openURL, still a wrapping row layout.
+
+ICON SOURCE: the existing Phosphor icon family (used for nav/rail) does 
+NOT include branded social logos — it's a general iconography set, not 
+brand marks. Use `@expo/vector-icons`'s bundled FontAwesome5 Brands 
+icons instead for these 5 specifically (already available in Expo by 
+default, no new dependency needed) — this gives recognizable actual 
+platform logos rather than generic shapes. Size/weight/opacity should sit 
+quietly within the existing profile aesthetic — monochrome (not the 
+platforms' brand colors), sized consistent with the app's other small UI 
+icons, not oversized or attention-grabbing.
+
+ACCESSIBILITY: since there's no visible text anymore, add an 
+accessibilityLabel to each icon (e.g. "Instagram", "TikTok") so screen 
+readers can still identify the link.
+
+DO NOT MODIFY: the underlying social-links data/schema, the edit-screen 
+"Add your socials" expand/collapse behavior or its input fields, which 
+platforms render (still only filled-in ones), anything outside the 
+display-side icon swap.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Profile with 2+ socials filled in — confirm each renders as a small 
+   monochrome brand icon (not text), tappable, opening the correct URL.
+2. Confirm platforms with no value still render nothing.
+3. Confirm icons are legibly distinct from one another at their rendered 
+   size (not muddy/indistinguishable).
+4. Spot-check with a screen reader or accessibility inspector that each 
+   icon has a meaningful label.
+5. Confirm edit-screen behavior (expand/collapse, 5 URL inputs, 
+   save/clear) is unaffected.

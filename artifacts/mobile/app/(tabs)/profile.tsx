@@ -36,6 +36,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
 import { PawPrint, Heart, Users, SignOut, CaretRight } from 'phosphor-react-native';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
@@ -1005,12 +1006,14 @@ function FriendAvatarCluster({ pets, colors }: FriendAvatarClusterProps) {
 
 // ── SocialLinks ───────────────────────────────────────────────────────────────
 
-const SOCIAL_DISPLAY = [
-  { key: 'instagram' as const, label: 'Instagram' },
-  { key: 'facebook'  as const, label: 'Facebook'  },
-  { key: 'linkedin'  as const, label: 'LinkedIn'  },
-  { key: 'xTwitter'  as const, label: 'X'         },
-  { key: 'tiktok'    as const, label: 'TikTok'    },
+// FA5 Brands icon name for each platform.
+// FA5 uses "twitter" (not "x-twitter" which is FA6).
+const SOCIAL_DISPLAY: { key: keyof Pick<MeProfile, 'instagram'|'facebook'|'linkedin'|'xTwitter'|'tiktok'>; label: string; icon: string }[] = [
+  { key: 'instagram', label: 'Instagram', icon: 'instagram' },
+  { key: 'facebook',  label: 'Facebook',  icon: 'facebook'  },
+  { key: 'linkedin',  label: 'LinkedIn',  icon: 'linkedin'  },
+  { key: 'xTwitter',  label: 'X',         icon: 'twitter'   },
+  { key: 'tiktok',    label: 'TikTok',    icon: 'tiktok'    },
 ];
 
 function SocialLinks({
@@ -1025,7 +1028,7 @@ function SocialLinks({
 
   return (
     <View style={styles.socialLinksRow}>
-      {filled.map(({ key, label }) => (
+      {filled.map(({ key, label, icon }) => (
         <TouchableOpacity
           key={key}
           style={styles.socialLinkItem}
@@ -1037,9 +1040,12 @@ function SocialLinks({
           accessibilityRole="link"
           accessibilityLabel={label}
         >
-          <Text style={[styles.socialLinkText, { color: colors.mutedForeground }]}>
-            {label}
-          </Text>
+          <FontAwesome5
+            name={icon as React.ComponentProps<typeof FontAwesome5>['name']}
+            size={18}
+            color={colors.mutedForeground}
+            brand
+          />
         </TouchableOpacity>
       ))}
     </View>
