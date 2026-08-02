@@ -1,0 +1,27 @@
+SCOPE: Diagnose and fix the Share card generation, which is currently fully broken — tapping Share shows a brief spinner then does nothing (no card, no share sheet, no error).
+
+DIAGNOSE FIRST — do not guess, confirm the actual failure:
+1. Add temporary console logging (or check existing error handling) around every step of the web share path in utils/shareCardAction.ts: the photo fetch, the canvas draw, the PNG export, and the navigator.share/fallback call. Identify EXACTLY which step is failing.
+2. Most likely candidate: the `credentials: 'include'` fetch of the photo URL. Check whether post photos are served via a same-origin authenticated route or via R2 signed URLs (which may be a different origin and may not accept/need credentials:'include' at all — a signed URL typically grants access via the URL itself, not cookies, and attempting a credentialed fetch to a cross-origin signed URL can trigger a CORS failure that silently rejects the fetch promise).
+3. Check whether the code currently catches errors from this fetch/canvas pipeline at all — if a rejected promise or thrown error isn't caught, the UI would exactly match this symptom: spinner shows, promise fails silently, isSharing state resets, nothing else happens.
+
+FIX (once root cause confirmed):
+- If it's the credentials/CORS issue: fetch the photo URL WITHOUT credentials (signed URLs don't need them and including them can trigger CORS preflight failures), or fetch through whatever authenticated proxy/route the rest of the app already uses to display photos (check how the feed/post-detail screens successfully load the same image — replicate that approach for the fetch used here).
+- Add proper error handling around the whole share pipeline: if card generation fails for any reason, show a clear, on-brand error state (a toast, e.g. "couldn't create your share card — try again 🐾") instead of silently doing nothing. Never let this fail invisibly again.
+- Confirm the SAME issue doesn't affect the native path (captureRef → expo-sharing) — test both.
+
+DO NOT MODIFY: the card's visual design (photo + footer band with wordmark/slogan — already correct per earlier verification), comment system, boop/treat systems, other screens.
+
+PRESERVATION CLAUSE: only the image-fetching/generation pipeline and its error handling are in scope — the card's visual composition and the share-sheet handoff logic stay as designed.
+
+ACCEPTANCE TEST (golden path):
+- Sign in
+- Open a post, tap Share
+- Card successfully generates (spinner, then either the native share sheet opens or the download+clipboard fallback fires) — confirm on WEB specifically since that's where this failed
+- Repeat on 2-3 different posts/pets to confirm it's not just one image working by coincidence
+- If something does fail, confirm a clear error message now shows instead of silent failure
+- Test on native (iOS) as well to confirm that path still works
+- Home loads, boop persists
+- Nursery pager works
+- Post flow works
+- Sign out

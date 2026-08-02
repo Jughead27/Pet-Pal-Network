@@ -65,8 +65,16 @@ async function webShareCard(
     ? `${window.location.origin}${mediaUri}`
     : mediaUri;
 
-  // Fetch image through the authenticated session (same-origin, no CORS header needed).
-  const resp = await fetch(absoluteUri, { credentials: 'include' });
+  // Append ?inline=1 so the media route streams bytes directly with
+  // Access-Control-Allow-Origin: * instead of 302-redirecting to a
+  // cross-origin R2 presigned URL.  Credentialed fetches to cross-origin
+  // R2 URLs trigger CORS preflight failures; inline mode bypasses this.
+  // The /api/media/ route authenticates via HMAC tokens in the URL —
+  // no session cookie is needed, so credentials: 'omit' is correct.
+  const separator = absoluteUri.includes('?') ? '&' : '?';
+  const inlineUri = `${absoluteUri}${separator}inline=1`;
+
+  const resp = await fetch(inlineUri, { credentials: 'omit' });
   if (!resp.ok) throw new Error(`Image fetch failed: ${resp.status}`);
   const imgBlob  = await resp.blob();
   const objectUrl = URL.createObjectURL(imgBlob);

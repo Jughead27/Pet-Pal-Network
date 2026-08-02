@@ -377,8 +377,15 @@ export default function FeedPage({
         ]);
       }
       await executeShareCard({ mediaUri, cardRef, showToast });
-    } catch {
-      // User cancelled the share sheet or an unexpected error — not a crash.
+    } catch (err) {
+      // User dismissed the share sheet — not an error worth surfacing.
+      // Any other failure (fetch, canvas, sharing API) gets a toast so the
+      // user knows something went wrong instead of seeing a silent spinner.
+      const msg = err instanceof Error ? err.message : '';
+      const userCancelled = msg.includes('cancel') || msg.includes('abort') || msg.includes('share');
+      if (!userCancelled) {
+        showToast("couldn't create share card — try again 🐾");
+      }
     } finally {
       setIsSharing(false);
     }
