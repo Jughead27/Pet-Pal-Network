@@ -1,0 +1,17 @@
+SCOPE (one change): Fix the right-rail icon shadow — it currently renders as a visible dark rounded-rectangle TILE behind each icon. Remove the tiles and replace with a shadow that follows the icon's shape, so the glyphs read over photos with no box. Rail only.
+
+components/ActionRail.tsx:
+- REMOVE whatever draws the box behind each rail icon — any background rounded-rect / semi-opaque fill, and any React Native view shadow (shadowColor/shadowOpacity/shadowRadius/elevation) on a container. On the web build those become a rectangular box-shadow, which is the visible tile.
+- Instead, give each Phosphor glyph a SHAPE-FOLLOWING shadow so it lifts off the photo with no box. Preferred cross-platform method: render each rail icon TWICE — a "shadow" copy underneath in near-black at ~50% opacity, offset ~1px down/right (same icon, size, and weight), then the real colored icon on top. That yields a soft drop shadow hugging the glyph outline on web, iOS, and Android, with no rectangle. (Alternatively, web-only: style filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.55))' on the icon — but the duplicate-glyph method is the reliable cross-platform one.)
+- Keep weight="regular", the current sizes (Boop/Treat 28, Comment/Share 24), and colors (coral / gold / foreground). Counts, handlers, toasts, and the pop/scatter system stay untouched.
+
+DO NOT MODIFY: the nav bar (it's good now), any tap behavior, the reaction/pop system, counts, toasts, the follow paw, avatar placeholders, the API, or the schema. NO schema change. No new dependencies.
+
+PRESERVATION CLAUSE: only the rail icon shadow technique changes. Everything else byte-identical. Web, iOS, and Android render identically.
+
+ACCEPTANCE TEST (golden path):
+1. On a post over the busy/bright photo: each rail icon (HandTap coral, Bone gold, ChatCircle, ShareNetwork) reads clearly AND has NO visible rectangle/tile behind it — just a soft shape-hugging shadow.
+2. Boop still pops and persists, treat works, toasts fire.
+3. Home tabs unchanged; Nursery pager → post flow → sign out.
+
+Commit your changes locally.

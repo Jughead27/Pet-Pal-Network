@@ -34,14 +34,55 @@ import { useBoopPost, useTreatPost } from '@workspace/api-client-react';
 const TEACHING_KEY_BOOP  = 'fishbook:teaching:boop';
 const TEACHING_KEY_TREAT = 'fishbook:teaching:treat';
 
+// ─── Glyph shadow helper ──────────────────────────────────────────────────────
+// Renders the icon twice: a near-black copy offset 1 px down-right at ~55%
+// opacity, then the real icon on top.  The result is a shape-hugging drop
+// shadow that works identically on web, iOS, and Android — no rectangle tile.
+
+interface GlyphShadowProps {
+  // The Phosphor icon component (e.g. HandTap, Bone, ChatCircle …)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  icon: React.ComponentType<any>;
+  color: string;
+  size: number;
+  weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone';
+}
+
+function WithGlyphShadow({ icon: Icon, color, size, weight = 'regular' }: GlyphShadowProps) {
+  return (
+    <View style={glyphShadowStyles.container}>
+      {/* Shadow copy — near-black, offset 1×1.5 px, 55% opacity */}
+      <View style={glyphShadowStyles.shadow} pointerEvents="none">
+        <Icon color="#000000" size={size} weight={weight} />
+      </View>
+      {/* Real icon on top */}
+      <Icon color={color} size={size} weight={weight} />
+    </View>
+  );
+}
+
+const glyphShadowStyles = StyleSheet.create({
+  container: {
+    // No background, no border-radius — keeps it a pure glyph layer.
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  shadow: {
+    position: 'absolute',
+    opacity: 0.55,
+    transform: [{ translateX: 1 }, { translateY: 1.5 }],
+  },
+});
+
 // ─── Icon helpers ─────────────────────────────────────────────────────────────
 
 function BoopIcon({ color, size }: { color: string; size: number }) {
-  return <HandTap color={color} weight="regular" size={size} />;
+  return <WithGlyphShadow icon={HandTap} color={color} size={size} />;
 }
 
 function TreatIcon({ color, size }: { color: string; size: number }) {
-  return <Bone color={color} weight="regular" size={size} />;
+  return <WithGlyphShadow icon={Bone} color={color} size={size} />;
 }
 
 // ─── BoopRipple ───────────────────────────────────────────────────────────────
@@ -512,7 +553,7 @@ export default function ActionRail({
       {/* 3. Comment */}
       <ActionItem
         renderIcon={(color) => (
-          <ChatCircle color={color} weight="regular" size={24} />
+          <WithGlyphShadow icon={ChatCircle} color={color} size={24} />
         )}
         count={commentCount}
         onPress={onCommentPress}
@@ -522,7 +563,7 @@ export default function ActionRail({
       {/* 4. Share */}
       <ActionItem
         renderIcon={(color) => (
-          <ShareNetwork color={color} weight="regular" size={24} />
+          <WithGlyphShadow icon={ShareNetwork} color={color} size={24} />
         )}
         onPress={onSharePress}
         testID="share-button"
@@ -576,12 +617,8 @@ const styles = StyleSheet.create({
     position: 'relative',
     // Must be visible on iOS — default is hidden, which clips the ripple ring.
     overflow: 'visible',
-    // Soft drop-shadow so coral/gold/white glyphs stay readable over bright photos.
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 5,
+    // No background or box-shadow here — shadow is applied per-glyph via
+    // WithGlyphShadow so it follows the icon outline, not a rectangle.
   },
   itemTouchable: {
     alignItems: 'center',
