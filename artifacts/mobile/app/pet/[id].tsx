@@ -49,6 +49,10 @@ import {
   usePatchPetAvatar,
   usePresignAvatarUpload,
   useVerifyUpload,
+  useGetMyPets,
+  useAddPostPetTag,
+  useRemovePostPetTag,
+  useSearchPets,
   getGetFeedQueryKey,
   getGetPetQueryKey,
   getGetMyPetsQueryKey,
@@ -102,6 +106,10 @@ export default function PetProfileScreen() {
   const [isEditMode,       setIsEditMode]       = useState(false);
   const [draftCaption,     setDraftCaption]     = useState("");
   const [draftIsNursery,   setDraftIsNursery]   = useState(false);
+  // Pet-tagging state inside the Edit Post form
+  const [editTagSearch,    setEditTagSearch]    = useState("");
+  const [editRemovingId,   setEditRemovingId]   = useState<string | null>(null);
+  const [editAddingId,     setEditAddingId]     = useState<string | null>(null);
 
   // ── Co-owner invite flow ───────────────────────────────────────────────────
   type CoOwnerStep = "idle" | "input" | "sending" | "sent";
@@ -213,12 +221,61 @@ export default function PetProfileScreen() {
     },
   });
 
+  // ── Pet-tag edit hooks ────────────────────────────────────────────────────
+  const { data: myPetsData }                   = useGetMyPets();
+  const myOwnPets                              = myPetsData?.pets ?? [];
+  const { mutateAsync: addTagMutation }        = useAddPostPetTag();
+  const { mutateAsync: removeTagMutation }     = useRemovePostPetTag();
+
+  // Search for cross-owner pets to add (only fires when ≥1 char typed)
+  const editTagExclude = (selectedPost as any)?.taggedPets?.map((tp: any) => tp.id).join(',') ?? '';
+  const { data: editSearchData } = useSearchPets(
+    { q: editTagSearch, exclude: editTagExclude },
+    { query: { enabled: editTagSearch.trim().length >= 1 } },
+  );
+  const editTagSearchResults = (editSearchData?.pets ?? []).filter(
+    (r) => !myOwnPets.some((p) => p.id === r.id),
+  );
+
+  // Own pets not yet tagged on this post
+  const editableOwnPets = myOwnPets.filter(
+    (p) => !((selectedPost as any)?.taggedPets ?? []).some((tp: any) => tp.id === p.id),
+  );
+
+  const handleEditAddTag = useCallback(async (tagPetId: string) => {
+    if (!selectedPostId || editAddingId) return;
+    setEditAddingId(tagPetId);
+    try {
+      await addTagMutation({ id: selectedPostId, petId: tagPetId });
+      setEditTagSearch('');
+      queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? '') });
+    } catch {
+      // Silent — server error message not surfaced here (keep the modal open)
+    } finally {
+      setEditAddingId(null);
+    }
+  }, [selectedPostId, editAddingId, addTagMutation, queryClient, petId]);
+
+  const handleEditRemoveTag = useCallback(async (tagPetId: string) => {
+    if (!selectedPostId || editRemovingId) return;
+    setEditRemovingId(tagPetId);
+    try {
+      await removeTagMutation({ id: selectedPostId, petId: tagPetId });
+      queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? '') });
+    } catch {
+      // Silent — tag stays visible if request fails
+    } finally {
+      setEditRemovingId(null);
+    }
+  }, [selectedPostId, editRemovingId, removeTagMutation, queryClient, petId]);
+
   // Closing the modal always resets all modal state so it's fresh next open
   const closePostModal = useCallback(() => {
     setSelectedPostId(null);
     setDeleteConfirm(false);
     setArchiveConfirm(false);
     setIsEditMode(false);
+    setEditTagSearch('');
   }, []);
 
   // ── Avatar helpers ─────────────────────────────────────────────────────────
@@ -1224,6 +1281,124 @@ export default function PetProfileScreen() {
                           <View style={[styles.modalThumb, draftIsNursery && styles.modalThumbOn]} />
                         </View>
                       </Pressable>
+                      {/* ── Pet tags section ──────────────────────────────── */}
+                      <View style={[styles.modalTagSection, { borderTopColor: colors.border }]}>
+                        <Text style={[styles.modalTagLabel, { color: colors.mutedForeground }]}>
+                          Tagged pets
+                        </Text>
+
+                        {/* Currently tagged — poster can remove any, whisper style */}
+                        {((selectedPost as any).taggedPets ?? []).map((tp: any) => (
+                          <View key={tp.id} style={styles.editTagRow}>
+                            <Text style={[styles.editTagName, { color: colors.foreground }]}>
+                              {tp.name}
+                            </Text>
+                            {((selectedPost as any).taggedPets ?? []).length > 1 && (
+                              <TouchableOpacity
+                                onPress={() => handleEditRemoveTag(tp.id)}
+                                disabled={!!editRemovingId}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                {editRemovingId === tp.id ? (
+                                  <ActivityIndicator
+                                    size="small"
+                                    color={colors.mutedForeground}
+                                    style={{ transform: [{ scale: 0.55 }] }}
+                                  />
+                                ) : (
+                                  <Text style={[styles.editTagRemove, { color: colors.mutedForeground }]}>
+                                    remove
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        ))}
+
+                        {/* Own pets not yet tagged — tap to add instantly */}
+                        {editableOwnPets.length > 0 && (
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.editTagScroll}
+                            keyboardShouldPersistTaps="handled"
+                          >
+                            {editableOwnPets.map((p) => (
+                              <TouchableOpacity
+                                key={p.id}
+                                style={[
+                                  styles.editTagAddChip,
+                                  { backgroundColor: colors.secondary, borderColor: colors.border },
+                                ]}
+                                onPress={() => handleEditAddTag(p.id)}
+                                disabled={!!editAddingId}
+                                activeOpacity={0.7}
+                              >
+                                {editAddingId === p.id ? (
+                                  <ActivityIndicator size="small" color={colors.primary} />
+                                ) : (
+                                  <Text style={[styles.editTagChipText, { color: colors.foreground }]}>
+                                    + {p.name}
+                                  </Text>
+                                )}
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        )}
+
+                        {/* Search for another user's pet — same pattern as compose */}
+                        <TextInput
+                          style={[
+                            styles.editTagSearchInput,
+                            {
+                              backgroundColor: colors.secondary,
+                              borderColor: colors.border,
+                              color: colors.foreground,
+                            },
+                          ]}
+                          value={editTagSearch}
+                          onChangeText={setEditTagSearch}
+                          placeholder="Search to tag another pet…"
+                          placeholderTextColor={colors.mutedForeground}
+                          autoCapitalize="none"
+                          returnKeyType="search"
+                        />
+                        {editTagSearchResults.length > 0 && (
+                          <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            style={styles.editTagScroll}
+                            keyboardShouldPersistTaps="handled"
+                          >
+                            {editTagSearchResults.map((r) => (
+                              <TouchableOpacity
+                                key={r.id}
+                                style={[
+                                  styles.editTagAddChip,
+                                  { backgroundColor: colors.secondary, borderColor: colors.border },
+                                ]}
+                                onPress={() => handleEditAddTag(r.id)}
+                                disabled={!!editAddingId}
+                                activeOpacity={0.7}
+                              >
+                                {editAddingId === r.id ? (
+                                  <ActivityIndicator size="small" color={colors.primary} />
+                                ) : (
+                                  <>
+                                    <Text style={[styles.editTagChipText, { color: colors.foreground }]}>
+                                      {r.name}
+                                    </Text>
+                                    <Text style={[styles.editTagChipOwner, { color: colors.mutedForeground }]}>
+                                      @{r.ownerUsername}
+                                    </Text>
+                                  </>
+                                )}
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        )}
+                      </View>
+
                       {/* Cancel / Save */}
                       <View style={[styles.modalConfirmButtons, styles.modalEditActions]}>
                         <TouchableOpacity
@@ -2067,5 +2242,69 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 12,
     opacity: 0.5,
+  },
+
+  // ── Edit-post pet-tag section ──────────────────────────────────────────────
+  modalTagSection: {
+    borderTopWidth:   StyleSheet.hairlineWidth,
+    paddingTop:       12,
+    paddingHorizontal: 14,
+    paddingBottom:    8,
+    gap:              8,
+  },
+  modalTagLabel: {
+    fontFamily: "Inter_400Regular",
+    fontSize:   11,
+    opacity:    0.6,
+    textTransform: "uppercase",
+    letterSpacing:  0.5,
+  },
+  editTagRow: {
+    flexDirection:  "row",
+    alignItems:     "center",
+    justifyContent: "space-between",
+    paddingVertical: 3,
+  },
+  editTagName: {
+    fontFamily: "Inter_500Medium",
+    fontSize:   14,
+  },
+  // Matches reportWhisper / removeTagWhisper — barely-there typographic action
+  editTagRemove: {
+    fontFamily: "Inter_400Regular",
+    fontSize:   11,
+    opacity:    0.35,
+  },
+  editTagScroll: {
+    marginTop: 2,
+  },
+  editTagAddChip: {
+    borderWidth:   1,
+    borderRadius:  20,
+    paddingHorizontal: 12,
+    paddingVertical:    7,
+    marginRight:   8,
+    alignItems:    "center",
+    minWidth:      60,
+    minHeight:     34,
+    justifyContent: "center",
+  },
+  editTagChipText: {
+    fontFamily: "Inter_500Medium",
+    fontSize:   13,
+  },
+  editTagChipOwner: {
+    fontFamily: "Inter_400Regular",
+    fontSize:   11,
+    marginTop:  1,
+  },
+  editTagSearchInput: {
+    borderWidth:      1,
+    borderRadius:     8,
+    paddingHorizontal: 12,
+    paddingVertical:   8,
+    fontFamily:       "Inter_400Regular",
+    fontSize:         14,
+    marginTop:        4,
   },
 });

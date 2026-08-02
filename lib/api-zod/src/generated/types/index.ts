@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './addPostPetTag201';
 export * from './archivePostResponse';
 export * from './avatarPatchBody';
 export * from './avatarPatchResponse';

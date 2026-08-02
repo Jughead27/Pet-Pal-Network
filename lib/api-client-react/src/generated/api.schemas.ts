@@ -615,6 +615,10 @@ export type VerifyUpload200 = {
   ok: boolean;
 };
 
+export type AddPostPetTag201 = {
+  ok: boolean;
+};
+
 export type SearchPetsParams = {
 /**
  * Search query (min 1 character)

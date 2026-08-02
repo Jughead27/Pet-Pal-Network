@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AddPostPetTag201,
   ArchivePostResponse,
   AvatarPatchBody,
   AvatarPatchResponse,
@@ -2382,6 +2383,80 @@ export const useDeleteComment = <TError = ErrorType<ErrorResponse>,
       return useMutation(getDeleteCommentMutationOptions(options));
     }
 
+export const getAddPostPetTagUrl = (id: string,
+    petId: string,) => {
+
+
+
+
+  return `/api/posts/${id}/pets/${petId}`
+}
+
+/**
+ * Adds a pet tag to an already-published post. Caller must be the original poster of the post. Subject to the same block guard as POST /posts — if the pet's owner has blocked the caller (or vice versa), returns 403. Idempotent: tagging the same pet twice is a no-op (201 returned either way). Sends a pet_tagged notification to the pet's owner when the pet is not owned by the caller.
+ * @summary Add a pet tag to an existing post
+ */
+export const addPostPetTag = async (id: string,
+    petId: string, options?: RequestInit): Promise<AddPostPetTag201> => {
+
+  return customFetch<AddPostPetTag201>(getAddPostPetTagUrl(id,petId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getAddPostPetTagMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addPostPetTag>>, TError,{id: string;petId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof addPostPetTag>>, TError,{id: string;petId: string}, TContext> => {
+
+const mutationKey = ['addPostPetTag'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof addPostPetTag>>, {id: string;petId: string}> = (props) => {
+          const {id,petId} = props ?? {};
+
+          return  addPostPetTag(id,petId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AddPostPetTagMutationResult = NonNullable<Awaited<ReturnType<typeof addPostPetTag>>>
+
+    export type AddPostPetTagMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Add a pet tag to an existing post
+ */
+export const useAddPostPetTag = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof addPostPetTag>>, TError,{id: string;petId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof addPostPetTag>>,
+        TError,
+        {id: string;petId: string},
+        TContext
+      > => {
+      return useMutation(getAddPostPetTagMutationOptions(options));
+    }
+
 export const getRemovePostPetTagUrl = (id: string,
     petId: string,) => {
 
@@ -2392,7 +2467,7 @@ export const getRemovePostPetTagUrl = (id: string,
 }
 
 /**
- * Removes a specific pet's tag from a post. Only that pet's owner can call this (403 otherwise). The post itself is not deleted. Returns 400 if this is the last tag on the post.
+ * Removes a specific pet's tag from a post. Allowed for EITHER the pet's owner OR the post's original poster (403 otherwise). The post itself is not deleted. Returns 400 if this is the last tag on the post.
  * @summary Remove a pet tag from a post
  */
 export const removePostPetTag = async (id: string,

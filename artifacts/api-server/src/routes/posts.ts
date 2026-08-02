@@ -141,19 +141,108 @@ router.post("/posts", async (req, res) => {
 });
 
 /**
+ * POST /posts/:id/pets/:petId
+ *
+ * Adds a pet tag to an already-published post.
+ * Caller must be the original poster. Applies the same block guard as POST /posts.
+ * Idempotent (ON CONFLICT DO NOTHING). Sends a pet_tagged notification for cross-owner pets.
+ */
+router.post("/posts/:id/pets/:petId", async (req, res) => {
+  const { id: postId, petId } = req.params;
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  // Caller must be the original poster
+  const [postRow] = await db
+    .select({ postedByUserId: postsTable.postedByUserId })
+    .from(postsTable)
+    .where(and(eq(postsTable.id, postId), isNull(postsTable.archivedAt)))
+    .limit(1);
+
+  if (!postRow) {
+    res.status(404).json({ error: "Post not found" });
+    return;
+  }
+  if (postRow.postedByUserId !== userId) {
+    res.status(403).json({ error: "You can only add tags to your own posts" });
+    return;
+  }
+
+  // Pet must exist and be active
+  const [petRow] = await db
+    .select({ id: petsTable.id, ownerId: petsTable.ownerId })
+    .from(petsTable)
+    .where(and(eq(petsTable.id, petId), activePets))
+    .limit(1);
+
+  if (!petRow) {
+    res.status(404).json({ error: "Pet not found" });
+    return;
+  }
+
+  // Block guard — same as POST /posts: both directions, cross-owner only
+  if (petRow.ownerId !== userId) {
+    const [blockRow] = await db
+      .select({ id: blocksTable.id })
+      .from(blocksTable)
+      .where(
+        or(
+          and(eq(blocksTable.blockerId, petRow.ownerId), eq(blocksTable.blockedId, userId)),
+          and(eq(blocksTable.blockerId, userId),         eq(blocksTable.blockedId, petRow.ownerId)),
+        ),
+      )
+      .limit(1);
+
+    if (blockRow) {
+      res.status(403).json({ error: "Cannot tag a pet whose owner has blocked you (or whom you have blocked)" });
+      return;
+    }
+  }
+
+  // Insert tag (idempotent)
+  await db
+    .insert(postPetsTable)
+    .values({ postId, petId, taggedByUserId: userId })
+    .onConflictDoNothing();
+
+  // Notify cross-owner pet's owner
+  if (petRow.ownerId !== userId) {
+    await db
+      .insert(notificationsTable)
+      .values({ userId: petRow.ownerId, type: "pet_tagged", postId, petId, actorUserId: userId })
+      .onConflictDoNothing();
+  }
+
+  res.status(201).json({ ok: true });
+});
+
+/**
  * DELETE /posts/:id/pets/:petId
  *
  * Removes a specific pet tag from a post.
- * Only that pet's owner may call this (403 otherwise).
+ * Allowed for EITHER the pet's owner OR the post's original poster.
  * Returns 400 if this is the last remaining tag on the post.
  */
 router.delete("/posts/:id/pets/:petId", async (req, res) => {
   const { id: postId, petId } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
-  // Verify viewer owns the pet
-  if (!(await isPetOwner(userId, petId))) {
-    res.status(403).json({ error: "You do not own this pet" });
+  // Allow the pet's owner OR the post's original poster
+  const [postRow] = await db
+    .select({ postedByUserId: postsTable.postedByUserId })
+    .from(postsTable)
+    .where(eq(postsTable.id, postId))
+    .limit(1);
+
+  if (!postRow) {
+    res.status(404).json({ error: "Post not found" });
+    return;
+  }
+
+  const callerOwnsPet  = await isPetOwner(userId, petId);
+  const callerIsAuthor = postRow.postedByUserId === userId;
+
+  if (!callerOwnsPet && !callerIsAuthor) {
+    res.status(403).json({ error: "You do not own this pet or this post" });
     return;
   }
 

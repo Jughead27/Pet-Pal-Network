@@ -1170,13 +1170,69 @@ paths:
                 $ref: "#/components/schemas/ErrorResponse"
 
   /posts/{id}/pets/{petId}:
+    post:
+      operationId: addPostPetTag
+      tags: [posts]
+      summary: Add a pet tag to an existing post
+      description: >
+        Adds a pet tag to an already-published post.
+        Caller must be the original poster of the post.
+        Subject to the same block guard as POST /posts —
+        if the pet's owner has blocked the caller (or vice versa), returns 403.
+        Idempotent: tagging the same pet twice is a no-op (201 returned either way).
+        Sends a pet_tagged notification to the pet's owner when the pet is
+        not owned by the caller.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Post ID
+        - name: petId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Pet ID to tag
+      responses:
+        "201":
+          description: Tag added (or already existed)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the post's author, or a block relationship exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Post or pet not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
     delete:
       operationId: removePostPetTag
       tags: [posts]
       summary: Remove a pet tag from a post
       description: >
         Removes a specific pet's tag from a post.
-        Only that pet's owner can call this (403 otherwise).
+        Allowed for EITHER the pet's owner OR the post's original poster (403 otherwise).
         The post itself is not deleted.
         Returns 400 if this is the last tag on the post.
       security:

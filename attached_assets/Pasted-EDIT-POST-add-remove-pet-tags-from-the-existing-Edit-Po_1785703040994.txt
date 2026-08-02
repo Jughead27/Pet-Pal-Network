@@ -1,0 +1,47 @@
+EDIT POST — add/remove pet tags from the existing Edit Post modal
+
+CONTEXT: Multi-pet tagging (own + cross-owner, with search, live-tag, 
+and one-tap removal) shipped for the NEW POST compose flow, but the 
+EDIT POST modal (opened from a pet's profile, caption + Nursery toggle 
+only) has no way to add a tag to an already-published post. Pre-existing 
+posts (created before multi-pet tagging shipped) have no way to be 
+retroactively tagged with additional pets.
+
+FIX: Add the same pet-tagging capability already built for compose into 
+the Edit Post modal:
+  - Show currently tagged pets (reuse existing display pattern).
+  - Allow ADDING a pet tag: same search (pet name OR owner username), 
+    same own-pets-prominent + cross-owner-via-search pattern already 
+    built for New Post. Adding a cross-owner pet tag from Edit Post 
+    should behave identically to adding one at post-creation time — 
+    live immediately, notification sent to that pet's owner, subject to 
+    the same block-check guard (#18) already shipped for POST /posts — 
+    apply that same guard here.
+  - Allow REMOVING a pet tag directly from Edit Post too, if not already 
+    reachable from here (reuse the existing DELETE /posts/:id/pets/:petId 
+    endpoint and remove-tag whisper pattern already built — the poster 
+    should be able to remove any tag on their own post from this screen, 
+    not just tagged owners removing their own pet from post detail).
+  - The existing bug fix (Pressable wrapping the modal card so taps 
+    inside don't dismiss it) must extend correctly to whatever new 
+    interactive elements (search input, tag chips) are added here — 
+    don't reintroduce the backdrop-swallows-taps bug.
+
+DO NOT MODIFY: caption/Nursery editing behavior already in this modal, 
+the New Post compose flow, anything outside Edit Post's pet-tagging 
+addition.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Edit one of your existing single-pet or multi-pet posts — confirm 
+   you can search and add another pet tag (both an own pet and, if 
+   testable, a cross-owner pet).
+2. Confirm a newly-added cross-owner tag behaves like a fresh tag — 
+   live immediately, notification sent, removable by that pet's owner.
+3. Confirm the block guard applies here too (test with a blocked pair 
+   if feasible).
+4. Confirm you can remove an existing tag directly from Edit Post.
+5. Confirm tapping into the search input, tag chips, or any new element 
+   in this modal does NOT close the modal (regression check on the 
+   recent Pressable fix).
+6. Confirm caption/Nursery editing still works unaffected.
+7. Golden path unaffected.

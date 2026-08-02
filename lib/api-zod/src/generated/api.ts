@@ -724,7 +724,21 @@ export const DeleteCommentResponse = zod.void()
 
 
 /**
- * Removes a specific pet's tag from a post. Only that pet's owner can call this (403 otherwise). The post itself is not deleted. Returns 400 if this is the last tag on the post.
+ * Adds a pet tag to an already-published post. Caller must be the original poster of the post. Subject to the same block guard as POST /posts — if the pet's owner has blocked the caller (or vice versa), returns 403. Idempotent: tagging the same pet twice is a no-op (201 returned either way). Sends a pet_tagged notification to the pet's owner when the pet is not owned by the caller.
+ * @summary Add a pet tag to an existing post
+ */
+export const AddPostPetTagParams = zod.object({
+  "id": zod.coerce.string().describe('Post ID'),
+  "petId": zod.coerce.string().describe('Pet ID to tag')
+})
+
+export const AddPostPetTagResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * Removes a specific pet's tag from a post. Allowed for EITHER the pet's owner OR the post's original poster (403 otherwise). The post itself is not deleted. Returns 400 if this is the last tag on the post.
  * @summary Remove a pet tag from a post
  */
 export const RemovePostPetTagParams = zod.object({
