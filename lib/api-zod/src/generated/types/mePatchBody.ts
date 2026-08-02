@@ -18,4 +18,14 @@ export interface MePatchBody {
   locationCity?: string | null;
   /** About blurb (0–200 chars, trimmed). Null or empty string clears it. */
   about?: string | null;
+  /** Instagram profile URL (max 200 chars). Null or empty string clears it. */
+  instagram?: string | null;
+  /** Facebook profile URL (max 200 chars). Null or empty string clears it. */
+  facebook?: string | null;
+  /** LinkedIn profile URL (max 200 chars). Null or empty string clears it. */
+  linkedin?: string | null;
+  /** X (Twitter) profile URL (max 200 chars). Null or empty string clears it. */
+  xTwitter?: string | null;
+  /** TikTok profile URL (max 200 chars). Null or empty string clears it. */
+  tiktok?: string | null;
 }

@@ -2046,6 +2046,26 @@ components:
           type: string
           nullable: true
           description: Short bio about the owner (max 200 chars).
+        instagram:
+          type: string
+          nullable: true
+          description: Instagram profile URL.
+        facebook:
+          type: string
+          nullable: true
+          description: Facebook profile URL.
+        linkedin:
+          type: string
+          nullable: true
+          description: LinkedIn profile URL.
+        xTwitter:
+          type: string
+          nullable: true
+          description: X (Twitter) profile URL.
+        tiktok:
+          type: string
+          nullable: true
+          description: TikTok profile URL.
         createdAt:
           type: string
           format: date-time
@@ -2055,6 +2075,11 @@ components:
         - displayName
         - locationCity
         - about
+        - instagram
+        - facebook
+        - linkedin
+        - xTwitter
+        - tiktok
         - createdAt
 
     MePatchBody:
@@ -2080,3 +2105,23 @@ components:
           type: string
           nullable: true
           description: About blurb (0–200 chars, trimmed). Null or empty string clears it.
+        instagram:
+          type: string
+          nullable: true
+          description: Instagram profile URL (max 200 chars). Null or empty string clears it.
+        facebook:
+          type: string
+          nullable: true
+          description: Facebook profile URL (max 200 chars). Null or empty string clears it.
+        linkedin:
+          type: string
+          nullable: true
+          description: LinkedIn profile URL (max 200 chars). Null or empty string clears it.
+        xTwitter:
+          type: string
+          nullable: true
+          description: X (Twitter) profile URL (max 200 chars). Null or empty string clears it.
+        tiktok:
+          type: string
+          nullable: true
+          description: TikTok profile URL (max 200 chars). Null or empty string clears it.

@@ -19,5 +19,15 @@ export interface MeProfile {
   locationCity: string | null;
   /** Short bio about the owner (max 200 chars). */
   about: string | null;
+  /** Instagram profile URL. */
+  instagram: string | null;
+  /** Facebook profile URL. */
+  facebook: string | null;
+  /** LinkedIn profile URL. */
+  linkedin: string | null;
+  /** X (Twitter) profile URL. */
+  xTwitter: string | null;
+  /** TikTok profile URL. */
+  tiktok: string | null;
   createdAt: Date;
 }

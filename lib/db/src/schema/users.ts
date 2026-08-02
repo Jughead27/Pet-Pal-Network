@@ -20,6 +20,12 @@ export const usersTable = pgTable(
     displayName:  text("display_name"),
     locationCity: text("location_city"),
     about:        text("about"),
+    // Optional social links — all nullable, stored as full URLs
+    instagram:    text("instagram"),
+    facebook:     text("facebook"),
+    linkedin:     text("linkedin"),
+    xTwitter:     text("x_twitter"),
+    tiktok:       text("tiktok"),
     createdAt:    timestamp("created_at").defaultNow().notNull(),
     role:      userRoleEnum("role").notNull().default("member"),
     // Set by admins. Suspended users receive 403 on every authenticated call.

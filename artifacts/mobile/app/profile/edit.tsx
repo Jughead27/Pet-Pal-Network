@@ -46,6 +46,16 @@ type FieldErrors = {
   general?:     string;
 };
 
+const SOCIAL_PLATFORMS = [
+  { key: 'instagram', label: 'Instagram',  placeholder: 'https://instagram.com/yourhandle' },
+  { key: 'facebook',  label: 'Facebook',   placeholder: 'https://facebook.com/yourpage'    },
+  { key: 'linkedin',  label: 'LinkedIn',   placeholder: 'https://linkedin.com/in/you'      },
+  { key: 'xTwitter',  label: 'X / Twitter', placeholder: 'https://x.com/yourhandle'        },
+  { key: 'tiktok',   label: 'TikTok',     placeholder: 'https://tiktok.com/@yourhandle'   },
+] as const;
+
+type SocialKey = typeof SOCIAL_PLATFORMS[number]['key'];
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function EditProfileScreen() {
@@ -63,6 +73,10 @@ export default function EditProfileScreen() {
   const [about,       setAbout]       = useState('');
   const [errors,      setErrors]      = useState<FieldErrors>({});
   const [seeded,      setSeeded]      = useState(false);
+  const [socials,     setSocials]     = useState<Record<SocialKey, string>>({
+    instagram: '', facebook: '', linkedin: '', xTwitter: '', tiktok: '',
+  });
+  const [socialsExpanded, setSocialsExpanded] = useState(false);
 
   useEffect(() => {
     if (meData && !seeded) {
@@ -70,6 +84,17 @@ export default function EditProfileScreen() {
       setDisplayName(meData.displayName ?? '');
       setCity(meData.locationCity   ?? '');
       setAbout(meData.about         ?? '');
+      setSocials({
+        instagram: meData.instagram ?? '',
+        facebook:  meData.facebook  ?? '',
+        linkedin:  meData.linkedin  ?? '',
+        xTwitter:  meData.xTwitter  ?? '',
+        tiktok:    meData.tiktok    ?? '',
+      });
+      // Auto-expand if any social is already set
+      if (meData.instagram || meData.facebook || meData.linkedin || meData.xTwitter || meData.tiktok) {
+        setSocialsExpanded(true);
+      }
       setSeeded(true);
     }
   }, [meData, seeded]);
@@ -83,6 +108,12 @@ export default function EditProfileScreen() {
       displayName:  displayName.trim() || null,
       locationCity: city.trim()        || null,
       about:        about.trim()       || null,
+      // Social links — always send all five so clearing works
+      instagram: socials.instagram.trim() || null,
+      facebook:  socials.facebook.trim()  || null,
+      linkedin:  socials.linkedin.trim()  || null,
+      xTwitter:  socials.xTwitter.trim()  || null,
+      tiktok:    socials.tiktok.trim()    || null,
     };
     // Only include username if non-empty (user may have left it blank meaning "keep current")
     const trimmedUsername = username.trim();
@@ -105,7 +136,7 @@ export default function EditProfileScreen() {
         },
       },
     );
-  }, [username, displayName, city, about, patchMe, qc]);
+  }, [username, displayName, city, about, socials, patchMe, qc]);
 
   if (isLoading || !seeded) {
     return (
@@ -238,6 +269,47 @@ export default function EditProfileScreen() {
             maxLength={210} // soft-cap at 210; server rejects >200 trimmed
           />
         </FieldBlock>
+
+        {/* ── Add your socials (collapsed accordion) ── */}
+        <TouchableOpacity
+          onPress={() => setSocialsExpanded((v) => !v)}
+          activeOpacity={0.7}
+          style={styles.socialsToggle}
+          accessibilityRole="button"
+          accessibilityLabel={socialsExpanded ? 'Collapse socials' : 'Add your socials'}
+        >
+          <Text style={[styles.socialsToggleText, { color: colors.mutedForeground }]}>
+            {socialsExpanded ? 'Hide socials' : 'Add your socials'}
+          </Text>
+          <Text style={[styles.socialsToggleCaret, { color: colors.mutedForeground }]}>
+            {socialsExpanded ? '↑' : '↓'}
+          </Text>
+        </TouchableOpacity>
+
+        {socialsExpanded && (
+          <View style={styles.socialsPanel}>
+            {SOCIAL_PLATFORMS.map(({ key, label, placeholder }) => (
+              <View key={key} style={styles.socialRow}>
+                <Text style={[styles.socialLabel, { color: colors.foreground }]}>{label}</Text>
+                <TextInput
+                  value={socials[key]}
+                  onChangeText={(t) => setSocials((prev) => ({ ...prev, [key]: t }))}
+                  style={[
+                    styles.input,
+                    { color: colors.foreground, borderColor: colors.border, backgroundColor: colors.card },
+                  ]}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  returnKeyType="next"
+                  placeholder={placeholder}
+                  placeholderTextColor={colors.mutedForeground}
+                  editable={!isSaving}
+                />
+              </View>
+            ))}
+          </View>
+        )}
 
         {/* ── General server error ── */}
         {errors.general ? (
@@ -412,6 +484,33 @@ const styles = StyleSheet.create({
     fontFamily:   'Inter_400Regular',
     fontSize:     13,
     marginBottom: 16,
+  },
+
+  socialsToggle: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    marginBottom:   18,
+    paddingVertical: 4,
+  },
+  socialsToggleText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   14,
+  },
+  socialsToggleCaret: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+  },
+  socialsPanel: {
+    marginBottom: 10,
+  },
+  socialRow: {
+    marginBottom: 18,
+  },
+  socialLabel: {
+    fontFamily:   'Inter_500Medium',
+    fontSize:     13,
+    marginBottom: 6,
   },
 
 });

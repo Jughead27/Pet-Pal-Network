@@ -1,0 +1,48 @@
+PROFILE SOCIAL LINKS — Instagram/Facebook/LinkedIn/X/TikTok, optional
+
+CONTEXT: Owner profiles currently have username, display_name, 
+location_city, about ("About the Owner"). Adding optional social links 
+as a deliberate small "human" concession — acknowledged as an exception 
+to the pets-not-people mission, so it's placed quietly rather than 
+front-and-center.
+
+FIX — Schema: add 5 optional nullable URL fields to the owner profile 
+(instagram, facebook, linkedin, x/twitter, tiktok) — same table as the 
+existing profile fields (username/display_name/location_city/about).
+
+API: extend the existing GET/PATCH /me merge-semantics pattern to 
+include these 5 fields — same validation approach as other profile 
+fields (reasonable length cap, basic URL format check per platform if 
+easy, but don't over-engineer validation — these are optional and 
+low-risk).
+
+DISPLAY: tucked into "About the Owner" section ONLY — not beside the 
+name, not a separate profile section. Render only the platforms that are 
+actually filled in (empty ones render nothing, matching the existing 
+empty-field convention on this profile). Simple typographic list/row, 
+consistent with the no-capsule/no-pill design system — small platform 
+labels or icons, tap opens the URL.
+
+EDIT UX (profile-edit screen): a collapsed "Add your socials" section 
+that expands to reveal the 5 URL input fields when tapped — NOT an 
+always-visible form taking up space by default. Same 16px input-font 
+convention as the rest of the app (per the recent iOS Safari fix). 
+Fields are independently optional — filling in one doesn't require the 
+others.
+
+DO NOT MODIFY: existing profile fields (username/display_name/
+location_city/about) or their validation, the merge semantics of GET/
+PATCH /me, anything outside this addition.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Profile-edit: confirm "Add your socials" appears collapsed by 
+   default; tapping it expands to show 5 URL fields.
+2. Fill in 2 of the 5 (leave others blank), save — confirm only those 2 
+   appear on "About the Owner," rendered cleanly, tappable, opening the 
+   right URL.
+3. Confirm the 3 blank ones render nothing (no empty rows/placeholders).
+4. Edit again, clear one of the filled ones, save — confirm it 
+   disappears from display.
+5. Confirm existing profile fields (username, display_name, location, 
+   about) are unaffected.
+6. Golden path unaffected.

@@ -64,6 +64,11 @@ router.get("/me", async (req, res) => {
         displayName:        usersTable.displayName,
         locationCity:       usersTable.locationCity,
         about:              usersTable.about,
+        instagram:          usersTable.instagram,
+        facebook:           usersTable.facebook,
+        linkedin:           usersTable.linkedin,
+        xTwitter:           usersTable.xTwitter,
+        tiktok:             usersTable.tiktok,
         createdAt:          usersTable.createdAt,
         role:               usersTable.role,
         acceptedTosVersion: usersTable.acceptedTosVersion,
@@ -90,6 +95,11 @@ router.get("/me", async (req, res) => {
     displayName:        user.displayName     ?? null,
     locationCity:       user.locationCity    ?? null,
     about:              user.about           ?? null,
+    instagram:          user.instagram       ?? null,
+    facebook:           user.facebook        ?? null,
+    linkedin:           user.linkedin        ?? null,
+    xTwitter:           user.xTwitter        ?? null,
+    tiktok:             user.tiktok          ?? null,
     createdAt:          user.createdAt.toISOString(),
     role:               user.role,
     acceptedTosVersion: user.acceptedTosVersion ?? null,
@@ -201,6 +211,29 @@ router.patch("/me", async (req, res) => {
     }
   }
 
+  // ── Social links (instagram / facebook / linkedin / xTwitter / tiktok) ──────
+  for (const field of ['instagram', 'facebook', 'linkedin', 'xTwitter', 'tiktok'] as const) {
+    if (field in body) {
+      const raw = body[field];
+      if (raw === null || raw === undefined || raw === '') {
+        updates[field] = null;
+      } else if (typeof raw !== 'string') {
+        res.status(400).json({ error: `${field} must be a string or null.` });
+        return;
+      } else {
+        const trimmed = raw.trim();
+        if (trimmed.length === 0) {
+          updates[field] = null;
+        } else if (trimmed.length > 200) {
+          res.status(400).json({ error: `${field} URL must be 200 characters or fewer.` });
+          return;
+        } else {
+          updates[field] = trimmed;
+        }
+      }
+    }
+  }
+
   // Nothing to update — return current state
   if (Object.keys(updates).length === 0) {
     const [user] = await db
@@ -219,6 +252,11 @@ router.patch("/me", async (req, res) => {
       displayName:  user.displayName ?? null,
       locationCity: user.locationCity ?? null,
       about:        user.about       ?? null,
+      instagram:    user.instagram   ?? null,
+      facebook:     user.facebook    ?? null,
+      linkedin:     user.linkedin    ?? null,
+      xTwitter:     user.xTwitter    ?? null,
+      tiktok:       user.tiktok      ?? null,
       createdAt:    user.createdAt.toISOString(),
     });
     return;
@@ -243,6 +281,11 @@ router.patch("/me", async (req, res) => {
       displayName:  updated.displayName ?? null,
       locationCity: updated.locationCity ?? null,
       about:        updated.about       ?? null,
+      instagram:    updated.instagram   ?? null,
+      facebook:     updated.facebook    ?? null,
+      linkedin:     updated.linkedin    ?? null,
+      xTwitter:     updated.xTwitter    ?? null,
+      tiktok:       updated.tiktok      ?? null,
       createdAt:    updated.createdAt.toISOString(),
     });
   } catch (err: unknown) {

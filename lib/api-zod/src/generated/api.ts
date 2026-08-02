@@ -610,6 +610,11 @@ export const GetMeResponse = zod.object({
   "displayName": zod.string().nullable().describe('Owner\'s display name shown on their profile.'),
   "locationCity": zod.string().nullable().describe('City or location, plain text.'),
   "about": zod.string().nullable().describe('Short bio about the owner (max 200 chars).'),
+  "instagram": zod.string().nullable().describe('Instagram profile URL.'),
+  "facebook": zod.string().nullable().describe('Facebook profile URL.'),
+  "linkedin": zod.string().nullable().describe('LinkedIn profile URL.'),
+  "xTwitter": zod.string().nullable().describe('X (Twitter) profile URL.'),
+  "tiktok": zod.string().nullable().describe('TikTok profile URL.'),
   "createdAt": zod.coerce.date()
 }).describe('The signed-in owner\'s profile fields')
 
@@ -622,7 +627,12 @@ export const PatchMeBody = zod.object({
   "username": zod.string().optional().describe('Desired username. Server lowercases, validates format, checks reserved list, and enforces case-insensitive uniqueness.\n'),
   "displayName": zod.string().nullish().describe('Display name (1–40 chars, trimmed). Null clears it.'),
   "locationCity": zod.string().nullish().describe('City\/location (0–60 chars, trimmed). Null or empty string clears it.'),
-  "about": zod.string().nullish().describe('About blurb (0–200 chars, trimmed). Null or empty string clears it.')
+  "about": zod.string().nullish().describe('About blurb (0–200 chars, trimmed). Null or empty string clears it.'),
+  "instagram": zod.string().nullish().describe('Instagram profile URL (max 200 chars). Null or empty string clears it.'),
+  "facebook": zod.string().nullish().describe('Facebook profile URL (max 200 chars). Null or empty string clears it.'),
+  "linkedin": zod.string().nullish().describe('LinkedIn profile URL (max 200 chars). Null or empty string clears it.'),
+  "xTwitter": zod.string().nullish().describe('X (Twitter) profile URL (max 200 chars). Null or empty string clears it.'),
+  "tiktok": zod.string().nullish().describe('TikTok profile URL (max 200 chars). Null or empty string clears it.')
 }).describe('Fields to update on the owner profile. All fields are optional; omitted fields are left unchanged.\n')
 
 export const PatchMeResponse = zod.object({
@@ -631,6 +641,11 @@ export const PatchMeResponse = zod.object({
   "displayName": zod.string().nullable().describe('Owner\'s display name shown on their profile.'),
   "locationCity": zod.string().nullable().describe('City or location, plain text.'),
   "about": zod.string().nullable().describe('Short bio about the owner (max 200 chars).'),
+  "instagram": zod.string().nullable().describe('Instagram profile URL.'),
+  "facebook": zod.string().nullable().describe('Facebook profile URL.'),
+  "linkedin": zod.string().nullable().describe('LinkedIn profile URL.'),
+  "xTwitter": zod.string().nullable().describe('X (Twitter) profile URL.'),
+  "tiktok": zod.string().nullable().describe('TikTok profile URL.'),
   "createdAt": zod.coerce.date()
 }).describe('The signed-in owner\'s profile fields')
 

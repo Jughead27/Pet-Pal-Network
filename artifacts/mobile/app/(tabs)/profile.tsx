@@ -23,6 +23,7 @@ import React, { useCallback, useMemo, useRef, useState } from 'react';
 import FeedbackFlow from '@/components/FeedbackFlow';
 import {
   ActivityIndicator,
+  Linking,
   Platform,
   ScrollView,
   Share,
@@ -50,7 +51,7 @@ import {
   getGetMyFollowsQueryKey,
   customFetch,
 } from '@workspace/api-client-react';
-import type { Pet, PackedPetItem, FollowedSpeciesItem, FollowedBreedItem } from '@workspace/api-client-react';
+import type { Pet, PackedPetItem, FollowedSpeciesItem, FollowedBreedItem, MeProfile } from '@workspace/api-client-react';
 import { useFollowsContext } from '@/context/FollowsContext';
 import { usePackContext } from '@/context/PackContext';
 
@@ -357,6 +358,7 @@ export default function ProfileScreen() {
                 {meData!.about}
               </Text>
             )}
+            <SocialLinks meData={meData!} colors={colors} />
             {usernameUnset && (
               <TouchableOpacity
                 onPress={() => router.push('/profile/edit')}
@@ -1001,6 +1003,49 @@ function FriendAvatarCluster({ pets, colors }: FriendAvatarClusterProps) {
   );
 }
 
+// ── SocialLinks ───────────────────────────────────────────────────────────────
+
+const SOCIAL_DISPLAY = [
+  { key: 'instagram' as const, label: 'Instagram' },
+  { key: 'facebook'  as const, label: 'Facebook'  },
+  { key: 'linkedin'  as const, label: 'LinkedIn'  },
+  { key: 'xTwitter'  as const, label: 'X'         },
+  { key: 'tiktok'    as const, label: 'TikTok'    },
+];
+
+function SocialLinks({
+  meData,
+  colors,
+}: {
+  meData: MeProfile;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const filled = SOCIAL_DISPLAY.filter(({ key }) => !!meData[key]);
+  if (filled.length === 0) return null;
+
+  return (
+    <View style={styles.socialLinksRow}>
+      {filled.map(({ key, label }) => (
+        <TouchableOpacity
+          key={key}
+          style={styles.socialLinkItem}
+          activeOpacity={0.6}
+          onPress={() => {
+            const url = meData[key];
+            if (url) Linking.openURL(url).catch(() => {});
+          }}
+          accessibilityRole="link"
+          accessibilityLabel={label}
+        >
+          <Text style={[styles.socialLinkText, { color: colors.mutedForeground }]}>
+            {label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
@@ -1291,5 +1336,21 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize:   11,
     color:      '#FFFFFF',
+  },
+
+  // Social links (appended below — keep in sync with SocialLinks component)
+  socialLinksRow: {
+    flexDirection:  'row',
+    flexWrap:       'wrap',
+    gap:            12,
+    marginTop:      8,
+  },
+  socialLinkItem: {
+    paddingVertical: 0,
+  },
+  socialLinkText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+    textDecorationLine: 'underline',
   },
 });
