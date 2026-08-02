@@ -114,6 +114,10 @@ export default function AddScreen() {
   // Refiner modal visibility.
   const [refinerOpen,   setRefinerOpen]   = useState(false);
 
+  // Source-picker overlay — shown by "Change photo" so the user can swap the
+  // image without losing caption / pet selection or resetting to the idle step.
+  const [isChangingPhoto, setIsChangingPhoto] = useState(false);
+
   // Auto-select pet when there is exactly one.
   useEffect(() => {
     if (pets.length === 1) setSelectedPetId(pets[0].id);
@@ -128,6 +132,7 @@ export default function AddScreen() {
   const processPickedAsset = useCallback(async (asset: ImagePicker.ImagePickerAsset) => {
     setCompressedUri(null);
     setStep('compressing');
+    setIsChangingPhoto(false); // dismiss source-picker overlay the moment processing starts
     try {
       const compressed = await compressImage(asset.uri, asset.width, asset.height);
       const uri = compressed.uri;
@@ -367,6 +372,71 @@ export default function AddScreen() {
       style={[s.fill, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      {/* ── Change Photo source picker ──────────────────────────────────────── */}
+      {/*
+       * Rendered as a bottom-sheet modal so the user can pick a replacement
+       * photo without losing their caption or pet selection.  If they cancel
+       * the native picker (or tap the backdrop), they land straight back on
+       * the form step — no state is cleared.  `processPickedAsset` resets
+       * isChangingPhoto as soon as a new photo starts processing.
+       */}
+      <Modal
+        visible={isChangingPhoto}
+        animationType="slide"
+        transparent
+        statusBarTranslucent
+        onRequestClose={() => setIsChangingPhoto(false)}
+      >
+        <View style={s.changePhotoOverlay}>
+          <Pressable
+            style={s.changePhotoBackdrop}
+            onPress={() => setIsChangingPhoto(false)}
+            accessibilityLabel="Keep current photo"
+          />
+          <View style={[s.changePhotoSheet, { backgroundColor: colors.background }]}>
+            <View style={[s.changePhotoHandle, { backgroundColor: colors.border }]} />
+            <View style={[s.sourceCard, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 0 }]}>
+              {Platform.OS !== 'web' && (
+                <>
+                  <TouchableOpacity
+                    style={s.sourceRow}
+                    onPress={captureImage}
+                    activeOpacity={0.7}
+                    accessibilityRole="button"
+                    accessibilityLabel="Take a photo"
+                  >
+                    <Camera size={22} color={colors.foreground} weight="regular" />
+                    <Text style={[s.sourceRowText, { color: colors.foreground }]}>Take a photo</Text>
+                    <CaretRight size={18} color={colors.mutedForeground} weight="regular" />
+                  </TouchableOpacity>
+                  <View style={[s.sourceDivider, { backgroundColor: colors.border }]} />
+                </>
+              )}
+              <TouchableOpacity
+                style={s.sourceRow}
+                onPress={pickImage}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Choose from library"
+              >
+                <ImageSquare size={22} color={colors.foreground} weight="regular" />
+                <Text style={[s.sourceRowText, { color: colors.foreground }]}>Choose from library</Text>
+                <CaretRight size={18} color={colors.mutedForeground} weight="regular" />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[s.changePhotoCancel, { borderColor: colors.border }]}
+              onPress={() => setIsChangingPhoto(false)}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Keep current photo"
+            >
+              <Text style={[s.changePhotoCancelText, { color: colors.mutedForeground }]}>Keep current photo</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Frame Refiner modal ─────────────────────────────────────────────── */}
       <Modal
         visible={refinerOpen && !!compressedUri && !!cropRect}
@@ -473,12 +543,7 @@ export default function AddScreen() {
               <View style={[s.previewControlDivider, { backgroundColor: colors.border }]} />
               <TouchableOpacity
                 style={s.previewControlBtn}
-                onPress={() => {
-                  setCompressedUri(null);
-                  setCropRect(null);
-                  setError(null);
-                  setStep('idle');
-                }}
+                onPress={() => setIsChangingPhoto(true)}
                 accessibilityRole="button"
                 accessibilityLabel="Change photo"
               >
@@ -755,6 +820,41 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
     },
     sourceDivider: {
       height: StyleSheet.hairlineWidth,
+    },
+
+    // Change Photo bottom sheet
+    changePhotoOverlay: {
+      flex: 1,
+      justifyContent: 'flex-end',
+    },
+    changePhotoBackdrop: {
+      ...StyleSheet.absoluteFillObject,
+      backgroundColor: 'rgba(0,0,0,0.45)',
+    },
+    changePhotoSheet: {
+      paddingHorizontal: 16,
+      paddingTop: 12,
+      paddingBottom: 36,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+    },
+    changePhotoHandle: {
+      width: 36,
+      height: 4,
+      borderRadius: 2,
+      alignSelf: 'center',
+      marginBottom: 16,
+    },
+    changePhotoCancel: {
+      marginTop: 10,
+      borderRadius: 12,
+      borderWidth: StyleSheet.hairlineWidth,
+      paddingVertical: 16,
+      alignItems: 'center',
+    },
+    changePhotoCancelText: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 16,
     },
 
     imagePlaceholder: {

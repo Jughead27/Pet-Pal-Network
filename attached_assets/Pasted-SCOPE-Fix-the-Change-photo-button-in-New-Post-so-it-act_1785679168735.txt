@@ -1,0 +1,22 @@
+SCOPE: Fix the "Change photo" button in New Post so it actually changes the photo, not just navigates back.
+
+CONTEXT: Currently "Change photo" and "Cancel" do the same thing — both just return to the New Post page. "Change photo" should instead relaunch the photo-source picker (the same take-a-photo / choose-from-library / choose-from-files options offered by the initial "Add a photo / video" entry point), so the person can pick a different photo without losing their place or re-navigating from scratch.
+
+CHANGE:
+Wire "Change photo" to call the same photo-source-picker launch function used by the initial "Add a photo / video" entry point, rather than navigating back. Once a new photo is selected, it should replace the current one in the compose flow (same as if it were the first photo picked) — any existing crop/adjust state on the old photo should reset (a fresh photo needs a fresh default Fit state, not a stale crop rect from the previous image). If the person cancels out of the picker (backs out without selecting), they should land back exactly where "Change photo" was tapped from — no partial/broken state.
+
+DO NOT MODIFY: the "Cancel" button (stays as full-exit back-to-New-Post behavior), the "Adjust" button/crop-refiner flow, Fit-default composition, pet-selector chips, caption handling, the photo-source picker's own options/behavior (take photo / library / files) — only how "Change photo" invokes it.
+
+PRESERVATION CLAUSE: everything else in the photo step of New Post (Fit rendering, Adjust flow, pet chips, caption, Post button) behaves exactly as before — only the "Change photo" button's action changes.
+
+ACCEPTANCE TEST (golden path):
+- Sign in
+- Start a New Post, pick a photo
+- Tap "Change photo" → photo-source picker reopens (take photo / library / files)
+- Pick a different photo → it replaces the first one, Fit renders correctly, any prior crop/adjust state is reset
+- Tap "Change photo" again, then back out of the picker without selecting → lands back on New Post with the photo still intact, nothing broken
+- Cancel still fully exits New Post as before
+- Complete a post → works
+- Home loads, boop persists
+- Nursery pager works
+- Sign out
