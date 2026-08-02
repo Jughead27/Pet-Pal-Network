@@ -23,7 +23,6 @@ import {
 } from 'react-native';
 import ReportFlow from '@/components/ReportFlow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
 import { ChatCircle } from 'phosphor-react-native';
 import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
@@ -153,8 +152,8 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
           <Text style={[styles.headerTitle, { color: colors.foreground }]}>
             Comments
           </Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityRole="button">
-            <Ionicons name="close" size={22} color={colors.mutedForeground} />
+          <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Cancel">
+            <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel</Text>
           </TouchableOpacity>
         </View>
 
@@ -227,25 +226,27 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
               onPress={handleSend}
               activeOpacity={0.7}
               disabled={!draft.trim() || isSending}
-              style={[
-                styles.sendBtn,
-                {
-                  backgroundColor:
-                    draft.trim() && !isSending ? colors.primary : colors.border,
-                },
-              ]}
+              style={styles.sendBtn}
               accessibilityRole="button"
-              accessibilityLabel="Send comment"
+              accessibilityLabel="Post comment"
             >
-              <Ionicons
-                name="arrow-up"
-                size={18}
-                color={
-                  draft.trim() && !isSending
-                    ? colors.primaryForeground
-                    : colors.mutedForeground
-                }
-              />
+              {isSending ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text
+                  style={[
+                    styles.sendText,
+                    {
+                      color: draft.trim()
+                        ? colors.primary
+                        : colors.mutedForeground,
+                      opacity: draft.trim() ? 1 : 0.45,
+                    },
+                  ]}
+                >
+                  Post
+                </Text>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -364,11 +365,23 @@ const styles = StyleSheet.create({
     maxHeight: 100,
     lineHeight: 20,
   },
+  // Typographic "Post" send action — no background circle, no icon dependency.
+  // Sits flush right in the inputRow; touch target padded to 44 px min.
   sendBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    paddingHorizontal: 4,
+    paddingVertical: 10,
+    minHeight: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  sendText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 15,
+  },
+  // Typographic "Cancel" — replaces the Ionicons X in the header.
+  // Position is inherited from closeBtn (absolute, right: 16, bottom: 14).
+  cancelText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
   },
 });

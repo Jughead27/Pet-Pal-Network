@@ -24,13 +24,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'phosphor-react-native';
 import { useColors } from '@/hooks/useColors';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { customFetch } from '@workspace/api-client-react';
+import { customFetch, useGetMe } from '@workspace/api-client-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 interface UserQuotaRow {
   id:                string;
   username:          string | null;
+  role:              string;          // 'admin' | 'member' — from users.role
   inviteQuota:       number | null;
   effectiveQuota:    number;
   invitedByUsername: string | null;
@@ -54,6 +55,11 @@ export default function AdminInviteManagementScreen() {
   const insets   = useSafeAreaInsets();
   const qc       = useQueryClient();
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
+
+  // Signed-in admin's own ID — used to mark the "(you)" row.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: meData } = useGetMe() as { data: { id?: string } | undefined };
+  const meUserId = (meData as { id?: string } | undefined)?.id ?? null;
 
   const [offset, setOffset]   = useState(0);
   const [allRows, setAllRows] = useState<UserQuotaRow[]>([]);
@@ -170,6 +176,7 @@ export default function AdminInviteManagementScreen() {
             isEditing={editingId === row.id}
             isSaving={savingId === row.id}
             quotaInput={quotaInput}
+            isMe={meUserId !== null && row.id === meUserId}
             onStartEdit={() => {
               setEditingId(row.id);
               setQuotaInput(row.inviteQuota !== null ? String(row.inviteQuota) : '');
@@ -205,6 +212,7 @@ interface UserRowProps {
   isEditing:     boolean;
   isSaving:      boolean;
   quotaInput:    string;
+  isMe:          boolean;   // true when this row is the signed-in admin
   onStartEdit:   () => void;
   onCancelEdit:  () => void;
   onQuotaChange: (v: string) => void;
@@ -213,18 +221,30 @@ interface UserRowProps {
 
 function UserRow({
   row, defaultQuota, colors, isEditing, isSaving,
-  quotaInput, onStartEdit, onCancelEdit, onQuotaChange, onSave,
+  quotaInput, isMe, onStartEdit, onCancelEdit, onQuotaChange, onSave,
 }: UserRowProps) {
   const hasOverride = row.inviteQuota !== null;
+  const isAdmin     = row.role === 'admin';
 
   return (
     <View style={[styles.row, { borderColor: colors.border, backgroundColor: colors.card }]}>
       {/* Identity */}
       <View style={styles.rowTop}>
         <View style={styles.rowInfo}>
+          {/* Username + optional "(you)" suffix */}
           <Text style={[styles.username, { color: colors.foreground }]}>
             {row.username ?? row.id}
+            {isMe && (
+              <Text style={[styles.youSuffix, { color: colors.mutedForeground }]}>{' '}(you)</Text>
+            )}
           </Text>
+
+          {/* Role badge — quiet typographic, same register as lineage */}
+          <Text style={[styles.roleBadge, { color: colors.mutedForeground }]}>
+            {row.role}
+          </Text>
+
+          {/* Lineage */}
           {row.invitedByUsername ? (
             <Text style={[styles.lineage, { color: colors.mutedForeground }]}>
               called in by {row.invitedByUsername}
@@ -235,57 +255,67 @@ function UserRow({
             </Text>
           )}
         </View>
-        {/* Quota badge */}
-        <Text style={[styles.quotaBadge, { color: hasOverride ? colors.foreground : colors.mutedForeground }]}>
-          {row.effectiveQuota}{hasOverride ? '' : ' (default)'}
-        </Text>
+
+        {/* Quota badge — "unlimited" for admins, numeric for members */}
+        {isAdmin ? (
+          <Text style={[styles.quotaBadge, { color: colors.mutedForeground }]}>
+            unlimited
+          </Text>
+        ) : (
+          <Text style={[styles.quotaBadge, { color: hasOverride ? colors.foreground : colors.mutedForeground }]}>
+            {row.effectiveQuota}{hasOverride ? '' : ' (default)'}
+          </Text>
+        )}
       </View>
 
       {/* Stats */}
       <Text style={[styles.stats, { color: colors.mutedForeground }]}>
-        {row.usedCount} joined · {row.activeCount} pending · {row.nonRevokedCount}/{row.effectiveQuota} used
+        {row.usedCount} joined · {row.activeCount} pending · {row.nonRevokedCount}
+        {isAdmin ? '' : `/${row.effectiveQuota}`} used
       </Text>
 
-      {/* Quota editor */}
-      {isEditing ? (
-        <View style={styles.editRow}>
-          <TextInput
-            value={quotaInput}
-            onChangeText={onQuotaChange}
-            placeholder={String(defaultQuota)}
-            placeholderTextColor={colors.mutedForeground}
-            keyboardType="number-pad"
-            style={[styles.quotaInput, { color: colors.foreground, borderColor: colors.border }]}
-            autoFocus
-            maxLength={4}
-          />
-          <Text style={[styles.editHint, { color: colors.mutedForeground }]}>
-            (blank = reset to default)
-          </Text>
-          {isSaving ? (
-            <ActivityIndicator size={14} color={colors.mutedForeground} />
-          ) : (
-            <>
-              <TouchableOpacity onPress={onSave} style={styles.editAction}>
-                <Text style={[styles.editActionText, { color: colors.foreground }]}>save</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={onCancelEdit} style={styles.editAction}>
-                <Text style={[styles.editActionText, { color: colors.mutedForeground }]}>cancel</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      ) : (
-        <TouchableOpacity
-          onPress={onStartEdit}
-          style={styles.setQuotaBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Set quota"
-        >
-          <Text style={[styles.setQuotaText, { color: colors.mutedForeground }]}>
-            set quota
-          </Text>
-        </TouchableOpacity>
+      {/* Quota editor — hidden for admin rows (quota is bypassed server-side) */}
+      {!isAdmin && (
+        isEditing ? (
+          <View style={styles.editRow}>
+            <TextInput
+              value={quotaInput}
+              onChangeText={onQuotaChange}
+              placeholder={String(defaultQuota)}
+              placeholderTextColor={colors.mutedForeground}
+              keyboardType="number-pad"
+              style={[styles.quotaInput, { color: colors.foreground, borderColor: colors.border }]}
+              autoFocus
+              maxLength={4}
+            />
+            <Text style={[styles.editHint, { color: colors.mutedForeground }]}>
+              (blank = reset to default)
+            </Text>
+            {isSaving ? (
+              <ActivityIndicator size={14} color={colors.mutedForeground} />
+            ) : (
+              <>
+                <TouchableOpacity onPress={onSave} style={styles.editAction}>
+                  <Text style={[styles.editActionText, { color: colors.foreground }]}>save</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onCancelEdit} style={styles.editAction}>
+                  <Text style={[styles.editActionText, { color: colors.mutedForeground }]}>cancel</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={onStartEdit}
+            style={styles.setQuotaBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Set quota"
+          >
+            <Text style={[styles.setQuotaText, { color: colors.mutedForeground }]}>
+              set quota
+            </Text>
+          </TouchableOpacity>
+        )
       )}
     </View>
   );
@@ -321,6 +351,8 @@ const styles = StyleSheet.create({
   },
   rowInfo:    { flex: 1, gap: 2 },
   username:   { fontFamily: 'Inter_600SemiBold', fontSize: 15 },
+  youSuffix:  { fontFamily: 'Inter_400Regular', fontSize: 14 },   // "(you)" inline after username
+  roleBadge:  { fontFamily: 'Inter_400Regular', fontSize: 11, opacity: 0.6, textTransform: 'lowercase' },
   lineage:    { fontFamily: 'Inter_400Regular', fontSize: 12, opacity: 0.7 },
   quotaBadge: { fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   stats:      { fontFamily: 'Inter_400Regular', fontSize: 12, opacity: 0.6 },

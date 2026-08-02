@@ -686,6 +686,7 @@ adminRouter.get("/admin/invite-management", async (req, res) => {
     SELECT
       u.id,
       u.username,
+      u.role,
       u.invite_quota                                          AS "inviteQuota",
       COALESCE(u.invite_quota, ${defaultQuota})::int          AS "effectiveQuota",
       ib.username                                             AS "invitedByUsername",
@@ -695,7 +696,7 @@ adminRouter.get("/admin/invite-management", async (req, res) => {
     FROM users u
     LEFT JOIN users ib ON ib.id = u.invited_by
     LEFT JOIN invites i ON i.inviter_id = u.id
-    GROUP BY u.id, u.username, u.invite_quota, ib.username
+    GROUP BY u.id, u.username, u.role, u.invite_quota, ib.username
     ORDER BY u.username ASC
     LIMIT ${limit} OFFSET ${offset}
   `);

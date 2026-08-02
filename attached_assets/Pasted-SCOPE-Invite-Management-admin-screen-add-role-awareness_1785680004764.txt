@@ -1,0 +1,25 @@
+SCOPE: Invite Management admin screen — add role awareness. No schema change (role already exists on users).
+
+CONTEXT: The admin "Invite Management" list (per-user quota editor) currently shows every account with a raw numeric quota (e.g. "5 (default)"), with no indication of role or which account belongs to the signed-in admin. This predates the admin-unlimited-invites work and doesn't reflect it.
+
+CHANGES:
+1. Each row in Invite Management should show a small ROLE badge (e.g. "admin" / "member") alongside the existing "founding account" subtitle — same quiet typographic register as the rest of admin UI, not a loud pill.
+2. For rows where role = admin, replace the quota display ("5 (default)" / "set quota") with "unlimited" — no quota editor control needed for admin rows since the number is moot (the server bypasses enforcement regardless of the stored value). Keep the existing quota editor fully functional for non-admin rows.
+3. Mark the row matching the currently signed-in admin's own account with a "(you)" suffix next to their username — compare against the authenticated admin's own user ID from the session, not by string-matching username.
+
+DO NOT MODIFY: the quota_requests flow, grant/dismiss logic, non-admin quota editing behavior/values, any other admin screen, back-navigation (already fixed).
+
+PRESERVATION CLAUSE: existing Invite Management layout, the "default quota: 5 · N members" header, and the quota editor for non-admin rows stay exactly as they are — this only adds role/you-marking to the row display and swaps the quota control for "unlimited" on admin rows.
+
+ACCEPTANCE TEST (golden path):
+- Sign in as admin
+- Navigate to admin → Invite Management
+- Confirm role badges show on all rows
+- Confirm the signed-in admin's own row shows "unlimited" (not "5 (default)") and is marked "(you)"
+- Confirm any other admin-role rows also show "unlimited" (no quota editor)
+- Confirm non-admin rows are completely unaffected (still show quota + working "set quota" editor)
+- Back navigation still works from this screen
+- Home loads, boop persists
+- Nursery pager works
+- Post flow works
+- Sign out
