@@ -419,7 +419,7 @@ const styles = StyleSheet.create({
     borderWidth:      1,
     paddingHorizontal: 14,
     paddingVertical:  10,
-    fontSize:         14,
+    fontSize:         16, // ≥16 prevents iOS Safari auto-zoom on focus
     maxHeight:        120,
     lineHeight:       20,
   },

@@ -50,7 +50,6 @@ import { BabyCarriage } from 'phosphor-react-native';
 import SectionMasthead from '@/components/SectionMasthead';
 import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
 import CommentSheet from '@/components/CommentSheet';
-import ShareSheet from '@/components/ShareSheet';
 
 // ─── Layout constants ──────────────────────────────────────────────────────────
 
@@ -142,12 +141,9 @@ export default function NurseryScreen() {
 
   // ── Pager lifted sheet state ───────────────────────────────────────────────
   const [commentConfig, setCommentConfig] = useState<CommentSheetConfig | null>(null);
-  const [shareOpen,     setShareOpen]     = useState(false);
 
   const openCommentSheet  = useCallback((cfg: CommentSheetConfig) => setCommentConfig(cfg), []);
   const closeCommentSheet = useCallback(() => setCommentConfig(null), []);
-  const openShareSheet    = useCallback(() => setShareOpen(true),  []);
-  const closeShareSheet   = useCallback(() => setShareOpen(false), []);
 
   // ── Open pager at index ────────────────────────────────────────────────────
   const openPost = useCallback((index: number) => {
@@ -160,7 +156,6 @@ export default function NurseryScreen() {
   const closePost = useCallback(() => {
     // Close any open sheets before returning to grid
     setCommentConfig(null);
-    setShareOpen(false);
     setViewMode('grid');
 
     // Restore scroll position after React flushes the grid render.
@@ -217,10 +212,9 @@ export default function NurseryScreen() {
         height={effectivePageHeight}
         reducedMotion={reducedMotion}
         onOpenCommentSheet={openCommentSheet}
-        onOpenShareSheet={openShareSheet}
       />
     ),
-    [effectivePageHeight, reducedMotion, openCommentSheet, openShareSheet],
+    [effectivePageHeight, reducedMotion, openCommentSheet],
   );
 
   const getPagerItemLayout = useCallback(
@@ -439,7 +433,7 @@ export default function NurseryScreen() {
             snapToAlignment="start"
             decelerationRate="fast"
             // Disable scrolling while a sheet is open
-            scrollEnabled={commentConfig === null && !shareOpen}
+            scrollEnabled={commentConfig === null}
             showsVerticalScrollIndicator={false}
             bounces={false}
             overScrollMode="never"
@@ -468,10 +462,6 @@ export default function NurseryScreen() {
           onClose={closeCommentSheet}
           postId={commentConfig?.postId ?? null}
           onCommentPosted={commentConfig?.onCommentPosted}
-        />
-        <ShareSheet
-          visible={shareOpen}
-          onClose={closeShareSheet}
         />
       </View>
     );

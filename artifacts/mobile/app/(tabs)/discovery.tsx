@@ -51,7 +51,6 @@ import { resolveMediaKey } from '@/utils/mediaKey';
 import FocalImage from '@/components/FocalImage';
 import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
 import CommentSheet from '@/components/CommentSheet';
-import ShareSheet from '@/components/ShareSheet';
 import SectionMasthead from '@/components/SectionMasthead';
 import { Dog } from 'phosphor-react-native';
 
@@ -153,12 +152,9 @@ export default function SniffScreen() {
 
   // ── Pager sheet state ──────────────────────────────────────────────────────
   const [commentConfig, setCommentConfig] = useState<CommentSheetConfig | null>(null);
-  const [shareOpen,     setShareOpen]     = useState(false);
 
   const openCommentSheet  = useCallback((cfg: CommentSheetConfig) => setCommentConfig(cfg), []);
   const closeCommentSheet = useCallback(() => setCommentConfig(null), []);
-  const openShareSheet    = useCallback(() => setShareOpen(true),  []);
-  const closeShareSheet   = useCallback(() => setShareOpen(false), []);
 
   // ── Open / close pager ────────────────────────────────────────────────────
   const openPost = useCallback((index: number) => {
@@ -169,7 +165,6 @@ export default function SniffScreen() {
 
   const closePost = useCallback(() => {
     setCommentConfig(null);
-    setShareOpen(false);
     setViewMode('grid');
     requestAnimationFrame(() => {
       if (gridScrollY.current > 0) {
@@ -204,10 +199,9 @@ export default function SniffScreen() {
         height={effectivePageHeight}
         reducedMotion={reducedMotion}
         onOpenCommentSheet={openCommentSheet}
-        onOpenShareSheet={openShareSheet}
       />
     ),
-    [effectivePageHeight, reducedMotion, openCommentSheet, openShareSheet],
+    [effectivePageHeight, reducedMotion, openCommentSheet],
   );
 
   const getPagerItemLayout = useCallback(
@@ -448,7 +442,7 @@ export default function SniffScreen() {
             snapToInterval={effectivePageHeight}
             snapToAlignment="start"
             decelerationRate="fast"
-            scrollEnabled={commentConfig === null && !shareOpen}
+            scrollEnabled={commentConfig === null}
             showsVerticalScrollIndicator={false}
             bounces={false}
             overScrollMode="never"
@@ -476,7 +470,6 @@ export default function SniffScreen() {
           postId={commentConfig?.postId ?? null}
           onCommentPosted={commentConfig?.onCommentPosted}
         />
-        <ShareSheet visible={shareOpen} onClose={closeShareSheet} />
       </View>
     );
   }

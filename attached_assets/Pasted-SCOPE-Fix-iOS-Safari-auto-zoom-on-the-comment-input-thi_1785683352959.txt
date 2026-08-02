@@ -1,0 +1,24 @@
+SCOPE: Fix iOS Safari auto-zoom on the comment input — this is the likely actual root cause of the "buttons go off-screen and stay off-screen even after the keyboard closes" bug, which two prior layout-focused fixes did not resolve.
+
+ROOT CAUSE: iOS Safari automatically zooms the entire page when a focused text input has a computed font-size smaller than 16px, as an accessibility measure to make the text legible. This is a genuine page zoom (like a pinch-zoom), not a temporary viewport shift — so it does NOT reset when the keyboard closes, which matches the exact symptom reported (zoom persists after keyboard dismisses, only fixable by manually pinching back out).
+
+FIX:
+1. Find the comment text input's current font-size. If it is anything below 16px, change it to exactly 16px (or larger) — this is the standard threshold that prevents Safari's auto-zoom trigger.
+2. Check whether this same issue could affect ANY other text input in the app (New Post caption field, profile bio/username fields, auth screens, etc.) — apply the same >=16px minimum wherever user-focused text inputs exist, since this is a systemic iOS Safari behavior, not comment-specific. If the app has a shared TextInput/Input component, fix the default there rather than patching each usage individually.
+3. If font-size was already >=16px everywhere (meaning this ISN'T the cause), report that clearly rather than guessing further — check the viewport meta tag for `user-scalable=no` or `maximum-scale=1` which can also be used to prevent Safari's auto-zoom as a fallback measure (note: this makes the whole page unpinchable everywhere, which is a broader UX tradeoff worth flagging rather than silently applying).
+
+DO NOT MODIFY: any input's placeholder text, validation logic, submission behavior, or visual color/weight styling beyond font-size — this should be a minimal, targeted fix.
+
+PRESERVATION CLAUSE: comment submission, cancel, list rendering, and all other input behavior stay exactly as already fixed — only font-size (and, if needed, the viewport meta tag) changes.
+
+ACCEPTANCE TEST (golden path, TEST ON ACTUAL iOS SAFARI / iPhone — this bug does not reproduce on desktop or Android):
+- Sign in
+- Open a post with zero comments, tap comment, tap into the text input
+- Confirm the page does NOT auto-zoom when the keyboard opens — text stays at normal scale, Cancel/Post remain visible without any zoom occurring
+- Type and submit a comment → appears in the list
+- Dismiss keyboard → confirm page is still at normal (non-zoomed) scale, no lingering zoom
+- Spot-check one or two other text inputs (e.g. New Post caption) for the same auto-zoom behavior — confirm it's also fixed if it was present
+- Home loads, boop persists
+- Nursery pager works
+- Post flow works
+- Sign out

@@ -1941,7 +1941,7 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     paddingBottom: Platform.OS === "ios" ? 13 : 10,
     fontFamily: "Inter_400Regular",
-    fontSize: 14,
+    fontSize: 16, // ≥16 prevents iOS Safari auto-zoom on focus
     minHeight: 72,
     textAlignVertical: "top",
   },

@@ -540,7 +540,7 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       paddingHorizontal: 14,
       paddingVertical: Platform.OS === 'ios' ? 13 : 10,
       fontFamily: 'Inter_400Regular',
-      fontSize: 15,
+      fontSize: 16, // ≥16 prevents iOS Safari auto-zoom on focus
       color: c.foreground,
     },
     bioInput: {
@@ -576,7 +576,7 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
     searchInput: {
       flex: 1,
       fontFamily: 'Inter_400Regular',
-      fontSize: 15,
+      fontSize: 16, // ≥16 prevents iOS Safari auto-zoom on focus
       paddingVertical: Platform.OS === 'ios' ? 11 : 8,
     },
 

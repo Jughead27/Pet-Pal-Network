@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     borderRadius:      8,
     paddingHorizontal: 10,
     paddingVertical:   6,
-    fontSize:          15,
+    fontSize:          16, // ≥16 prevents iOS Safari auto-zoom on focus
     fontFamily:        'Inter_400Regular',
     width:             64,
   },

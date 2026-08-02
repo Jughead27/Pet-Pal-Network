@@ -7,9 +7,10 @@
  * Per-page state (boop/treat counts, chrome toggle, pops) lives inside
  * each FeedPage — no state bleeds between pages on swipe.
  *
- * CommentSheet and ShareSheet are lifted here so they don't re-mount on
- * every page and the FlatList can disable its own scroll when they are open
- * (important for web where the Modal is not a native layer).
+ * CommentSheet is lifted here so it doesn't re-mount on every page and the
+ * FlatList can disable its own scroll while it is open (important for web
+ * where the Modal is not a native layer).  Share card generation runs inside
+ * each FeedPage instance and needs no lifted state.
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -30,7 +31,6 @@ import { getPostSuccessSignalTime, clearPostSuccessSignal } from '@/utils/feedSc
 import type { FeedPost } from '@workspace/api-client-react';
 import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
 import CommentSheet from '@/components/CommentSheet';
-import ShareSheet from '@/components/ShareSheet';
 
 // ─── HomeScreen ───────────────────────────────────────────────────────────────
 
@@ -68,14 +68,11 @@ export default function HomeScreen() {
   // ── Lifted sheet state ────────────────────────────────────────────────────
   // CommentSheet: tracks which post's sheet is open + its onCommentPosted cb
   const [commentConfig, setCommentConfig] = useState<CommentSheetConfig | null>(null);
-  const [shareOpen, setShareOpen] = useState(false);
 
   const openCommentSheet = useCallback((config: CommentSheetConfig) => {
     setCommentConfig(config);
   }, []);
   const closeCommentSheet = useCallback(() => setCommentConfig(null), []);
-  const openShareSheet  = useCallback(() => setShareOpen(true),  []);
-  const closeShareSheet = useCallback(() => setShareOpen(false), []);
 
   // ── FlatList refs ─────────────────────────────────────────────────────────
   const flatListRef = useRef<FlatList<FeedPost>>(null);
@@ -125,10 +122,9 @@ export default function HomeScreen() {
         height={effectivePageHeight}
         reducedMotion={reducedMotion}
         onOpenCommentSheet={openCommentSheet}
-        onOpenShareSheet={openShareSheet}
       />
     ),
-    [effectivePageHeight, reducedMotion, openCommentSheet, openShareSheet],
+    [effectivePageHeight, reducedMotion, openCommentSheet],
   );
 
   const keyExtractor = useCallback((item: FeedPost) => item.id, []);
@@ -194,7 +190,7 @@ export default function HomeScreen() {
           snapToAlignment="start"
           decelerationRate="fast"
           // Prevent feed scroll when a modal is open
-          scrollEnabled={commentConfig === null && !shareOpen}
+          scrollEnabled={commentConfig === null}
           // Visual
           showsVerticalScrollIndicator={false}
           bounces={false}
@@ -216,10 +212,6 @@ export default function HomeScreen() {
         onClose={closeCommentSheet}
         postId={commentConfig?.postId ?? null}
         onCommentPosted={commentConfig?.onCommentPosted}
-      />
-      <ShareSheet
-        visible={shareOpen}
-        onClose={closeShareSheet}
       />
     </View>
   );

@@ -1,0 +1,33 @@
+SCOPE: Build the Share card feature — generate a branded, shareable image card from a post and hand it to the native share sheet. Photo posts only for now (video sharing is a deferred future pass, once video posts ship). No schema change.
+
+DESIGN SPEC (locked):
+- Card = the pet's photo, full-bleed/near-full-bleed, UNMODIFIED — use the original full-resolution R2 image, not the app's Fit-preview/blur treatment.
+- Below the photo, a footer BAND in the app-ground color (#060B10), containing:
+  - A small pshpsh logo/wordmark (quiet, same restrained register as other subtle brand touches in the app — NOT a large stamp)
+  - The slogan "follow pets, not people." (lowercase, matches app's established typographic voice)
+  - Nothing else — no caption text, no counts, no "shared by," no additional explainer copy
+- Overall proportions: the footer band should read as a supporting element, not compete with the photo — think a thin mount/label strip beneath a framed photo, not a big branded header.
+- Export as a PNG at a resolution suitable for sharing to Instagram Stories / iMessage (i.e., not a low-res screenshot — render at native/full resolution, not a scaled-down preview size).
+
+IMPLEMENTATION:
+1. Tap the existing Share (ShareNetwork) icon on a post → immediately begin generating the card (no intermediate menu/screen — there's one thing to share). Show a brief loading state (spinner or similar quiet indicator) while the card renders, since composing + capturing takes a moment.
+2. Compose the card as an offscreen view (photo + footer band as described) and capture it to a PNG file. Use whatever capture approach fits this app's dual web+native target (e.g. react-native-view-shot or equivalent that works across Expo web export and native builds) — confirm it actually works on the LIVE pshpsh.net web build, not just native, since this app is web-first for testers right now.
+3. Hand the resulting image to the platform's native share flow:
+   - Native (iOS/Android): standard RN Share API with the image file.
+   - Web: Web Share API (`navigator.share` with `files`) where supported. Where a share target/browser supports it, include text "pshpsh.net" alongside the image so a link can ride along (e.g. iMessage-style targets). Since Web Share's file-sharing support is inconsistent across desktop browsers, ADD A FALLBACK for when it's unavailable: e.g. trigger a direct image download + copy "pshpsh.net" to clipboard, with a brief confirmation toast explaining what happened ("saved image — link copied 🐾" or similar on-brand phrasing). Do not fail silently if Web Share isn't supported.
+4. No share counts, no analytics-visible tracking of shares, no "shared by" attribution anywhere — this stays a private, non-extractive action per the app's mission.
+
+DO NOT MODIFY: the ShareNetwork icon itself (already styled correctly per the icon family), boop/treat/reaction systems, comment system, any other rail button, post detail/feed rendering, R2 photo storage/serving.
+
+PRESERVATION CLAUSE: nothing about how posts are displayed, stored, or served changes — this is purely an additive export/share capability layered on top of existing post data (photo URL, pet name).
+
+ACCEPTANCE TEST (golden path):
+- Sign in
+- Open a post, tap Share
+- Card generates (loading state shown briefly), native share sheet (or web fallback) opens with a correctly composed card: full photo + footer band with logo + "follow pets, not people."
+- On web, if Web Share/file-sharing isn't supported by the browser, confirm the fallback (download + clipboard) works and shows a clear confirmation
+- Repeat on a couple of different posts/pets to confirm the pet's name/photo render correctly each time, not a cached/stale card
+- Home loads, boop persists
+- Nursery pager works
+- Post flow works
+- Sign out

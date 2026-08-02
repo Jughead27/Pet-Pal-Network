@@ -22,8 +22,10 @@
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Image,
+  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -40,7 +42,9 @@ import { resolveMediaKey } from '@/utils/mediaKey';
 import { useBoopPost } from '@workspace/api-client-react';
 import type { FeedPost, PackResult } from '@workspace/api-client-react';
 import ActionRail from '@/components/ActionRail';
+import ShareCard from '@/components/ShareCard';
 import AddToPackLink from '@/components/AddToPackLink';
+import { executeShareCard } from '@/utils/shareCardAction';
 import PopText from '@/components/PopText';
 import { setFeedCellDimensions } from '@/utils/feedCellDimensions';
 
@@ -126,7 +130,6 @@ interface FeedPageProps {
   height: number;
   reducedMotion: boolean;
   onOpenCommentSheet: (config: CommentSheetConfig) => void;
-  onOpenShareSheet: () => void;
 }
 
 // ─── FeedPage ─────────────────────────────────────────────────────────────────
@@ -136,7 +139,6 @@ export default function FeedPage({
   height,
   reducedMotion,
   onOpenCommentSheet,
-  onOpenShareSheet,
 }: FeedPageProps) {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -171,6 +173,22 @@ export default function FeedPage({
       Animated.timing(toastOpacity, { toValue: 0, duration: 500, useNativeDriver: true }),
     ]).start();
   }, [toastOpacity]);
+
+  // ── Share card state ──────────────────────────────────────────────────────
+  // isSharing: true while the card is being composited + handed to the OS
+  // cardRef: ref on the off-screen ShareCard view (native only)
+  // cardImageLoaded*: track when the photo inside ShareCard has loaded so we
+  //   can delay capture on native until the image is ready
+  const [isSharing, setIsSharing] = useState(false);
+  const cardRef                   = useRef<View>(null);
+  const cardImageLoadedRef        = useRef(false);
+  const cardImageReadyResolveRef  = useRef<(() => void) | null>(null);
+
+  const handleCardImageLoaded = useCallback(() => {
+    cardImageLoadedRef.current = true;
+    cardImageReadyResolveRef.current?.();
+    cardImageReadyResolveRef.current = null;
+  }, []);
 
   // ── Caption ───────────────────────────────────────────────────────────────
   // Always truncated to 2 lines in the feed; full caption lives on the detail screen.
@@ -336,6 +354,36 @@ export default function FeedPage({
     () => resolveMediaKey(post.mediaKey, post.mediaUrl),
     [post.mediaKey, post.mediaUrl],
   );
+
+  // ── Share press handler ───────────────────────────────────────────────────
+  // Defined after heroImage so the dep array references the memoised value.
+  const handleSharePress = useCallback(async () => {
+    // Extract a URI string from the resolved image source.
+    // heroImage is ImageSourcePropType — we need the raw URI for sharing.
+    const src = heroImage as { uri?: string } | number;
+    const mediaUri = typeof src === 'object' && src !== null && 'uri' in src
+      ? (src as { uri: string }).uri
+      : null;
+    if (!mediaUri) return; // seed/bundled assets — not shareable
+
+    setIsSharing(true);
+    try {
+      // On native: wait for the off-screen card image to finish loading
+      // before react-native-view-shot captures it.
+      if (Platform.OS !== 'web' && !cardImageLoadedRef.current) {
+        await Promise.race([
+          new Promise<void>(resolve => { cardImageReadyResolveRef.current = resolve; }),
+          new Promise<void>(resolve => setTimeout(resolve, 2000)),
+        ]);
+      }
+      await executeShareCard({ mediaUri, cardRef, showToast });
+    } catch {
+      // User cancelled the share sheet or an unexpected error — not a crash.
+    } finally {
+      setIsSharing(false);
+    }
+  }, [heroImage, showToast]);
+
   const petName   = post.pet.name;
   const petBreed  = post.pet.breed ?? '';
   const petId     = post.pet.id;
@@ -412,7 +460,7 @@ export default function FeedPage({
           onCommentPress={() =>
             onOpenCommentSheet({ postId: post.id, onCommentPosted: handleCommentPosted })
           }
-          onSharePress={onOpenShareSheet}
+          onSharePress={handleSharePress}
           onBoopFired={spawnBoopPop}
           onTreatFired={spawnTreatPop}
           onToast={showToast}
@@ -502,6 +550,34 @@ export default function FeedPage({
       >
         <Text style={styles.outOfTreatsText}>{toastMsg}</Text>
       </Animated.View>
+
+      {/*
+       * ── OFF-SCREEN SHARE CARD (native only) ─────────────────────────────
+       * Rendered outside the visible area via left:-9999 so react-native-view-shot
+       * can capture it.  On web we compose via Canvas API instead — no view needed.
+       */}
+      {Platform.OS !== 'web' && (
+        <ShareCard
+          ref={cardRef}
+          source={heroImage}
+          onImageLoaded={handleCardImageLoaded}
+        />
+      )}
+
+      {/*
+       * ── SHARE GENERATION OVERLAY ─────────────────────────────────────────
+       * A brief translucent dimmer with a spinner while the card is being
+       * composited.  pointerEvents:none so gestures pass through if dismissed.
+       */}
+      {isSharing && (
+        <View
+          style={styles.sharingOverlay}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          pointerEvents={'none' as any}
+        >
+          <ActivityIndicator size="small" color="rgba(255,255,255,0.85)" />
+        </View>
+      )}
     </View>
   );
 }
@@ -611,5 +687,16 @@ const styles = StyleSheet.create({
     fontStyle: 'normal' as const,
     color: 'rgba(240,244,248,0.60)',
     ...TEXT_SHADOW,
+  },
+  // Share-card generation overlay — brief translucent dimmer while the card
+  // is being composited and handed to the OS share sheet.
+  // pointerEvents:none lets through any taps underneath.
+  sharingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems:      'center',
+    justifyContent:  'center',
+    backgroundColor: 'rgba(0,0,0,0.35)',
+    zIndex:          1000,
+    elevation:       1000,
   },
 });

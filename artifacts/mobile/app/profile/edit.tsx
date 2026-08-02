@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
 
   input: {
     fontFamily:        'Inter_400Regular',
-    fontSize:          15,
+    fontSize:          16, // ≥16 prevents iOS Safari auto-zoom on focus
     borderWidth:       StyleSheet.hairlineWidth,
     borderRadius:      10,
     paddingHorizontal: 14,

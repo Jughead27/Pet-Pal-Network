@@ -694,7 +694,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical:   Platform.OS === 'ios' ? 13 : 10,
     fontFamily:        'Inter_400Regular',
-    fontSize:          15,
+    fontSize:          16, // ≥16 prevents iOS Safari auto-zoom on focus
   },
   bioInput: {
     minHeight:         80,
@@ -729,7 +729,7 @@ const s = StyleSheet.create({
   searchInput: {
     flex:            1,
     fontFamily:      'Inter_400Regular',
-    fontSize:        15,
+    fontSize:        16, // ≥16 prevents iOS Safari auto-zoom on focus
     paddingVertical: Platform.OS === 'ios' ? 11 : 8,
   },
 

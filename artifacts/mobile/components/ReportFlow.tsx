@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     borderRadius:      12,
     paddingHorizontal: 14,
     paddingVertical:   10,
-    fontSize:          14,
+    fontSize:          16, // ≥16 prevents iOS Safari auto-zoom on focus
     lineHeight:        20,
     minHeight:         80,
     maxHeight:         140,

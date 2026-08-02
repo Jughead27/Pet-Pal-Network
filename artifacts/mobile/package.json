@@ -57,10 +57,14 @@
   "dependencies": {
     "@clerk/clerk-expo": "^2.19.31",
     "expo-auth-session": "~7.0.11",
+    "expo-clipboard": "~8.0.8",
+    "expo-file-system": "~19.0.23",
     "expo-image-manipulator": "^14.0.8",
     "expo-secure-store": "^15.0.8",
+    "expo-sharing": "~14.0.8",
     "phosphor-react-native": "^3.0.6",
     "react-native-reanimated": "~4.1.7",
+    "react-native-view-shot": "4.0.3",
     "smartcrop": "^2.0.5"
   }
 }
