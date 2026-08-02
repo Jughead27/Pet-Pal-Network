@@ -1,0 +1,20 @@
+SCOPE (one change): Redo the right-rail icon shadow. The current shadow is a hard-edged offset duplicate that looks embossed/amateur (the earlier version was a box tile). Replace it with a SOFT, subtle, BLURRED shadow that follows each glyph — the treatment Instagram/TikTok use for over-photo rail icons. Rail only.
+
+components/ActionRail.tsx:
+- Remove the current shadow entirely (the offset duplicate-glyph copies, and any container shadow or background rect).
+- Give each rail glyph a SOFT, BLURRED drop shadow that hugs the icon outline — a faint dark halo. NOT a hard offset copy, NOT a rectangle, NOT a heavy blob.
+  - Web (current target): apply CSS filter: drop-shadow(0 1px 2px rgba(0,0,0,0.55)) to each icon. The blur radius (the third value) is what makes it soft and professional, and it follows the SVG shape so there's no box. Tune opacity/blur to taste, but keep it subtle and tight.
+  - Native (iOS/Android): match it with react-native-svg's drop-shadow filter, or a soft shadow with a real blur radius — same soft-halo result, no hard edge.
+- Keep weight="regular", current sizes (Boop/Treat 28, Comment/Share 24), and colors (coral / gold / foreground). Counts, handlers, toasts, and the pop/scatter system stay untouched.
+- If a clean soft drop-shadow genuinely can't be achieved on the web build, DO NOT fall back to a hard shadow or a box — instead use a single, very subtle continuous scrim: a soft vertical gradient (transparent → ~30% black) behind the whole rail column, so all four icons read against a faint darkening with no per-icon effect.
+
+DO NOT MODIFY: the nav bar, any tap behavior, the reaction/pop system, counts, toasts, the follow paw, avatar placeholders, the API, or the schema. NO schema change. No new dependencies.
+
+PRESERVATION CLAUSE: only the rail shadow technique changes. Everything else byte-identical. Web, iOS, and Android render identically.
+
+ACCEPTANCE TEST:
+1. On a post over the busy/bright photo: each rail icon reads clearly, with only a soft faint halo — no rectangle/tile, no hard double-image, no heavy blob. It should look like a polished IG/TikTok rail.
+2. Boop still pops/persists, treat works, toasts fire.
+3. Home/nav unchanged; post flow → sign out.
+
+Commit your changes locally.

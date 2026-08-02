@@ -35,9 +35,17 @@ const TEACHING_KEY_BOOP  = 'fishbook:teaching:boop';
 const TEACHING_KEY_TREAT = 'fishbook:teaching:treat';
 
 // ─── Glyph shadow helper ──────────────────────────────────────────────────────
-// Renders the icon twice: a near-black copy offset 1 px down-right at ~55%
-// opacity, then the real icon on top.  The result is a shape-hugging drop
-// shadow that works identically on web, iOS, and Android — no rectangle tile.
+// Wraps each rail glyph in a View that applies a soft, blurred drop-shadow:
+//
+//   Web  — CSS `filter: drop-shadow(…)` follows the SVG outline exactly, so
+//           there is no rectangle and no hard double-image.  This is the same
+//           technique Instagram / TikTok use for their over-photo rail icons.
+//
+//   iOS / Android — React Native View shadow props produce a Gaussian-blurred
+//           shadow with a real shadowRadius; it is not perfectly glyph-shaped
+//           but is tight and soft enough to look equivalent in practice.
+//
+// No duplicate glyph, no background rect, no box-shadow tile.
 
 interface GlyphShadowProps {
   // The Phosphor icon component (e.g. HandTap, Bone, ChatCircle …)
@@ -50,28 +58,29 @@ interface GlyphShadowProps {
 
 function WithGlyphShadow({ icon: Icon, color, size, weight = 'regular' }: GlyphShadowProps) {
   return (
-    <View style={glyphShadowStyles.container}>
-      {/* Shadow copy — near-black, offset 1×1.5 px, 55% opacity */}
-      <View style={glyphShadowStyles.shadow} pointerEvents="none">
-        <Icon color="#000000" size={size} weight={weight} />
-      </View>
-      {/* Real icon on top */}
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    <View style={Platform.OS === 'web' ? (glyphShadowStyles.web as any) : glyphShadowStyles.native}>
       <Icon color={color} size={size} weight={weight} />
     </View>
   );
 }
 
 const glyphShadowStyles = StyleSheet.create({
-  container: {
-    // No background, no border-radius — keeps it a pure glyph layer.
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
+  // Web: CSS filter drop-shadow follows the SVG glyph shape — no box.
+  // `filter` is not in RN's StyleSheet types; cast at call-site via (as any).
+  web: {
+    // @ts-ignore — valid CSS property, not in RN types
+    filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.60))',
   },
-  shadow: {
-    position: 'absolute',
-    opacity: 0.55,
-    transform: [{ translateX: 1 }, { translateY: 1.5 }],
+  // Native: blurred View shadow — closest achievable without react-native-svg
+  // filter wiring.  shadowRadius gives the Gaussian blur on iOS; elevation
+  // maps to Material shadow on Android.
+  native: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.55,
+    shadowRadius: 3,
+    elevation: 4,
   },
 });
 
