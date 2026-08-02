@@ -1,0 +1,24 @@
+SCOPE (one change): Unify the paw glyph. Replace the custom PawIcon in the follow control AND the profile avatar placeholders with Phosphor's PawPrint, so both share one source and match the icon family. Enlarge the follow paw to fill the majority of its button, and preserve the follow animation.
+
+FOLLOW CONTROL (components/AddToPackLink.tsx):
+- Replace the current PawIcon glyph with Phosphor PawPrint (from phosphor-react-native, already installed).
+- States, driven by the EXISTING progress Animated.Value (0 = not following → 1 = following), behavior unchanged:
+  - Not following: PawPrint weight="regular" (outline), no "following" text — exactly the current not-following behavior.
+  - Following: PawPrint weight="fill", with the existing "following" whisper label.
+  - Animate the outline→fill transition using the existing progress value (e.g. crossfade a regular PawPrint fading out against a fill PawPrint fading in, tied to progress). Keep the "following" label opacity animation and the PackContext cross-surface sync exactly as they are.
+- SIZE: the paw currently reads too subtle — enlarge it so it fills the MAJORITY of its circular button/ring (generous padding only). Keep the ring/touchable layout and tap-to-toggle behavior intact.
+
+AVATAR PLACEHOLDERS (profile page — the fallback shown when a pet has no avatar):
+- Use the SAME Phosphor PawPrint (weight="regular"/"light"), sized generously to fill most of the placeholder circle, so it visually matches the follow paw. This replaces whatever placeholder glyph is there now.
+
+DO NOT MODIFY: the nav bar, the rail icons, the reaction/pop system, counts, toasts, the follow tap/toggle logic or PackContext, the API, or the schema. NO schema change. No new dependencies (use the phosphor-react-native already installed).
+
+PRESERVATION CLAUSE: only the paw glyph (follow + avatar placeholder), its size, and the outline↔fill animation wiring change. The follow behavior, the "following" label, cross-surface sync, and tap-to-toggle stay byte-identical. Web, iOS, and Android render identically.
+
+ACCEPTANCE TEST (golden path):
+1. Sign in → Home: on a feed post, the follow paw beside the pet name is noticeably larger (fills its button), reads as an outline when not following and a filled paw when following, with the "following" whisper when followed.
+2. Tap it → toggles follow, the paw animates outline↔fill smoothly, and the state syncs to the profile (PackContext).
+3. Profile page: a pet with no avatar shows the same PawPrint placeholder, matching the follow paw's style.
+4. Boop still pops/persists, treat works, nav unchanged → post flow → sign out.
+
+Commit your changes locally.

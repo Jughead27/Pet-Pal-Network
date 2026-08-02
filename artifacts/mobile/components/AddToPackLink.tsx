@@ -29,7 +29,7 @@ import * as Haptics from 'expo-haptics';
 import { useJoinPetPack, useLeavePetPack } from '@workspace/api-client-react';
 import type { PackResult } from '@workspace/api-client-react';
 import { usePackContext } from '@/context/PackContext';
-import PawIcon from '@/components/PawIcon';
+import { PawPrint } from 'phosphor-react-native';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -129,11 +129,13 @@ export default function AddToPackLink({ petId, initialInPack, onSuccess }: AddTo
         Active ring:   solid light fill, light border → fades in when active.
       */}
       <View style={styles.ringContainer}>
+        {/* Inactive: outline paw, fades out as progress → 1 */}
         <Animated.View style={[styles.ring, styles.ringInactive, { opacity: inactiveOpacity }]}>
-          <PawIcon size={14} color="rgba(240,244,248,0.80)" />
+          <PawPrint size={20} weight="regular" color="rgba(240,244,248,0.80)" />
         </Animated.View>
+        {/* Active: filled paw, fades in as progress → 1 */}
         <Animated.View style={[styles.ring, styles.ringActive, { opacity: progress }]}>
-          <PawIcon size={14} color="#060B10" />
+          <PawPrint size={20} weight="fill" color="#060B10" />
         </Animated.View>
       </View>
 
@@ -156,12 +158,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
   },
   ringContainer: {
-    width: 26,
-    height: 26,
+    width: 30,
+    height: 30,
   },
   ring: {
     ...StyleSheet.absoluteFillObject,
-    borderRadius: 13,
+    borderRadius: 15,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',

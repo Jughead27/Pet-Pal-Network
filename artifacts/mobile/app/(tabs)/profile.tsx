@@ -33,7 +33,8 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Feather, Ionicons } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
+import { PawPrint } from 'phosphor-react-native';
 import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
@@ -791,7 +792,7 @@ function PetThumbnail({ thumbnailUrl, size, colors }: PetThumbnailProps) {
           alignItems: 'center', justifyContent: 'center',
         }}
       >
-        <Ionicons name="paw-outline" size={Math.round(size * 0.45)} color={colors.mutedForeground} />
+        <PawPrint size={Math.round(size * 0.58)} weight="light" color={colors.mutedForeground} />
       </View>
     );
   }
@@ -935,7 +936,7 @@ function FriendAvatarCluster({ pets, colors }: FriendAvatarClusterProps) {
           alignItems: 'center', justifyContent: 'center',
         }}
       >
-        <Ionicons name="paw-outline" size={18} color={colors.mutedForeground} />
+        <PawPrint size={24} weight="light" color={colors.mutedForeground} />
       </View>
     );
   }
