@@ -94,50 +94,92 @@ function TreatIcon({ color, size }: { color: string; size: number }) {
   return <WithGlyphShadow icon={Bone} color={color} size={size} />;
 }
 
-// ─── BoopRipple ───────────────────────────────────────────────────────────────
-// A single coral ring that expands and fades from the boop icon on each press.
-// Multiple instances stack so rapid presses produce overlapping ripples.
+// ─── BoopSpark ────────────────────────────────────────────────────────────────
+// "Boop landed" burst: 5 short tapered coral rays that radiate outward from the
+// icon center and fade in ~300 ms.  Replaces the generic expanding-ring ripple —
+// this is the signature boop moment at the finger, distinct from the "Boop!"
+// scatter pops that float over the photo.
+//
+// Transform order: [{rotate}, {translateY}] → translateY moves along the already-
+// rotated Y-axis, so each ray springs in its own outward direction automatically.
+//
+// Cap: SPARK_CAP concurrent bursts; extra taps are silently dropped so rapid
+// tapping stays smooth with no runaway React state growth.
 
-interface BoopRippleProps {
+const SPARK_ANGLES = [0, 72, 144, 216, 288]; // 5 evenly distributed directions (°)
+const SPARK_CAP    = 4;                        // max live bursts at once
+
+interface BoopSparkProps {
   color: string;
   onDone: () => void;
 }
 
-function BoopRipple({ color, onDone }: BoopRippleProps) {
-  const scale   = useRef(new Animated.Value(0.25)).current;
-  const opacity = useRef(new Animated.Value(0.85)).current;
+function BoopSpark({ color, onDone }: BoopSparkProps) {
+  // One travel value per ray — all share a single opacity envelope.
+  const travels = useRef(SPARK_ANGLES.map(() => new Animated.Value(2))).current;
+  const opacity  = useRef(new Animated.Value(0.95)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(scale, {
-        toValue: 3.2,
-        duration: 480,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }),
+      // Each ray springs from 2 (inside icon) to -22 (clear of icon edge).
+      ...travels.map((t) =>
+        Animated.timing(t, {
+          toValue: -22,
+          duration: 280,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        })
+      ),
       Animated.timing(opacity, {
         toValue: 0,
-        duration: 480,
+        duration: 310,
         easing: Easing.in(Easing.quad),
         useNativeDriver: true,
       }),
     ]).start(({ finished }) => {
       if (finished) onDone();
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
     <Animated.View
-      style={[
-        styles.rippleRing,
-        { borderColor: color, transform: [{ scale }], opacity },
-      ]}
-      // pointerEvents in style (RN 0.76+)
+      style={[StyleSheet.absoluteFillObject, { opacity }]}
       pointerEvents="none"
-    />
+    >
+      {SPARK_ANGLES.map((angle, i) => (
+        <Animated.View
+          key={angle}
+          style={[
+            sparkStyles.ray,
+            {
+              backgroundColor: color,
+              transform: [
+                // 1. Orient ray in its outward direction.
+                { rotate: `${angle}deg` },
+                // 2. Translate along the now-rotated Y-axis (negative = outward).
+                { translateY: travels[i] },
+              ],
+            },
+          ]}
+        />
+      ))}
+    </Animated.View>
   );
 }
+
+// Each ray: a short pill centered within boopIconArea (width:40, height:32).
+// left = (40 - 3) / 2 = 18.5 → 18;  top = (32 - 10) / 2 = 11
+const sparkStyles = StyleSheet.create({
+  ray: {
+    position: 'absolute',
+    width: 3,
+    height: 10,
+    borderRadius: 1.5,
+    left: 18,
+    top: 11,
+  },
+});
 
 // ─── BoopRailItem ─────────────────────────────────────────────────────────────
 // Dedicated boop button with:
@@ -164,12 +206,12 @@ function BoopRailItem({
   const colors = useColors();
   const scale = useRef(new Animated.Value(1)).current;
 
-  // Stack of live ripple IDs — multiple can coexist during rapid presses.
-  const [ripples, setRipples] = useState<number[]>([]);
-  const rippleIdRef = useRef(0);
+  // Stack of live spark burst IDs — capped at SPARK_CAP for rapid-tap safety.
+  const [sparks, setSparks] = useState<number[]>([]);
+  const sparkIdRef = useRef(0);
 
-  const removeRipple = useCallback((id: number) => {
-    setRipples((prev) => prev.filter((r) => r !== id));
+  const removeSpark = useCallback((id: number) => {
+    setSparks((prev) => prev.filter((s) => s !== id));
   }, []);
 
   const handlePress = useCallback(() => {
@@ -196,9 +238,11 @@ function BoopRailItem({
         }),
       ]).start();
 
-      // Spawn a new coral ripple ring
-      const id = ++rippleIdRef.current;
-      setRipples((prev) => [...prev, id]);
+      // Spawn a coral spark burst (capped so rapid tapping stays smooth).
+      if (sparks.length < SPARK_CAP) {
+        const id = ++sparkIdRef.current;
+        setSparks((prev) => [...prev, id]);
+      }
     }
 
     // Medium impact — lands physically on a real phone
@@ -230,12 +274,12 @@ function BoopRailItem({
         accessibilityRole="button"
       >
         <View style={styles.boopIconArea}>
-          {/* Coral ripple rings — rendered behind the icon, overflow: visible */}
-          {ripples.map((id) => (
-            <BoopRipple
+          {/* Coral spark bursts — rendered behind the icon, overflow: visible */}
+          {sparks.map((id) => (
+            <BoopSpark
               key={id}
               color={activeColor}
-              onDone={() => removeRipple(id)}
+              onDone={() => removeSpark(id)}
             />
           ))}
           <Animated.View style={{ transform: [{ scale }] }}>
@@ -647,17 +691,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'visible',
-  },
-  // Coral ripple ring — starts at scale 0.25 (8px diameter) and expands
-  // to scale 3.2 (~102px) while fading. Base ring is 32×32 with a 2.5px border.
-  rippleRing: {
-    position: 'absolute',
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2.5,
-    // background is transparent — it's a ring, not a filled circle
-    backgroundColor: 'transparent',
   },
   count: {
     fontSize: 11,

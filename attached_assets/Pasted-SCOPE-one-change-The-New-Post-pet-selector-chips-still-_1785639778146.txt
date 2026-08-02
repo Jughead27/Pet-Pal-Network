@@ -1,0 +1,18 @@
+SCOPE (one change): The New Post pet-selector chips still show only the PawPrint placeholder even for pets that HAVE an avatar image. On the profile "My Pets" list, Ripley and Newt show their real photos; on New Post those same pets show a paw. Make the New Post chips render each pet's REAL avatar image when it has one — identical to the My Pets rows — with the PawPrint placeholder ONLY as the no-image fallback. The placeholder sizing is already correct; keep it.
+
+NEW POST page pet chips (the "posting as [pet]" selector):
+- The profile "My Pets" list already renders pet avatars correctly (Ripley/Newt = photos, Winston = paw). Use the EXACT SAME avatar source and rendering here — ideally the same shared component.
+- Trace how My Pets gets the image: which pet field holds the avatar (e.g. avatarUrl / signed R2 URL) and which component renders it, then apply that identical field + component to the New Post chips.
+- MOST LIKELY CAUSE: the pet objects feeding the New Post selector come from a lighter pet list that does NOT include the avatar image URL, so the chip has nothing to show and falls back to the paw. Confirm whether the New Post pet data carries the same avatar field My Pets uses; if it doesn't, include that existing avatar URL field in the data the selector consumes.
+- Result must be: image when present → else PawPrint placeholder (current size/style kept).
+
+DO NOT MODIFY: the My Pets / profile avatar behavior (it's the correct reference — match it), the follow paw, the nav bar, rail icons, the reaction/pop system, counts, toasts, the compose flow logic, or the schema. NO schema change — if the pet list lacks the avatar field, include the EXISTING avatar URL field in that response, do not add columns. No new dependencies.
+
+PRESERVATION CLAUSE: only the New Post chip avatar rendering (and, if needed, surfacing the existing avatar URL field in the pet list it consumes) changes. Everything else byte-identical. Web, iOS, and Android render identically.
+
+ACCEPTANCE TEST (golden path):
+1. Open New Post: Ripley and Newt show their real avatar photos in their chips (matching My Pets); Winston shows the PawPrint placeholder. Consistent with the profile page.
+2. Select a pet → the compose flow (Fit/adjust, caption, post) works.
+3. My Pets / profile unchanged; follow paw, boop/treat/nav unchanged → post flow → sign out.
+
+Commit your changes locally.

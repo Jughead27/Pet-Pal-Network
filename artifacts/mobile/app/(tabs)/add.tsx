@@ -529,7 +529,7 @@ export default function AddScreen() {
             // Single-pet: auto-selected — show a quiet "posting as" line
             <View style={s.postingAsRow}>
               <PetAvatar
-                url={pets[0].avatarUrl}
+                url={pets[0].thumbnailUrl}
                 size={32}
                 backgroundColor={colors.secondary}
                 pawColor={colors.mutedForeground}
@@ -657,7 +657,7 @@ function PetChip({ pet, selected, colors, onPress }: PetChipProps) {
       ]}
     >
       <PetAvatar
-        url={pet.avatarUrl}
+        url={pet.thumbnailUrl}
         size={44}
         backgroundColor={selected ? 'rgba(255,255,255,0.25)' : colors.border}
         pawColor={selected ? colors.primaryForeground : colors.mutedForeground}
