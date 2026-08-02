@@ -240,6 +240,24 @@ export default function SniffScreen() {
     return unsubscribe;
   }, [navigation, closePost]);
 
+  // ── Tab-press full reset ───────────────────────────────────────────────────
+  // Tapping the Sniff tab (even when already focused) resets to the default
+  // state: All species, Fresh sort, grid mode, scrolled to top.
+  // gridScrollY.current = 0 before closePost() so closePost's rAF does not
+  // restore the old scroll position.
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (navigation as any).addListener('tabPress', () => {
+      setActiveSpeciesId(null);
+      setSort(GetFeedSort.fresh);
+      gridScrollY.current = 0;
+      closePost();
+      // Scroll grid to top — no-op if grid is not mounted (pager mode),
+      // in which case closePost() handles the transition back to grid at 0.
+      gridListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+  }, [navigation, closePost]);
+
   // ── Shared container / layout ─────────────────────────────────────────────
   const containerStyle = Platform.OS === 'web'
     ? [styles.fill, { height: windowHeight, backgroundColor: colors.background }]

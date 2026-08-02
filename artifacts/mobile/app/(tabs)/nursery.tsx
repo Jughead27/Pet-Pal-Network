@@ -22,7 +22,7 @@
  * No react-native-reanimated imports.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigation } from 'expo-router';
 import {
   AccessibilityInfo,
@@ -30,6 +30,8 @@ import {
   BackHandler,
   FlatList,
   Platform,
+  Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -54,12 +56,18 @@ import ShareSheet from '@/components/ShareSheet';
 
 // THUMBNAIL_SIZE is computed dynamically inside the component from useColumnWidth()
 // so it reflects the 430-px column width on web desktop, not the full window width.
-const NUM_COLS  = 3;
-const CELL_GAP  = 2;  // px between columns (and rows)
+const NUM_COLS   = 3;
+const CELL_GAP   = 2;   // px between columns (and rows)
+const CHIP_HEIGHT = 36; // height of the species filter chip row
 
 // ─── NurseryScreen ─────────────────────────────────────────────────────────────
 
 type ViewMode = 'grid' | 'pager';
+
+interface SpeciesChip {
+  id: string;
+  name: string;
+}
 
 export default function NurseryScreen() {
   const colors        = useColors();
@@ -71,9 +79,38 @@ export default function NurseryScreen() {
   const columnWidth   = useColumnWidth();
   const thumbnailSize = (columnWidth - CELL_GAP * (NUM_COLS - 1)) / NUM_COLS;
 
-  // ── Shared nursery data ────────────────────────────────────────────────────
-  const { data, isLoading, isError } = useGetFeed({ nursery: true });
-  const posts = data?.posts ?? [];
+  // ── Species filter (null = "All") ─────────────────────────────────────────
+  const [activeSpeciesId, setActiveSpeciesId] = useState<string | null>(null);
+
+  // ── Nursery data ───────────────────────────────────────────────────────────
+  // Two queries mirror the Sniff pattern:
+  //   allData  — unfiltered nursery posts, used to derive species chips.
+  //   filteredData — same params + optional speciesId, drives the grid.
+  // When activeSpeciesId is null both queries share the same cache key.
+  const { data: allData, isLoading, isError } = useGetFeed({ nursery: true });
+  const {
+    data: filteredData,
+    isLoading: filteredLoading,
+    isError: filteredError,
+  } = useGetFeed(
+    activeSpeciesId
+      ? { nursery: true, speciesId: activeSpeciesId }
+      : { nursery: true },
+  );
+  const posts = filteredData?.posts ?? [];
+
+  // ── Species chips — derived from the unfiltered result ────────────────────
+  const chips: SpeciesChip[] = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const p of allData?.posts ?? []) {
+      if (p.pet.speciesId && !seen.has(p.pet.speciesId)) {
+        seen.set(p.pet.speciesId, p.pet.species);
+      }
+    }
+    return Array.from(seen.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [allData?.posts]);
 
   // ── Layout measurement (shared between grid and pager) ─────────────────────
   // On web effectivePageHeight is always windowHeight (onLayout resolves to 0).
@@ -206,16 +243,24 @@ export default function NurseryScreen() {
   }, [viewMode, closePost]);
 
   // ── Reset to grid on tab blur ──────────────────────────────────────────────
-  // When the user leaves the Nursery tab (switching to Home, Profile, etc.)
-  // the screen stays mounted, so viewMode would persist. We subscribe to the
-  // navigation 'blur' event directly — bypassing useFocusEffect which guards on
-  // optionalNavigation and silently no-ops if that reference hasn't resolved.
-  // closePost() resets view mode + sheets and restores the grid scroll position.
   useEffect(() => {
     const unsubscribe = navigation.addListener('blur', () => {
       closePost();
     });
     return unsubscribe;
+  }, [navigation, closePost]);
+
+  // ── Tab-press full reset ───────────────────────────────────────────────────
+  // Tapping the Nursery tab (even when already focused) resets to the default
+  // state: All species, grid mode, scrolled to top.
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (navigation as any).addListener('tabPress', () => {
+      setActiveSpeciesId(null);
+      gridScrollY.current = 0;
+      closePost();
+      gridListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
   }, [navigation, closePost]);
 
   // ── Shared container style ─────────────────────────────────────────────────
@@ -235,8 +280,76 @@ export default function NurseryScreen() {
     [],
   );
 
+  // ── Nursery header — single opaque bar in normal flex flow above the grid ──
+  // Masthead + optional chip row in one solid View.  No absolute positioning
+  // needed; the FlatList is a flex sibling below this, so it scrolls cleanly
+  // underneath without any z-index layering or header-bleed issues.
+  const nurseryHeader = (
+    <View style={[styles.headerBar, { backgroundColor: colors.background }]}>
+      <SectionMasthead
+        icon={<BabyCarriage size={18} color={colors.foreground} weight="regular" />}
+        title="Nursery"
+        style={{ paddingTop: topInset }}
+      />
+      {chips.length > 0 && (
+        <View style={styles.chipBand}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.chipScroll}
+            contentContainerStyle={styles.chipContent}
+          >
+            {/* "All" chip */}
+            <Pressable
+              onPress={() => { setActiveSpeciesId(null); gridScrollY.current = 0; }}
+              style={styles.chipPressable}
+              accessibilityRole="button"
+              accessibilityLabel="Show all species"
+              accessibilityState={{ selected: activeSpeciesId === null }}
+            >
+              <Text
+                style={[
+                  styles.chipText,
+                  activeSpeciesId === null
+                    ? [styles.chipTextActive,   { color: colors.foreground }]
+                    : [styles.chipTextInactive, { color: colors.mutedForeground }],
+                ]}
+              >
+                All
+              </Text>
+            </Pressable>
+
+            {chips.map((chip) => (
+              <Pressable
+                key={chip.id}
+                onPress={() => { setActiveSpeciesId(chip.id); gridScrollY.current = 0; }}
+                style={styles.chipPressable}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${chip.name}`}
+                accessibilityState={{ selected: activeSpeciesId === chip.id }}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    activeSpeciesId === chip.id
+                      ? [styles.chipTextActive,   { color: colors.foreground }]
+                      : [styles.chipTextInactive, { color: colors.mutedForeground }],
+                  ]}
+                >
+                  {chip.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  );
+
   // ── Loading / error (shared across both layers) ────────────────────────────
-  if (isLoading) {
+  // Spinner only on the very first load (allData not yet available).
+  // Subsequent filter changes are instant from cache; no flash of spinner.
+  if (isLoading && !allData) {
     return (
       <View style={[containerStyle, styles.centered]}>
         <ActivityIndicator color={colors.primary} size="large" />
@@ -254,15 +367,11 @@ export default function NurseryScreen() {
     );
   }
 
-  // ── Empty state ────────────────────────────────────────────────────────────
-  if (posts.length === 0) {
+  // ── Empty: no nursery posts at all ─────────────────────────────────────────
+  if ((allData?.posts ?? []).length === 0) {
     return (
       <View style={containerStyle}>
-        <SectionMasthead
-          icon={<BabyCarriage size={18} color={colors.foreground} weight="regular" />}
-          title="Nursery"
-          style={{ paddingTop: topInset }}
-        />
+        {nurseryHeader}
         <View style={[styles.fill, styles.centered]}>
           <View style={styles.emptyContent}>
             <BabyCarriage size={72} color={colors.mutedForeground} weight="regular" />
@@ -273,6 +382,30 @@ export default function NurseryScreen() {
               Flag baby moments when you post and they'll{'\n'}hatch right here.
             </Text>
           </View>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Empty: species filter active but no matching nursery posts ─────────────
+  if (posts.length === 0 && activeSpeciesId !== null) {
+    const chipName = chips.find((c) => c.id === activeSpeciesId)?.name ?? 'this species';
+    return (
+      <View style={containerStyle}>
+        {nurseryHeader}
+        <View style={[styles.fill, styles.centered]}>
+          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+            No nursery posts for {chipName}
+          </Text>
+          <Pressable
+            onPress={() => setActiveSpeciesId(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Show all nursery posts"
+          >
+            <Text style={[styles.showAllLink, { color: colors.primary }]}>
+              Show all
+            </Text>
+          </Pressable>
         </View>
       </View>
     );
@@ -368,11 +501,7 @@ export default function NurseryScreen() {
 
   return (
     <View style={containerStyle} onLayout={handleContainerLayout}>
-      <SectionMasthead
-        icon={<BabyCarriage size={18} color={colors.foreground} weight="regular" />}
-        title="Nursery"
-        style={{ paddingTop: topInset, backgroundColor: colors.background }}
-      />
+      {nurseryHeader}
       <FlatList
         key="grid"
         ref={gridListRef}
@@ -406,6 +535,49 @@ const styles = StyleSheet.create({
   fill:    { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center' },
   errorText: { fontSize: 14, textAlign: 'center', fontFamily: 'Inter_400Regular' },
+
+  // ── Header bar — solid opaque wrapper in normal flex flow above the grid ───
+  headerBar: {
+    // backgroundColor set inline from colors.background
+  },
+
+  // ── Species chip band ──────────────────────────────────────────────────────
+  chipBand: {
+    height: CHIP_HEIGHT,
+  },
+  chipScroll: {
+    flex:      1,
+    maxHeight: CHIP_HEIGHT,
+  },
+  chipContent: {
+    flexDirection:     'row',
+    alignItems:        'flex-end',
+    paddingHorizontal: 16,
+    paddingBottom:     8,
+    gap:               20,
+    height:            undefined,
+  },
+  chipPressable: {
+    paddingVertical: 4,
+  },
+  chipText: {
+    fontSize:      15,
+    letterSpacing: -0.2,
+  },
+  chipTextActive: {
+    fontFamily: 'Inter_600SemiBold',
+  },
+  chipTextInactive: {
+    fontFamily: 'Inter_400Regular',
+  },
+
+  // ── Filtered-empty "Show all" link ─────────────────────────────────────────
+  showAllLink: {
+    fontFamily:    'Inter_600SemiBold',
+    fontSize:      15,
+    letterSpacing: -0.1,
+    marginTop:     8,
+  },
 
   // ── Empty state ────────────────────────────────────────────────────────────
   emptyContent: {

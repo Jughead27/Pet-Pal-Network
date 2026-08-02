@@ -23,6 +23,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { useNavigation } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
 import { useGetFeed } from '@workspace/api-client-react';
 import { getPostSuccessSignalTime, clearPostSuccessSignal } from '@/utils/feedScrollSignal';
@@ -35,6 +36,7 @@ import ShareSheet from '@/components/ShareSheet';
 
 export default function HomeScreen() {
   const colors = useColors();
+  const navigation = useNavigation();
   const { data, dataUpdatedAt, isLoading, isError } = useGetFeed();
   const posts = data?.posts ?? [];
 
@@ -77,6 +79,17 @@ export default function HomeScreen() {
 
   // ── FlatList refs ─────────────────────────────────────────────────────────
   const flatListRef = useRef<FlatList<FeedPost>>(null);
+
+  // ── Tab-press scroll-to-top ───────────────────────────────────────────────
+  // Tapping the Home tab (even when already focused) always scrolls the feed
+  // back to the latest post.  Uses tabPress rather than useFocusEffect because
+  // useFocusEffect silently no-ops on tab screens.
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (navigation as any).addListener('tabPress', () => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    });
+  }, [navigation]);
 
   // ── Post-success scroll-to-top ────────────────────────────────────────────
   // When the Add flow posts successfully it stamps a signal timestamp.

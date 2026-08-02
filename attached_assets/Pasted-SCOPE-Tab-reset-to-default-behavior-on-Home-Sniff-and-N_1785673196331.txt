@@ -1,0 +1,22 @@
+SCOPE: Tab-reset-to-default behavior on Home, Sniff, and Nursery; add a species filter to Nursery matching Sniff's existing pattern.
+
+CONTEXT: Currently tapping a tab icon just re-focuses that tab's existing state (scroll position on Home, last-selected filter on Sniff). We want tab-tap to always return the user to that screen's DEFAULT state.
+
+CHANGES:
+1. HOME — tapping the Home tab icon (including when already on Home) should scroll the feed back to the top (latest post), not preserve the previous scroll position. Use the standard Expo Router / React Navigation "tab press while focused" listener to trigger a scrollToOffset(0) / scrollToIndex(0) on the feed FlatList ref.
+2. SNIFF — tapping the Sniff tab icon should reset the species filter to "All" and the sort back to its default (Fresh, per existing convention), regardless of what was previously selected. Same tab-press-while-focused pattern.
+3. NURSERY — same reset-to-default behavior: tapping the Nursery tab icon clears any active filter and returns to the default (unfiltered) view.
+4. NURSERY SPECIES FILTER (new) — add a species filter chip row to Nursery matching Sniff's existing chip UI/behavior exactly (same component if possible — extract shared FilterChips if Sniff's isn't already reusable). No schema change: species is already a pet field. Default state = "All" species shown.
+
+DO NOT MODIFY: boop/treat/reaction system, PopText/scatter animations, existing icon family (Phosphor set from the icon project), New Post flow, caption handling, follow-paw component, any auth/Clerk logic, the pinned-header/grid-clip fix on Sniff or Nursery.
+
+PRESERVATION CLAUSE: all existing Sniff/Nursery grid rendering, pagination, and the recently-fixed header-bleed clipping must remain unchanged in behavior — only the filter STATE reset and the new Nursery filter chips are in scope.
+
+ACCEPTANCE TEST (golden path): 
+- Sign in
+- Scroll deep into Home feed, tap Home tab again → returns to top/latest post
+- Go to Sniff, select a species filter, tap Sniff tab again → resets to "All"
+- Go to Nursery, confirm species filter chips now appear and function like Sniff's; select one, tap Nursery tab again → resets to default
+- Boop persists as before
+- Post flow works
+- Sign out
