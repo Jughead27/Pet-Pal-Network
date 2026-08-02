@@ -53,12 +53,15 @@ function CommentRow({
   colors,
   isOwn,
   onLongPress,
+  onDelete,
 }: {
   comment: PostComment;
   colors: ReturnType<typeof useColors>;
-  /** True when the viewer is the comment author — changes long-press hint. */
+  /** True when the viewer is the comment author — shows delete whisper + changes long-press hint. */
   isOwn: boolean;
   onLongPress: () => void;
+  /** Called when the viewer taps the visible "delete" whisper on their own comment. */
+  onDelete: () => void;
 }) {
   const initials = comment.authorUsername
     .split(/[._-]/)
@@ -98,6 +101,19 @@ function CommentRow({
         <Text style={[styles.commentText, { color: colors.foreground }]}>
           {comment.text}
         </Text>
+        {isOwn && (
+          <TouchableOpacity
+            onPress={onDelete}
+            activeOpacity={0.5}
+            accessibilityRole="button"
+            accessibilityLabel="Delete comment"
+            hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
+          >
+            <Text style={[styles.deleteWhisper, { color: colors.mutedForeground }]}>
+              delete
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Pressable>
   );
@@ -260,9 +276,10 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
                 <CommentRow
                   comment={item}
                   colors={colors}
-                  isOwn={item.authorId === userId}
+                  isOwn={!!userId && item.authorId === userId}
+                  onDelete={() => setDeletingCommentId(item.id)}
                   onLongPress={() => {
-                    if (item.authorId === userId) {
+                    if (!!userId && item.authorId === userId) {
                       setDeletingCommentId(item.id);
                     } else {
                       setReportingCommentId(item.id);
@@ -481,6 +498,12 @@ const styles = StyleSheet.create({
   commentText: {
     fontSize:   14,
     lineHeight: 20,
+  },
+  deleteWhisper: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   11,
+    opacity:    0.35,
+    marginTop:  3,
   },
   emptyState: {
     flex:           1,

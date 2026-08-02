@@ -1,0 +1,46 @@
+DELETE COMMENT — fix ownership bug + make delete discoverable (visible affordance, not long-press-only)
+
+CONTEXT: Delete-own-comments shipped using a 400ms long-press to reveal 
+the delete option. Two problems reported:
+  1. On at least one comment (on a post owned by James's own pet, Newt), 
+     James — the comment's actual author — does not see the delete 
+     option via long-press at all.
+  2. Even where it may be working, long-press-only is not discoverable — 
+     James: "if there is one, it is 100% not intuitive for the end 
+     user." There is currently no visible cue that a delete action 
+     exists.
+
+FIX 1 — BUG: Investigate the ownership check in CommentSheet's long-press 
+branch. Confirm whether it's strictly comparing comment.authorId (or 
+equivalent) against the viewer's userId — check for a mismatch when the 
+viewer is also the POST's owner (not just the comment's author), 
+mismatched ID formats, or stale/cached comment data. Fix so the delete 
+branch appears whenever the VIEWER wrote that specific comment, 
+regardless of who owns the post.
+
+FIX 2 — DISCOVERABILITY: Add a small, muted, typographic "delete" 
+whisper directly visible on/near each of the VIEWER's OWN comments in 
+the comment list (not on other users' comments) — same visual register 
+as the existing "report" whisper in post-detail (small, ~35% opacity, 
+no capsule/pill). Tapping it opens the existing delete confirm panel 
+(already built — minimal transparent modal, "delete comment"/"cancel"). 
+Keep the long-press-to-delete behavior as an additional shortcut, not 
+the only path — but the visible whisper is now the primary, discoverable 
+affordance.
+
+DO NOT MODIFY: the report flow for other users' comments, admin 
+moderation, the delete confirm panel itself, anything outside these two 
+fixes.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Open comments on a post — confirm a visible, quiet "delete" whisper 
+   appears on your own comments only (not on others' comments).
+2. Tap it — confirm the existing delete confirm panel opens and works 
+   as before.
+3. Reproduce the original bug case (comment on your own pet's post) — 
+   confirm delete now works correctly there too.
+4. Confirm other users still only see report (not delete) on your 
+   comments, and vice versa.
+5. Confirm the visible whisper doesn't clutter the comment list or 
+   break layout at various comment lengths.
+6. Golden path unaffected.

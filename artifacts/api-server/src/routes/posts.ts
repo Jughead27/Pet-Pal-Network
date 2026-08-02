@@ -456,10 +456,11 @@ router.post("/posts/:id/comments", async (req, res) => {
     .where(eq(usersTable.id, userId));
 
   res.status(201).json({
-    id: inserted.id,
-    text: inserted.text,
+    id:             inserted.id,
+    text:           inserted.text,
     authorUsername: user.username,
-    createdAt: inserted.createdAt,
+    authorId:       userId,        // required for client-side ownership check
+    createdAt:      inserted.createdAt,
   });
 });
 
