@@ -1,0 +1,44 @@
+CO-OWNERSHIP — add self-removal UI (currently missing)
+
+CONTEXT: The co-ownership design's core safety guarantee is "nobody can 
+force another owner off a pet, but any owner can remove themselves at 
+any time." The backend (DELETE /pets/:id/co-owners/me) already exists 
+and enforces this correctly, but there is currently NO UI anywhere for 
+a co-owner to actually do this — the pet-edit screen's earlier attempt 
+at this was unwired/dead code and has since been removed during cleanup.
+
+FIX: Add a visible "leave as owner" (or similar plain wording — avoid 
+anything that reads as harsh/final without reason) action, placed on 
+the pet profile's Owners section (the same place "+ add owner" now 
+lives) — visible to the CURRENT VIEWER only if they are themselves one 
+of the pet's owners. Tapping it calls the existing DELETE /pets/:id/
+co-owners/me endpoint. Handle the 409 "last owner" case gracefully — 
+if removal is rejected because the viewer is the sole remaining owner, 
+show a clear message explaining why (e.g. "You're the only owner — add 
+another owner before leaving, or delete the pet instead") rather than a 
+raw error.
+
+Keep it typographic, matching the Owners section's established 
+register (same tier as "+ add owner", not buried at whisper-level, 
+since choosing to leave is just as legitimate an action as adding 
+someone).
+
+DO NOT MODIFY: the add-owner flow, invite/accept/decline logic, backend 
+DELETE endpoint logic itself (already correct) — this is purely adding 
+the missing UI trigger for it.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. As a co-owner (pet has 2+ owners), find and use "leave as owner" — 
+   confirm it removes you from that pet's owners and the pet disappears 
+   from your My Pets, while remaining for the other owner(s).
+2. As the SOLE owner of a pet, attempt to leave — confirm a clear, 
+   non-error-looking message explains why it's blocked, not a raw 409.
+3. Confirm this doesn't affect the add-owner flow or anything else on 
+   the Owners section.
+4. Golden path unaffected.
+
+SEPARATE QUESTION (not part of the fix above — just answer this too): 
+are the pre-existing TypeScript search-hook errors you flagged last 
+session NEW, introduced by a recent delivery, or unrelated/pre-existing 
+elsewhere in the codebase? Just need a direct answer, no action needed 
+unless they turn out to be something this delivery touched.

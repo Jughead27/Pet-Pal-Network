@@ -21,7 +21,7 @@ import { CreatePetBody, PatchPetBody } from "@workspace/api-zod";
 import { mediaTokenUrl, copyObject } from "../lib/r2.js";
 import { notHiddenByAdminPost } from "../lib/excludeBlocked.js";
 import { writeAudit } from "../lib/writeAudit.js";
-import { isPetOwner, isPetPrimaryOwner, getPetOwnerRow } from "../lib/isPetOwner.js";
+import { isPetOwner, getPetOwnerRow } from "../lib/isPetOwner.js";
 
 const router: IRouter = Router();
 
@@ -98,7 +98,7 @@ router.get("/pets/search", async (req, res) => {
  *
  * With co-ownership:
  *   viewerOwnsPet        — viewer is any member of pet_owners (primary or co)
- *   viewerIsPrimaryOwner — viewer holds the 'primary' role
+ *   viewerOwnsPet — viewer is in pet_owners (any owner, symmetric model)
  *   each post gets viewerCanManagePost = viewer posted it OR viewer is primary
  *
  * Requires a valid Clerk session token (enforced by requireClerkAuth).
@@ -172,8 +172,7 @@ router.get("/pets/:id", async (req, res) => {
     ]),
   ]);
 
-  const viewerIsOwner       = ownerRow !== null;
-  const viewerIsPrimaryOwner = ownerRow?.role === "primary";
+  const viewerIsOwner = ownerRow !== null;
 
   const [packRow, speciesFollowRows, breedFollowRows] = packChecks;
 
@@ -205,8 +204,7 @@ router.get("/pets/:id", async (req, res) => {
     breed:              pet.breed ?? null,
     ownerId:            pet.ownerId,
     viewerInPack,
-    viewerOwnsPet:      viewerIsOwner,
-    viewerIsPrimaryOwner,
+    viewerOwnsPet: viewerIsOwner,
   };
 
   if (isBlocked) {
@@ -224,10 +222,10 @@ router.get("/pets/:id", async (req, res) => {
       viewerFollowsSpecies,
       viewerFollowsBreed,
       viewerOwnsPet:         viewerIsOwner,
-      viewerIsPrimaryOwner,
       avatarUrl:             pet.avatarKey ? mediaTokenUrl(pet.avatarKey) : null,
       avatarFocusX:          pet.avatarFocusX ?? null,
       avatarFocusY:          pet.avatarFocusY ?? null,
+      owners:                [],
       posts:                 [],
       archivedPosts:         [],
     });
@@ -282,9 +280,8 @@ router.get("/pets/:id", async (req, res) => {
     .orderBy(desc(postsTable.createdAt));
 
   const posts = rows.map((r) => {
-    // viewerCanManagePost: original poster OR primary owner
-    const viewerCanManagePost = viewerIsPrimaryOwner ||
-      (viewerIsOwner && r.postedByUserId === userId);
+    // viewerCanManagePost: any current owner may edit/archive/delete any post
+    const viewerCanManagePost = viewerIsOwner;
     return {
       id:                  r.id,
       caption:             r.caption ?? null,
@@ -366,8 +363,7 @@ router.get("/pets/:id", async (req, res) => {
     : [];
 
   const archivedPosts = archivedPostRows.map((r) => {
-    const viewerCanManagePost = viewerIsPrimaryOwner ||
-      (viewerIsOwner && r.postedByUserId === userId);
+    const viewerCanManagePost = viewerIsOwner;
     return {
       id:                  r.id,
       caption:             r.caption ?? null,
@@ -399,6 +395,17 @@ router.get("/pets/:id", async (req, res) => {
     };
   });
 
+  // Fetch all current owners for "About the owners" section
+  const ownerRows = await db
+    .select({
+      userId:   petOwnersTable.userId,
+      username: usersTable.username,
+    })
+    .from(petOwnersTable)
+    .innerJoin(usersTable, eq(usersTable.id, petOwnersTable.userId))
+    .where(eq(petOwnersTable.petId, id))
+    .orderBy(petOwnersTable.addedAt);
+
   res.json({
     id:                  pet.id,
     ownerId:             pet.ownerId,
@@ -412,11 +419,11 @@ router.get("/pets/:id", async (req, res) => {
     viewerInPack,
     viewerFollowsSpecies,
     viewerFollowsBreed,
-    viewerOwnsPet:         viewerIsOwner,
-    viewerIsPrimaryOwner,
-    avatarUrl:             pet.avatarKey ? mediaTokenUrl(pet.avatarKey) : null,
-    avatarFocusX:          pet.avatarFocusX ?? null,
-    avatarFocusY:          pet.avatarFocusY ?? null,
+    viewerOwnsPet:       viewerIsOwner,
+    avatarUrl:           pet.avatarKey ? mediaTokenUrl(pet.avatarKey) : null,
+    avatarFocusX:        pet.avatarFocusX ?? null,
+    avatarFocusY:        pet.avatarFocusY ?? null,
+    owners:              ownerRows.map((o) => ({ userId: o.userId, username: o.username })),
     posts,
     archivedPosts,
   });
@@ -489,10 +496,10 @@ router.post("/pets", async (req, res) => {
       })
       .returning();
 
-    // Primary ownership row — exactly one per pet, created atomically
+    // Ownership row — created atomically with the pet
     await tx
       .insert(petOwnersTable)
-      .values({ petId: newPet.id, userId, role: "primary" })
+      .values({ petId: newPet.id, userId })
       .onConflictDoNothing();
 
     // Auto-pack: owner always follows their own pet from creation
@@ -574,7 +581,6 @@ router.get("/me/pets", async (req, res) => {
       avatarKey:      petsTable.avatarKey,
       avatarFocusX:   petsTable.avatarFocusX,
       avatarFocusY:   petsTable.avatarFocusY,
-      role:           petOwnersTable.role,
       recentMediaKey: sql<string | null>`(
         SELECT ${postsTable.mediaKey}
         FROM   ${postsTable}
@@ -604,7 +610,6 @@ router.get("/me/pets", async (req, res) => {
         speciesId:    p.speciesId ?? null,
         breedId:      p.breedId   ?? null,
         createdAt:    p.createdAt,
-        role:         p.role,   // 'primary' | 'co' — useful for UI badges
         thumbnailUrl,
         avatarUrl,
         avatarFocusX: p.avatarFocusX ?? null,
@@ -815,8 +820,8 @@ router.delete("/pets/:id", async (req, res) => {
     return;
   }
 
-  if (!(await isPetPrimaryOwner(userId, id))) {
-    res.status(403).json({ error: "Forbidden — only the primary owner may delete a pet" });
+  if (!(await isPetOwner(userId, id))) {
+    res.status(403).json({ error: "Forbidden — only an owner may delete a pet" });
     return;
   }
 

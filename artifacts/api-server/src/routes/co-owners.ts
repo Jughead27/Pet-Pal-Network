@@ -1,23 +1,24 @@
 /**
- * Co-ownership invite routes.
+ * Co-ownership routes — symmetric model.
  *
+ * Any owner can invite another user by username.
  * Invite lifecycle: pending → accepted | declined.
- * Accepted invites create a pet_owners row (role='co').
- * No one becomes a co-owner without explicitly accepting.
+ * Accepted requests create a pet_owners row.
+ * Only self-removal is allowed; a pet must always retain at least one owner.
  */
 
 import { Router, type IRouter } from "express";
 import {
   db,
   petOwnersTable,
-  petOwnerInvitesTable,
+  coOwnershipRequestsTable,
   petsTable,
   usersTable,
   auditLogTable,
 } from "@workspace/db";
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
 import { activePets } from "../lib/petQueries.js";
-import { isPetPrimaryOwner } from "../lib/isPetOwner.js";
+import { isPetOwner } from "../lib/isPetOwner.js";
 
 const router: IRouter = Router();
 
@@ -39,11 +40,11 @@ async function writeAudit(
   });
 }
 
-// ─── POST /pets/:petId/co-owner-invites ──────────────────────────────────────
-// Primary owner invites a user (by username) as a co-owner.
-router.post("/pets/:petId/co-owner-invites", async (req, res) => {
-  const { petId }  = req.params;
-  const inviterId  = (req as any).auth.userId as string;
+// ─── POST /pets/:id/co-owners ─────────────────────────────────────────────────
+// Any owner invites a user (by username) as a co-owner.
+router.post("/pets/:id/co-owners", async (req, res) => {
+  const { id: petId } = req.params;
+  const inviterId = (req as any).auth.userId as string;
   const { username } = req.body as { username?: string };
 
   if (!username?.trim()) {
@@ -51,9 +52,9 @@ router.post("/pets/:petId/co-owner-invites", async (req, res) => {
     return;
   }
 
-  // Only primary owner may invite
-  if (!(await isPetPrimaryOwner(inviterId, petId))) {
-    res.status(403).json({ error: "Only the primary owner can invite co-owners" });
+  // Caller must be an owner
+  if (!(await isPetOwner(inviterId, petId))) {
+    res.status(403).json({ error: "Only owners can invite co-owners" });
     return;
   }
 
@@ -75,7 +76,7 @@ router.post("/pets/:petId/co-owner-invites", async (req, res) => {
 
   // Can't invite yourself
   if (invitee.id === inviterId) {
-    res.status(400).json({ error: "You are already the primary owner" });
+    res.status(400).json({ error: "You are already an owner of this pet" });
     return;
   }
 
@@ -86,76 +87,112 @@ router.post("/pets/:petId/co-owner-invites", async (req, res) => {
     .where(and(eq(petOwnersTable.petId, petId), eq(petOwnersTable.userId, invitee.id)))
     .limit(1);
   if (existing) {
-    res.status(409).json({ error: "User is already a co-owner of this pet" });
+    res.status(409).json({ error: "User is already an owner of this pet" });
     return;
   }
 
-  // Create invite (the unique index will reject a duplicate pending invite)
-  let invite;
-  try {
-    const [row] = await db
-      .insert(petOwnerInvitesTable)
-      .values({
-        petId,
-        inviterId,
-        inviteeId: invitee.id,
-        status:    "pending",
-      })
-      .returning();
-    invite = row;
-  } catch (err: any) {
-    // Unique violation = invite already exists for this pet+invitee pair
-    if (err.code === "23505") {
-      res.status(409).json({ error: "An invite to this user is already pending" });
-      return;
-    }
-    throw err;
+  // Check for an existing pending request for this pet+invitee pair
+  const [pendingRequest] = await db
+    .select({ id: coOwnershipRequestsTable.id })
+    .from(coOwnershipRequestsTable)
+    .where(
+      and(
+        eq(coOwnershipRequestsTable.petId, petId),
+        eq(coOwnershipRequestsTable.inviteeUserId, invitee.id),
+        eq(coOwnershipRequestsTable.status, "pending"),
+      ),
+    )
+    .limit(1);
+  if (pendingRequest) {
+    res.status(409).json({ error: "A pending request for this user already exists" });
+    return;
   }
 
+  const [request] = await db
+    .insert(coOwnershipRequestsTable)
+    .values({
+      petId,
+      inviterUserId: inviterId,
+      inviteeUserId: invitee.id,
+    })
+    .returning();
+
   res.status(201).json({
-    id:          invite.id,
-    petId:       invite.petId,
-    petName:     pet.name,
-    inviteeId:   invite.inviteeId,
+    id:              request.id,
+    petId:           request.petId,
+    petName:         pet.name,
+    inviteeId:       request.inviteeUserId,
     inviteeUsername: invitee.username,
-    status:      invite.status,
-    createdAt:   invite.createdAt,
+    status:          request.status,
+    createdAt:       request.createdAt,
   });
 });
 
-// ─── GET /me/co-owner-invites ─────────────────────────────────────────────────
-// Returns pending co-owner invites addressed to the authenticated user.
-router.get("/me/co-owner-invites", async (req, res) => {
+// ─── GET /co-ownership-requests/mine ─────────────────────────────────────────
+// Returns pending co-ownership requests addressed to the authenticated user.
+router.get("/co-ownership-requests/mine", async (req, res) => {
   const userId = (req as any).auth.userId as string;
 
   const rows = await db
     .select({
-      id:             petOwnerInvitesTable.id,
-      petId:          petOwnerInvitesTable.petId,
-      petName:        petsTable.name,
+      id:              coOwnershipRequestsTable.id,
+      petId:           coOwnershipRequestsTable.petId,
+      petName:         petsTable.name,
       inviterUsername: usersTable.username,
-      status:         petOwnerInvitesTable.status,
-      createdAt:      petOwnerInvitesTable.createdAt,
+      status:          coOwnershipRequestsTable.status,
+      createdAt:       coOwnershipRequestsTable.createdAt,
     })
-    .from(petOwnerInvitesTable)
-    .innerJoin(petsTable,   eq(petsTable.id,   petOwnerInvitesTable.petId))
-    .innerJoin(usersTable,  eq(usersTable.id,  petOwnerInvitesTable.inviterId))
+    .from(coOwnershipRequestsTable)
+    .innerJoin(petsTable,  eq(petsTable.id,  coOwnershipRequestsTable.petId))
+    .innerJoin(usersTable, eq(usersTable.id, coOwnershipRequestsTable.inviterUserId))
     .where(
       and(
-        eq(petOwnerInvitesTable.inviteeId, userId),
-        eq(petOwnerInvitesTable.status, "pending"),
+        eq(coOwnershipRequestsTable.inviteeUserId, userId),
+        eq(coOwnershipRequestsTable.status, "pending"),
         activePets,
       ),
     )
-    .orderBy(desc(petOwnerInvitesTable.createdAt));
+    .orderBy(desc(coOwnershipRequestsTable.createdAt));
 
-  res.json({ invites: rows });
+  res.json({ requests: rows });
 });
 
-// ─── GET /pets/:petId/co-owners ───────────────────────────────────────────────
-// Returns all owners of a pet (any owner may call this).
-router.get("/pets/:petId/co-owners", async (req, res) => {
-  const { petId } = req.params;
+// ─── GET /pets/:id/co-ownership-requests ─────────────────────────────────────
+// Returns pending requests sent for a pet (any owner may call).
+router.get("/pets/:id/co-ownership-requests", async (req, res) => {
+  const { id: petId } = req.params;
+  const userId = (req as any).auth.userId as string;
+
+  if (!(await isPetOwner(userId, petId))) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+
+  const rows = await db
+    .select({
+      id:              coOwnershipRequestsTable.id,
+      inviteeId:       coOwnershipRequestsTable.inviteeUserId,
+      inviteeUsername: usersTable.username,
+      status:          coOwnershipRequestsTable.status,
+      createdAt:       coOwnershipRequestsTable.createdAt,
+    })
+    .from(coOwnershipRequestsTable)
+    .innerJoin(usersTable, eq(usersTable.id, coOwnershipRequestsTable.inviteeUserId))
+    .where(
+      and(
+        eq(coOwnershipRequestsTable.petId, petId),
+        eq(coOwnershipRequestsTable.status, "pending"),
+      ),
+    )
+    .orderBy(desc(coOwnershipRequestsTable.createdAt));
+
+  res.json({ requests: rows });
+});
+
+// ─── GET /pets/:id/co-owners ──────────────────────────────────────────────────
+// Returns all current owners of a pet (any caller may view).
+router.get("/pets/:id/co-owners", async (req, res) => {
+  const { id: petId } = req.params;
 
   const [pet] = await db
     .select({ id: petsTable.id })
@@ -168,7 +205,6 @@ router.get("/pets/:petId/co-owners", async (req, res) => {
     .select({
       userId:   petOwnersTable.userId,
       username: usersTable.username,
-      role:     petOwnersTable.role,
       addedAt:  petOwnersTable.addedAt,
     })
     .from(petOwnersTable)
@@ -179,161 +215,120 @@ router.get("/pets/:petId/co-owners", async (req, res) => {
   res.json({ owners: rows });
 });
 
-// ─── GET /pets/:petId/co-owner-invites ────────────────────────────────────────
-// Returns pending invites sent for a pet (primary owner only).
-router.get("/pets/:petId/co-owner-invites", async (req, res) => {
-  const { petId } = req.params;
-  const userId    = (req as any).auth.userId as string;
-
-  if (!(await isPetPrimaryOwner(userId, petId))) {
-    res.status(403).json({ error: "Forbidden" });
-    return;
-  }
-
-  const rows = await db
-    .select({
-      id:              petOwnerInvitesTable.id,
-      inviteeId:       petOwnerInvitesTable.inviteeId,
-      inviteeUsername: usersTable.username,
-      status:          petOwnerInvitesTable.status,
-      createdAt:       petOwnerInvitesTable.createdAt,
-    })
-    .from(petOwnerInvitesTable)
-    .innerJoin(usersTable, eq(usersTable.id, petOwnerInvitesTable.inviteeId))
-    .where(
-      and(
-        eq(petOwnerInvitesTable.petId, petId),
-        eq(petOwnerInvitesTable.status, "pending"),
-      ),
-    )
-    .orderBy(desc(petOwnerInvitesTable.createdAt));
-
-  res.json({ invites: rows });
-});
-
-// ─── POST /co-owner-invites/:id/accept ───────────────────────────────────────
-// Invitee accepts: creates a pet_owners row (role='co') + audit.
-router.post("/co-owner-invites/:id/accept", async (req, res) => {
+// ─── POST /co-ownership-requests/:id/accept ───────────────────────────────────
+// Invitee accepts: creates a pet_owners row + audit.
+router.post("/co-ownership-requests/:id/accept", async (req, res) => {
   const { id }  = req.params;
   const userId  = (req as any).auth.userId as string;
 
-  const [invite] = await db
+  const [request] = await db
     .select()
-    .from(petOwnerInvitesTable)
-    .where(eq(petOwnerInvitesTable.id, id))
+    .from(coOwnershipRequestsTable)
+    .where(eq(coOwnershipRequestsTable.id, id))
     .limit(1);
 
-  if (!invite)                        { res.status(404).json({ error: "Invite not found" }); return; }
-  if (invite.inviteeId !== userId)    { res.status(403).json({ error: "Forbidden" }); return; }
-  if (invite.status !== "pending")    { res.status(409).json({ error: "Invite already resolved" }); return; }
+  if (!request)                          { res.status(404).json({ error: "Request not found" }); return; }
+  if (request.inviteeUserId !== userId)  { res.status(403).json({ error: "Forbidden" }); return; }
+  if (request.status !== "pending")      { res.status(409).json({ error: "Request already resolved" }); return; }
 
   // Fetch inviter's username for the audit metadata
   const [inviter] = await db
     .select({ username: usersTable.username })
     .from(usersTable)
-    .where(eq(usersTable.id, invite.inviterId))
+    .where(eq(usersTable.id, request.inviterUserId))
     .limit(1);
 
   await db.transaction(async (tx) => {
-    // Mark invite accepted
+    // Mark request accepted
     await tx
-      .update(petOwnerInvitesTable)
+      .update(coOwnershipRequestsTable)
       .set({ status: "accepted", resolvedAt: new Date() })
-      .where(eq(petOwnerInvitesTable.id, id));
+      .where(eq(coOwnershipRequestsTable.id, id));
 
-    // Create co-owner row
+    // Create ownership row
     await tx
       .insert(petOwnersTable)
-      .values({
-        petId:     invite.petId,
-        userId,
-        role:      "co",
-        invitedBy: invite.inviterId,
-      })
+      .values({ petId: request.petId, userId })
       .onConflictDoNothing(); // idempotent guard
 
-    // Audit: accept
-    await writeAudit(tx, userId, "co_owner.accepted", "pet", invite.petId, {
-      inviteId:       id,
-      inviterUsername: inviter?.username ?? invite.inviterId,
+    await writeAudit(tx, userId, "co_owner.accepted", "pet", request.petId, {
+      requestId:      id,
+      inviterUsername: inviter?.username ?? request.inviterUserId,
     });
   });
 
-  res.json({ ok: true, petId: invite.petId });
+  res.json({ ok: true, petId: request.petId });
 });
 
-// ─── POST /co-owner-invites/:id/decline ──────────────────────────────────────
-// Invitee declines: marks invite declined + audit.
-router.post("/co-owner-invites/:id/decline", async (req, res) => {
+// ─── POST /co-ownership-requests/:id/decline ─────────────────────────────────
+// Invitee declines: marks request declined + audit.
+router.post("/co-ownership-requests/:id/decline", async (req, res) => {
   const { id } = req.params;
   const userId = (req as any).auth.userId as string;
 
-  const [invite] = await db
+  const [request] = await db
     .select()
-    .from(petOwnerInvitesTable)
-    .where(eq(petOwnerInvitesTable.id, id))
+    .from(coOwnershipRequestsTable)
+    .where(eq(coOwnershipRequestsTable.id, id))
     .limit(1);
 
-  if (!invite)                      { res.status(404).json({ error: "Invite not found" }); return; }
-  if (invite.inviteeId !== userId)  { res.status(403).json({ error: "Forbidden" }); return; }
-  if (invite.status !== "pending")  { res.status(409).json({ error: "Invite already resolved" }); return; }
+  if (!request)                         { res.status(404).json({ error: "Request not found" }); return; }
+  if (request.inviteeUserId !== userId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (request.status !== "pending")     { res.status(409).json({ error: "Request already resolved" }); return; }
 
   await db.transaction(async (tx) => {
     await tx
-      .update(petOwnerInvitesTable)
+      .update(coOwnershipRequestsTable)
       .set({ status: "declined", resolvedAt: new Date() })
-      .where(eq(petOwnerInvitesTable.id, id));
+      .where(eq(coOwnershipRequestsTable.id, id));
 
-    await writeAudit(tx, userId, "co_owner.declined", "pet", invite.petId, {
-      inviteId: id,
+    await writeAudit(tx, userId, "co_owner.declined", "pet", request.petId, {
+      requestId: id,
     });
   });
 
   res.json({ ok: true });
 });
 
-// ─── DELETE /pets/:petId/co-owners/:targetUserId ──────────────────────────────
-// Primary can remove any co-owner; co-owner can remove themselves ("leave").
-// Primary cannot be removed via this endpoint.
-router.delete("/pets/:petId/co-owners/:targetUserId", async (req, res) => {
-  const { petId, targetUserId } = req.params;
-  const callerId = (req as any).auth.userId as string;
+// ─── DELETE /pets/:id/co-owners/me ───────────────────────────────────────────
+// Any owner can remove themselves.  Blocked if they are the last owner —
+// a pet must always have at least one owner.
+router.delete("/pets/:id/co-owners/me", async (req, res) => {
+  const { id: petId } = req.params;
+  const userId = (req as any).auth.userId as string;
 
-  // Verify target is a co (not primary) owner
-  const [targetRow] = await db
-    .select({ id: petOwnersTable.id, role: petOwnersTable.role })
+  // Verify caller is an owner
+  const [ownerRow] = await db
+    .select({ id: petOwnersTable.id })
     .from(petOwnersTable)
-    .where(and(eq(petOwnersTable.petId, petId), eq(petOwnersTable.userId, targetUserId)))
+    .where(and(eq(petOwnersTable.petId, petId), eq(petOwnersTable.userId, userId)))
     .limit(1);
 
-  if (!targetRow) {
-    res.status(404).json({ error: "Co-owner not found" });
+  if (!ownerRow) {
+    res.status(404).json({ error: "You are not an owner of this pet" });
     return;
   }
-  if (targetRow.role === "primary") {
+
+  // Count remaining owners — block if this would orphan the pet
+  const [{ ownerCount }] = await db
+    .select({ ownerCount: sql<number>`count(*)::int` })
+    .from(petOwnersTable)
+    .where(eq(petOwnersTable.petId, petId));
+
+  if (ownerCount <= 1) {
     res.status(400).json({
-      error: "Cannot remove the primary owner. Transfer of primary is not supported in this release.",
+      error: "Cannot remove yourself — you are the only owner. Delete the pet instead.",
     });
-    return;
-  }
-
-  // Authorisation: caller must be primary owner OR be removing themselves
-  const callerIsPrimary = await isPetPrimaryOwner(callerId, petId);
-  const callerIsTarget  = callerId === targetUserId;
-
-  if (!callerIsPrimary && !callerIsTarget) {
-    res.status(403).json({ error: "Forbidden" });
     return;
   }
 
   await db.transaction(async (tx) => {
     await tx
       .delete(petOwnersTable)
-      .where(and(eq(petOwnersTable.petId, petId), eq(petOwnersTable.userId, targetUserId)));
+      .where(and(eq(petOwnersTable.petId, petId), eq(petOwnersTable.userId, userId)));
 
-    const action = callerIsTarget ? "co_owner.left" : "co_owner.removed";
-    await writeAudit(tx, callerId, action, "pet", petId, {
-      removedUserId: targetUserId,
+    await writeAudit(tx, userId, "co_owner.left", "pet", petId, {
+      removedUserId: userId,
     });
   });
 

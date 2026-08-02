@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FeedPost } from './feedPost';
+import type { PetProfileOwnersItem } from './petProfileOwnersItem';
 
 /**
  * Full pet profile including posts
@@ -33,6 +34,8 @@ export interface PetProfile {
   archivedPosts: FeedPost[];
   /** Whether the authenticated viewer owns this pet. */
   viewerOwnsPet: boolean;
+  /** All current owners of this pet (for "About the owners" display). */
+  owners: PetProfileOwnersItem[];
   /** Stable media URL for the pet's avatar. Null when no avatar is set. */
   avatarUrl: string | null;
   /** Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar. */

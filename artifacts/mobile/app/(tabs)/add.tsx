@@ -41,6 +41,7 @@ import {
   useVerifyUpload,
   useCreatePost,
   useSearchPets,
+  getSearchPetsQueryKey,
   getGetFeedQueryKey,
 } from '@workspace/api-client-react';
 import type { Pet } from '@workspace/api-client-react';
@@ -268,7 +269,7 @@ export default function AddScreen() {
   const excludeParam = [...selectedPetIds].join(',');
   const { data: petSearchData } = useSearchPets(
     { q: petSearchQuery, exclude: excludeParam },
-    { query: { enabled: petSearchQuery.trim().length >= 1 } },
+    { query: { enabled: petSearchQuery.trim().length >= 1, queryKey: getSearchPetsQueryKey({ q: petSearchQuery, exclude: excludeParam }) } },
   );
   const petSearchResults = petSearchData?.pets ?? [];
 

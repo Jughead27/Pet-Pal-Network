@@ -536,7 +536,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
         "403":
-          description: Not the primary owner
+          description: Caller is not an owner of this pet
           content:
             application/json:
               schema:
@@ -1654,6 +1654,19 @@ components:
         viewerOwnsPet:
           type: boolean
           description: Whether the authenticated viewer owns this pet.
+        owners:
+          type: array
+          description: All current owners of this pet (for "About the owners" display).
+          items:
+            type: object
+            properties:
+              userId:
+                type: string
+              username:
+                type: string
+            required:
+              - userId
+              - username
         avatarUrl:
           type: string
           nullable: true
@@ -1679,6 +1692,7 @@ components:
         - posts
         - archivedPosts
         - viewerOwnsPet
+        - owners
         - avatarUrl
         - avatarFocusX
         - avatarFocusY

@@ -373,6 +373,10 @@ export const GetPetResponse = zod.object({
 }).describe('A pet tagged in a post, with viewer ownership state')).describe('All pets tagged in this post (including the primary). Use this array for display.')
 }).describe('A post in the feed with reaction counts and viewer state')).describe('Archived posts for this pet. Populated only when the viewer is the owner; always an empty array for non-owners.\n'),
   "viewerOwnsPet": zod.boolean().describe('Whether the authenticated viewer owns this pet.'),
+  "owners": zod.array(zod.object({
+  "userId": zod.string(),
+  "username": zod.string()
+})).describe('All current owners of this pet (for \"About the owners\" display).'),
   "avatarUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar. Null when no avatar is set.'),
   "avatarFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.'),
   "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.')

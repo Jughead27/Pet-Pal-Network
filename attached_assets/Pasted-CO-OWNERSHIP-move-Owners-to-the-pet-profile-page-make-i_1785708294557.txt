@@ -1,0 +1,55 @@
+CO-OWNERSHIP — move Owners to the pet profile page, make it obvious not subtle
+
+CONTEXT: Co-ownership just shipped with the invite/manage UI living only 
+in pet-edit (a quiet inline form). Decided this is too buried — 
+co-ownership is a feature people will actively want (e.g. couples 
+co-parenting a pet), not something that should require finding the edit 
+screen first. Discovery needs to happen directly on the pet's own 
+profile page.
+
+FIX: Add a visible "Owners" section directly on the pet profile screen 
+(pet/[id].tsx) — not hidden in edit, not a quiet whisper-level link. 
+Something like:
+  - A row/section showing the pet's current owner(s) by name (reuse the 
+    existing "owners: [{userId, username}]" data already returned by 
+    GET /pets/:id).
+  - A clearly visible "+ add owner" action right next to/below it — 
+    still typographic and matching the app's overall restrained design 
+    system (no capsule/pill buttons), but NOT buried at whisper-level 
+    opacity like a report/delete action. This is a primary, wanted 
+    action, not an edge-case one — treat its visual weight accordingly 
+    (e.g. similar prominence to other primary actions on this screen, 
+    not equivalent to "remove tag" or "report").
+  - Tapping "+ add owner" opens the existing add-co-owner flow (username 
+    input, same validation/request-creation logic already built) — 
+    reuse the existing backend entirely, this is a UI relocation/
+    prominence change, not new functionality.
+  - The existing pet-edit screen's "add a co-owner" inline form can stay 
+    as a secondary path if convenient, or be removed in favor of this 
+    being the sole entry point — your call on whether keeping both is 
+    worth the redundancy, but the PROFILE page must have it visibly.
+
+ALSO: if the invited username doesn't exist on pshpsh (search/lookup 
+comes back empty), don't just fail silently or show a bare "not found" — 
+guide the user to invite that person to pshpsh first (referencing the 
+existing invite system), since co-ownership requires the other person 
+to already have an account.
+
+DO NOT MODIFY: the underlying co-ownership request/accept/decline logic, 
+schema, or API — this is purely a UI placement/prominence change plus 
+the not-found guidance.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Open any pet's profile — confirm an "Owners" section is visible 
+   directly on the page (not requiring a trip to edit) showing current 
+   owner(s) by name.
+2. Confirm a clearly visible "+ add owner" action is present and not 
+   styled as a low-priority whisper.
+3. Tap it, invite a co-owner by username — confirm the existing 
+   request/accept flow still works end to end.
+4. Try inviting a username that doesn't exist on pshpsh — confirm the 
+   user gets clear guidance to invite them to the app first, not a dead 
+   end.
+5. Confirm the pet-edit screen's existing co-ownership UI (if kept) 
+   still works consistently with the profile-page version.
+6. Golden path unaffected.

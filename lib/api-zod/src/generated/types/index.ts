@@ -40,6 +40,7 @@ export * from './patchPostResponse';
 export * from './pet';
 export * from './petPatchBody';
 export * from './petProfile';
+export * from './petProfileOwnersItem';
 export * from './petSearchResult';
 export * from './petSummary';
 export * from './postComment';

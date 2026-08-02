@@ -14,14 +14,14 @@ import { logger } from "./logger.js";
 
 export async function runStartupBackfill(): Promise<void> {
   try {
-    // ── pet_owners primary-row backfill ─────────────────────────────────────
+    // ── pet_owners backfill ──────────────────────────────────────────────────
     // Populates pet_owners for every pet created before the table existed.
-    // New pets have their primary row inserted atomically in POST /pets.
+    // New pets have their ownership row inserted atomically in POST /pets.
     // ON CONFLICT DO NOTHING makes this a sub-millisecond no-op after the
-    // first run.
+    // first run.  No role column — ownership is fully symmetric.
     const ownerResult = await db.execute(sql`
-      INSERT INTO pet_owners (pet_id, user_id, role)
-      SELECT id, owner_id, 'primary'
+      INSERT INTO pet_owners (pet_id, user_id)
+      SELECT id, owner_id
       FROM   pets
       ON CONFLICT DO NOTHING
     `);

@@ -95,44 +95,44 @@ export default function ProfileScreen() {
   });
   const blockedList = blocksData?.blocks ?? [];
 
-  // Co-owner invite data — pending invites sent to the viewer by pet primary owners
-  const { data: coOwnerInviteData, refetch: refetchCoOwnerInvites } = useQuery({
-    queryKey: ['my-co-owner-invites'],
+  // Co-ownership requests — pending requests sent to the viewer by other owners
+  const { data: coOwnerRequestData, refetch: refetchCoOwnerRequests } = useQuery({
+    queryKey: ['my-co-ownership-requests'],
     queryFn:  () => customFetch<{
-      invites: Array<{
+      requests: Array<{
         id: string;
         petId: string;
         petName: string;
         inviterUsername: string;
         createdAt: string;
       }>;
-    }>('/api/me/co-owner-invites'),
+    }>('/api/co-ownership-requests/mine'),
   });
   const [coOwnerActingIds, setCoOwnerActingIds] = useState<Set<string>>(new Set());
-  const coOwnerInvites = coOwnerInviteData?.invites ?? [];
+  const coOwnerRequests = coOwnerRequestData?.requests ?? [];
 
-  const handleCoOwnerAccept = useCallback(async (inviteId: string, petId: string) => {
-    if (coOwnerActingIds.has(inviteId)) return;
-    setCoOwnerActingIds((s) => new Set(s).add(inviteId));
+  const handleCoOwnerAccept = useCallback(async (requestId: string, petId: string) => {
+    if (coOwnerActingIds.has(requestId)) return;
+    setCoOwnerActingIds((s) => new Set(s).add(requestId));
     try {
-      await customFetch(`/api/co-owner-invites/${inviteId}/accept`, { method: 'POST' });
-      await refetchCoOwnerInvites();
+      await customFetch(`/api/co-ownership-requests/${requestId}/accept`, { method: 'POST' });
+      await refetchCoOwnerRequests();
       qc.invalidateQueries({ queryKey: ['my-pets'] });
     } catch { /* silent */ } finally {
-      setCoOwnerActingIds((s) => { const n = new Set(s); n.delete(inviteId); return n; });
+      setCoOwnerActingIds((s) => { const n = new Set(s); n.delete(requestId); return n; });
     }
-  }, [coOwnerActingIds, refetchCoOwnerInvites, qc]);
+  }, [coOwnerActingIds, refetchCoOwnerRequests, qc]);
 
-  const handleCoOwnerDecline = useCallback(async (inviteId: string) => {
-    if (coOwnerActingIds.has(inviteId)) return;
-    setCoOwnerActingIds((s) => new Set(s).add(inviteId));
+  const handleCoOwnerDecline = useCallback(async (requestId: string) => {
+    if (coOwnerActingIds.has(requestId)) return;
+    setCoOwnerActingIds((s) => new Set(s).add(requestId));
     try {
-      await customFetch(`/api/co-owner-invites/${inviteId}/decline`, { method: 'POST' });
-      await refetchCoOwnerInvites();
+      await customFetch(`/api/co-ownership-requests/${requestId}/decline`, { method: 'POST' });
+      await refetchCoOwnerRequests();
     } catch { /* silent */ } finally {
-      setCoOwnerActingIds((s) => { const n = new Set(s); n.delete(inviteId); return n; });
+      setCoOwnerActingIds((s) => { const n = new Set(s); n.delete(requestId); return n; });
     }
-  }, [coOwnerActingIds, refetchCoOwnerInvites]);
+  }, [coOwnerActingIds, refetchCoOwnerRequests]);
 
   // Invite data query
   const { data: inviteData, refetch: refetchInvites } = useQuery({
@@ -453,38 +453,38 @@ export default function ProfileScreen() {
           </>
         )}
 
-        {/* ══════════════ CO-OWNER INVITES ══════════════ */}
-        {coOwnerInvites.length > 0 && (
+        {/* ══════════════ CO-OWNERSHIP REQUESTS ══════════════ */}
+        {coOwnerRequests.length > 0 && (
           <>
             <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
-            <Text style={[styles.heading, { color: colors.foreground }]}>Co-owner invites</Text>
+            <Text style={[styles.heading, { color: colors.foreground }]}>Co-ownership requests</Text>
             <View style={styles.listGap}>
-              {coOwnerInvites.map((inv) => (
+              {coOwnerRequests.map((req) => (
                 <View
-                  key={inv.id}
+                  key={req.id}
                   style={[styles.inviteCard, { backgroundColor: colors.card, borderColor: colors.border }]}
                 >
                   <Text style={[styles.inviteCardText, { color: colors.foreground }]}>
-                    {inv.inviterUsername} wants to share {inv.petName} with you.
+                    {req.inviterUsername} wants to share {req.petName} with you.
                   </Text>
                   <View style={styles.inviteCardActions}>
                     <TouchableOpacity
-                      onPress={() => handleCoOwnerDecline(inv.id)}
-                      disabled={coOwnerActingIds.has(inv.id)}
+                      onPress={() => handleCoOwnerDecline(req.id)}
+                      disabled={coOwnerActingIds.has(req.id)}
                       style={[styles.inviteCardBtn, { borderColor: colors.border }]}
                       accessibilityRole="button"
-                      accessibilityLabel={`Decline co-owner invite for ${inv.petName}`}
+                      accessibilityLabel={`Decline co-ownership request for ${req.petName}`}
                     >
                       <Text style={[styles.inviteCardBtnText, { color: colors.mutedForeground }]}>decline</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      onPress={() => handleCoOwnerAccept(inv.id, inv.petId)}
-                      disabled={coOwnerActingIds.has(inv.id)}
+                      onPress={() => handleCoOwnerAccept(req.id, req.petId)}
+                      disabled={coOwnerActingIds.has(req.id)}
                       style={[styles.inviteCardBtn, { borderColor: colors.primary }]}
                       accessibilityRole="button"
-                      accessibilityLabel={`Accept co-owner invite for ${inv.petName}`}
+                      accessibilityLabel={`Accept co-ownership request for ${req.petName}`}
                     >
-                      {coOwnerActingIds.has(inv.id) ? (
+                      {coOwnerActingIds.has(req.id) ? (
                         <ActivityIndicator size="small" color={colors.primary} />
                       ) : (
                         <Text style={[styles.inviteCardBtnText, { color: colors.primary }]}>accept</Text>
@@ -492,13 +492,13 @@ export default function ProfileScreen() {
                     </TouchableOpacity>
                   </View>
                   <TouchableOpacity
-                    onPress={() => router.push(`/pet/${inv.petId}`)}
+                    onPress={() => router.push(`/pet/${req.petId}`)}
                     hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                     accessibilityRole="link"
-                    accessibilityLabel={`View ${inv.petName}'s profile`}
+                    accessibilityLabel={`View ${req.petName}'s profile`}
                   >
                     <Text style={[styles.inviteCardPetLink, { color: colors.mutedForeground }]}>
-                      view {inv.petName}'s profile →
+                      view {req.petName}'s profile →
                     </Text>
                   </TouchableOpacity>
                 </View>

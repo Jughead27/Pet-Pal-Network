@@ -16,7 +16,7 @@ import { and, asc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { CreatePostBody } from "@workspace/api-zod";
 import { deleteObject } from "../lib/r2.js";
 import { notBlockedCommentAuthor, notHiddenByAdminComment } from "../lib/excludeBlocked.js";
-import { isPetOwner, isPetPrimaryOwner } from "../lib/isPetOwner.js";
+import { isPetOwner } from "../lib/isPetOwner.js";
 import { activePets } from "../lib/petQueries.js";
 
 const router: IRouter = Router();
@@ -467,10 +467,7 @@ router.patch("/posts/:id", async (req, res) => {
     return;
   }
 
-  const isOriginalPoster  = postRow.postedByUserId === userId;
-  const isPrimary         = !isOriginalPoster && await isPetPrimaryOwner(userId, postRow.petId);
-
-  if (!isOriginalPoster && !isPrimary) {
+  if (!(await isPetOwner(userId, postRow.petId))) {
     res.status(403).json({ error: "You do not own this post" });
     return;
   }
@@ -515,10 +512,7 @@ router.delete("/posts/:id", async (req, res) => {
     return;
   }
 
-  const isOriginalPoster  = postRow.postedByUserId === userId;
-  const isPrimary         = !isOriginalPoster && await isPetPrimaryOwner(userId, postRow.petId);
-
-  if (!isOriginalPoster && !isPrimary) {
+  if (!(await isPetOwner(userId, postRow.petId))) {
     res.status(403).json({ error: "You do not own this post" });
     return;
   }
@@ -558,10 +552,7 @@ router.post("/posts/:id/archive", async (req, res) => {
     return;
   }
 
-  const isOriginalPoster  = postRow.postedByUserId === userId;
-  const isPrimary         = !isOriginalPoster && await isPetPrimaryOwner(userId, postRow.petId);
-
-  if (!isOriginalPoster && !isPrimary) {
+  if (!(await isPetOwner(userId, postRow.petId))) {
     res.status(403).json({ error: "You do not own this post" });
     return;
   }
@@ -594,10 +585,7 @@ router.post("/posts/:id/unarchive", async (req, res) => {
     return;
   }
 
-  const isOriginalPoster  = postRow.postedByUserId === userId;
-  const isPrimary         = !isOriginalPoster && await isPetPrimaryOwner(userId, postRow.petId);
-
-  if (!isOriginalPoster && !isPrimary) {
+  if (!(await isPetOwner(userId, postRow.petId))) {
     res.status(403).json({ error: "You do not own this post" });
     return;
   }

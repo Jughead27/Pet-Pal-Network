@@ -29,7 +29,7 @@ import {
   commentsTable,
   packFollowsTable,
   petOwnersTable,
-  petOwnerInvitesTable,
+  coOwnershipRequestsTable,
 } from "@workspace/db";
 import { and, inArray, isNotNull, lt } from "drizzle-orm";
 import { deleteObject } from "./r2.js";
@@ -69,9 +69,9 @@ export async function purgeSoftDeletedPets(): Promise<{ purged: number }> {
     // Posts (references petsTable.id via pet_id FK)
     await tx.delete(postsTable).where(inArray(postsTable.petId, petIds));
 
-    // Pack follows, invites, ownership (all reference petsTable.id)
+    // Pack follows, co-ownership requests, ownership rows (all reference petsTable.id)
     await tx.delete(packFollowsTable).where(inArray(packFollowsTable.petId, petIds));
-    await tx.delete(petOwnerInvitesTable).where(inArray(petOwnerInvitesTable.petId, petIds));
+    await tx.delete(coOwnershipRequestsTable).where(inArray(coOwnershipRequestsTable.petId, petIds));
     await tx.delete(petOwnersTable).where(inArray(petOwnersTable.petId, petIds));
 
     // Pet rows

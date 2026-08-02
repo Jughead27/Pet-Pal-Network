@@ -48,6 +48,7 @@ import {
   getGetMyPetsQueryKey,
   getGetMyFollowsQueryKey,
   getGetFeedQueryKey,
+  customFetch,
 } from '@workspace/api-client-react';
 import type { BreedItem, PetProfile } from '@workspace/api-client-react';
 

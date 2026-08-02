@@ -1,0 +1,102 @@
+CO-OWNERSHIP — pet_owners join table, invite-by-username, symmetric rights
+
+CONTEXT: A pet can currently only have one owner. Need to support 
+multiple owners (e.g. James + girlfriend co-parenting Newt and Ripley), 
+matching the fully-designed spec already locked: push model, 
+owner-initiated invites by username, acceptance required, fully 
+symmetric rights once accepted.
+
+PREREQUISITE CLEANUP (do this first, part of this delivery): The 
+existing pet soft-delete (deleted_at) has 4 known write-path existence 
+guards that don't currently filter out deleted pets — join/leave pack, 
+new post creation, and co-owner invite itself. Fix all 4 to exclude 
+soft-deleted pets before building co-ownership on top, using the same 
+activePets accessor pattern already used for the 11 read surfaces.
+
+SCHEMA:
+  - pet_owners table: pet_id, user_id, added_at. No role/primary field — 
+    ownership is fully symmetric, no primary/secondary distinction.
+  - Migrate existing single-owner pets: backfill pet_owners from the 
+    current pets.owner_id (or equivalent) relationship so no pet loses 
+    its existing owner. Idempotent per existing deploy-gotcha pattern.
+  - co_ownership_requests table: pet_id, inviter_user_id, invitee_user_id, 
+    status (pending/accepted/declined), created_at, resolved_at — same 
+    shape/pattern as the existing quota_requests and invite tables.
+
+API:
+  - POST /pets/:id/co-owners — existing owner invites a co-owner by 
+    username. Server validates: caller owns the pet, invitee username 
+    exists, invitee isn't already a co-owner, no existing pending 
+    request for this pet+invitee pair (idempotent-ish, same dedup 
+    pattern as other request tables). Creates a pending 
+    co_ownership_requests row.
+  - GET /co-ownership-requests/mine — invitee's pending requests (same 
+    pattern as GET /api/quota-requests mine).
+  - POST /co-ownership-requests/:id/accept — invitee accepts: creates 
+    the pet_owners row, marks request accepted. Pet now appears in both 
+    people's My Pets immediately.
+  - POST /co-ownership-requests/:id/decline — invitee declines: marks 
+    request declined, no pet_owners row created.
+  - DELETE /pets/:id/co-owners/me — any co-owner can self-remove from a 
+    pet at any time (no confirmation from other owners needed). Must 
+    NOT allow removing another owner — only self-removal. If this would 
+    leave the pet with zero owners, decide whether to block it or allow 
+    it (recommend: block it — a pet must always have at least one 
+    owner; surface a clear error if the removing owner is the last one).
+  - All existing pet-scoped owner-only actions (edit pet, delete pet, 
+    post as this pet, etc.) must now check pet_owners membership 
+    instead of a single owner_id — ANY co-owner can perform any of 
+    these, fully symmetric, no restrictions between owners.
+
+UI — INVITING:
+  - Quiet "add a co-owner" link on pet-edit screen (matches existing 
+    quiet-link pattern used elsewhere, e.g. admin link on profile). 
+    Enter a username, submit — same interaction shape as adding a 
+    social link or requesting more invites.
+
+UI — ACCEPTING:
+  - A "pet co-ownership requests" list, same pattern/placement as the 
+    existing invite/quota-request checked-list pattern (not pushed/
+    notified aggressively — checked when the user looks). Accept/
+    decline actions, typographic, no capsule buttons.
+
+UI — DISPLAY:
+  - "About the Owner" section on a multi-owner pet's profile lists ALL 
+    owners' names — no merged bios, just multiple names/sections as 
+    appropriate to the existing layout.
+  - Pet-edit screen for a co-owned pet shows a quiet "remove yourself as 
+    owner" option (self-removal only, per the API above).
+
+BLOCKING: blocking stays per-poster (posted_by_user_id on posts), NOT 
+per-pet — a co-owned pet's posts are attributed to whichever specific 
+co-owner posted them, and blocking behavior follows that existing 
+per-poster pattern unchanged.
+
+OUT OF SCOPE (do not build): self-claim (a user claiming an unclaimed/
+someone else's pet without being invited) — flagged as a possible 
+future v2 idea only, not part of this delivery.
+
+DO NOT MODIFY: the multi-pet-tagging feature (post_pets, tag add/
+remove), the pet-profile crash fix from today, anything outside 
+co-ownership and its stated prerequisite cleanup.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. As Pet Owner A, invite Owner B (by username) as a co-owner of a pet 
+   — confirm a pending request appears in Owner B's co-ownership 
+   requests list.
+2. As Owner B, accept — confirm the pet now appears in BOTH owners' My 
+   Pets immediately.
+3. As Owner B, edit the pet's details — confirm it works (symmetric 
+   rights, not owner-A-only).
+4. As Owner B, post as this pet — confirm it works.
+5. As Owner A, confirm they CANNOT remove Owner B from the pet (only 
+   self-removal is allowed).
+6. As Owner B, self-remove from the pet — confirm the pet disappears 
+   from Owner B's My Pets but remains for Owner A.
+7. Confirm "About the Owner" on the co-owned pet's profile lists both 
+   owners while both are attached.
+8. Confirm the 4 write-path existence guards (join/leave pack, new 
+   post, co-owner invite) now correctly exclude soft-deleted pets.
+9. Confirm an existing single-owner pet is unaffected (still shows its 
+   one owner, works normally) after the pet_owners backfill migration.
+10. Golden path unaffected.

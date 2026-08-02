@@ -1,7 +1,7 @@
 - [Clerk Auth Integration](clerk-auth-integration.md) — package versions, Metro blockList fix, SSO wiring, API middleware pattern.
 - [API Base URL — Expo domain split](api-base-url-expo-domain.md) — setBaseUrl required; relative fetch URLs hit the wrong host on both web and native.
 - [Write Reactions Architecture](write-reactions-architecture.md) — boop/treat/comment POST endpoints, viewer flags in feed, daily treat limit pattern.
-- [Orval index.ts append + Expo version pinning](orval-index-append.md) — orval appends duplicate exports after every codegen; fix both index files. Expo packages must be pinned to SDK 54 expected version, not latest.
+- [Orval index.ts append + Expo version pinning](orval-index-append.md) — orval appends duplicate exports after every codegen; fix both index files. Expo packages must be pinned to SDK 54 expected version, not latest. api-zod index must export ONLY ./generated/api (not ./generated/types — both export same names, causing TS conflict).
 - [Crop Focus / Focal Point Architecture](crop-focus-architecture.md) — cropFocusX/Y on posts; FocalImage component; CropFramer WYSIWYG step; post detail route at app/post/[id].tsx.
 - [Species + Breeds Integration](species-breeds-integration.md) — dist rebuild rule, api-zod index constraint, enabled query pattern, seed script, "Not listed" path.
 - [Pack Follows Architecture](pack-follows-architecture.md) — PackContext for cross-post consistency, auto-pack on create, EXISTS subquery in feed, Metro cache restart after codegen.
@@ -23,6 +23,7 @@
 - [Invites v2 Architecture](invites-v2-architecture.md) — invite codes, quota, gate, redeem flow, admin mgmt; SecureStore for OAuth round-trip survival.
 - [ToS & Legal Architecture](tos-legal-architecture.md) — public pages, first-login acceptance gate, config-driven version, inline TabLayout gate pattern.
 - [Co-ownership Architecture](co-ownership-architecture.md) — pet_owners join table, invite flow, permission model, viewerCanManagePost, mobile surface points.
+- [Co-Ownership Rebuild](co-ownership-rebuild.md) — symmetric model (no roles); co_ownership_requests table; new route names; any owner = equal rights.
 - [Auto-frame Architecture](auto-frame-architecture.md) — crop rect columns on posts, computeAutoFrame, FrameRefiner (pan+pinch), FocalImage modes, feedAspect = screenW/screenH.
 - [Quota Requests Architecture](quota-requests-architecture.md) — member invite quota requests; separate from invite_requests (pre-signup); grant bumps quota +5, audit logged.
 - [Multi-Pet Tagging Architecture](multi-pet-tagging.md) — post_pets canonical source; posts.petId backward compat; ownership rules; GET /pets/search must precede /:id; api-zod index exports only generated/api.
