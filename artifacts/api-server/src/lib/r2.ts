@@ -117,6 +117,35 @@ export async function copyObject(sourceKey: string, destKey: string): Promise<vo
 }
 
 /**
+ * Fetches the first `byteCount` bytes of an R2 object using a Range request.
+ * Returns a Buffer, or null if the object does not exist.
+ * Used by the magic-byte verifier — keeps network traffic to a minimum.
+ */
+export async function getObjectFirstBytes(
+  key: string,
+  byteCount: number = 12,
+): Promise<Buffer | null> {
+  try {
+    const resp = await r2.send(
+      new GetObjectCommand({
+        Bucket: R2_BUCKET,
+        Key:    key,
+        Range:  `bytes=0-${byteCount - 1}`,
+      }),
+    );
+    if (!resp.Body) return null;
+    const chunks: Uint8Array[] = [];
+    // resp.Body is a Readable stream in Node
+    for await (const chunk of resp.Body as AsyncIterable<Uint8Array>) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Best-effort delete of an R2 object.
  * Silently skips seed: keys (no real object behind them).
  * Throws on network/auth failures — callers should catch and log.

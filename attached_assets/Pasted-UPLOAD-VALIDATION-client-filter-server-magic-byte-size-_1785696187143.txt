@@ -1,0 +1,49 @@
+UPLOAD VALIDATION — client filter + server magic-byte/size gate
+
+CONTEXT: Currently no validation exists on media uploads beyond whatever 
+the device's picker naturally restricts. Limits per existing spec: images 
+≤10MB, video ≤60s/150MB (video not live yet, but validation should be 
+video-ready). This needs to land before testers.
+
+CLIENT-SIDE (fast feedback, not the security boundary):
+  - On file selection (New Post flow, pet-avatar upload, any other image 
+    upload entry point), check file size against the 10MB image limit 
+    (video limits apply once video ships) before allowing upload to 
+    proceed.
+  - If oversized, show a clear inline error (typographic, matching 
+    existing toast/error patterns — no modal unless that's the existing 
+    convention) rather than silently failing or letting a bad upload 
+    attempt hit the server.
+  - This is a UX nicety, not the real gate — server-side is what actually 
+    protects the system.
+
+SERVER-SIDE (the actual security boundary):
+  - On the upload endpoint, before accepting/forwarding to R2:
+    1. SIZE CHECK: reject anything over 10MB for images (video limits 
+       reserved for when video ships) with a clean 4xx error.
+    2. MAGIC-BYTE CHECK: verify the file's actual binary signature 
+       matches an allowed image type (JPEG/PNG/WEBP — whatever the app 
+       currently supports) rather than trusting the client-supplied 
+       MIME type or file extension, which can be spoofed. Reject 
+       anything that doesn't match with a clean 4xx error.
+  - These checks must happen server-side regardless of what the client 
+    already checked — client-side validation is bypassable, this is the 
+    real gate.
+
+DO NOT MODIFY: the existing upload/compose flow beyond adding these 
+checks, R2 storage logic, existing photo-fit/crop behavior, anything 
+outside upload validation.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Attempt to upload an image over 10MB — confirm client shows a clear 
+   error and does not proceed to upload.
+2. Bypass the client check if possible (e.g. direct API call) with an 
+   oversized file — confirm the server rejects it with a clean error, 
+   not a crash or silent failure.
+3. Attempt to upload a non-image file renamed with an image extension 
+   (e.g. a .txt file renamed to .jpg) — confirm the server's magic-byte 
+   check rejects it even though the extension/MIME type look valid.
+4. Confirm a normal, valid, under-limit image still uploads successfully 
+   — golden path unaffected.
+5. Golden path unaffected (sign in → Home → boop persists → Nursery 
+   pager → post flow → sign out).

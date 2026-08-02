@@ -49,7 +49,9 @@ import type {
   PresignBody,
   PresignResult,
   SpeciesListResponse,
-  TreatResult
+  TreatResult,
+  VerifyUpload200,
+  VerifyUploadBody
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -1424,6 +1426,78 @@ export const useTreatPost = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getTreatPostMutationOptions(options));
+    }
+
+export const getVerifyUploadUrl = () => {
+
+
+
+
+  return `/api/uploads/verify`
+}
+
+/**
+ * After the client PUTs a file directly to R2 via the presigned URL, call this endpoint to verify that the file's actual binary signature matches an allowed image type (JPEG, PNG, or WebP). If the check fails the object is deleted from R2 and a 400 is returned. Must be called before using the mediaKey in a post or avatar update.
+ * @summary Verify an uploaded file's magic bytes
+ */
+export const verifyUpload = async (verifyUploadBody: VerifyUploadBody, options?: RequestInit): Promise<VerifyUpload200> => {
+
+  return customFetch<VerifyUpload200>(getVerifyUploadUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(verifyUploadBody)
+  }
+);}
+
+
+
+
+
+export const getVerifyUploadMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyUpload>>, TError,{data: BodyType<VerifyUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof verifyUpload>>, TError,{data: BodyType<VerifyUploadBody>}, TContext> => {
+
+const mutationKey = ['verifyUpload'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof verifyUpload>>, {data: BodyType<VerifyUploadBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  verifyUpload(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type VerifyUploadMutationResult = NonNullable<Awaited<ReturnType<typeof verifyUpload>>>
+    export type VerifyUploadMutationBody = BodyType<VerifyUploadBody>
+    export type VerifyUploadMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Verify an uploaded file's magic bytes
+ */
+export const useVerifyUpload = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof verifyUpload>>, TError,{data: BodyType<VerifyUploadBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof verifyUpload>>,
+        TError,
+        {data: BodyType<VerifyUploadBody>},
+        TContext
+      > => {
+      return useMutation(getVerifyUploadMutationOptions(options));
     }
 
 export const getPresignAvatarUploadUrl = () => {

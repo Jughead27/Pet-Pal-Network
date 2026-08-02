@@ -38,6 +38,7 @@ import Button from '@/components/Button';
 import {
   useGetMyPets,
   usePresignUpload,
+  useVerifyUpload,
   useCreatePost,
   getGetFeedQueryKey,
 } from '@workspace/api-client-react';
@@ -125,6 +126,7 @@ export default function AddScreen() {
 
   // ── Mutations ─────────────────────────────────────────────────────────────
   const { mutateAsync: presignUpload } = usePresignUpload();
+  const { mutateAsync: verifyUpload  } = useVerifyUpload();
   const { mutateAsync: createPost    } = useCreatePost();
 
   // ── Image pipeline ────────────────────────────────────────────────────────
@@ -183,6 +185,10 @@ export default function AddScreen() {
       setError('Only JPEG, PNG, and WebP images are supported.');
       return;
     }
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      setError('This photo is too large (max 10 MB). Please choose a smaller image.');
+      return;
+    }
 
     await processPickedAsset(asset);
   }, [processPickedAsset]);
@@ -213,6 +219,10 @@ export default function AddScreen() {
     const mime  = asset.mimeType ?? '';
     if (mime && !['image/jpeg', 'image/png', 'image/webp'].includes(mime)) {
       setError('Only JPEG, PNG, and WebP images are supported.');
+      return;
+    }
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      setError('This photo is too large (max 10 MB). Please choose a smaller image.');
       return;
     }
 
@@ -274,6 +284,9 @@ export default function AddScreen() {
         body:    blob,
       });
       if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
+
+      // Server-side magic-byte check — real security boundary.
+      await verifyUpload({ data: { mediaKey } });
 
       await createPost({
         data: {

@@ -665,6 +665,49 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /uploads/verify:
+    post:
+      operationId: verifyUpload
+      tags: [uploads]
+      summary: Verify an uploaded file's magic bytes
+      description: >
+        After the client PUTs a file directly to R2 via the presigned URL, call
+        this endpoint to verify that the file's actual binary signature matches
+        an allowed image type (JPEG, PNG, or WebP). If the check fails the object
+        is deleted from R2 and a 400 is returned. Must be called before using
+        the mediaKey in a post or avatar update.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyUploadBody"
+      responses:
+        "200":
+          description: File is a valid image
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                required: [ok]
+        "400":
+          description: File failed magic-byte check or mediaKey is invalid
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /uploads/presign-avatar:
     post:
       operationId: presignAvatarUpload
@@ -1745,6 +1788,16 @@ components:
             $ref: "#/components/schemas/Pet"
       required:
         - pets
+
+    VerifyUploadBody:
+      type: object
+      description: Request body for verifying an uploaded file's magic bytes
+      properties:
+        mediaKey:
+          type: string
+          description: The mediaKey returned by /uploads/presign or /uploads/presign-avatar (must start with posts/ or avatars/)
+      required:
+        - mediaKey
 
     PresignBody:
       type: object

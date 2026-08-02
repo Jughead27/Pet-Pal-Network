@@ -287,6 +287,14 @@ export interface MyPetsResponse {
   pets: Pet[];
 }
 
+/**
+ * Request body for verifying an uploaded file's magic bytes
+ */
+export interface VerifyUploadBody {
+  /** The mediaKey returned by /uploads/presign or /uploads/presign-avatar (must start with posts/ or avatars/) */
+  mediaKey: string;
+}
+
 export type PresignBodyContentType = typeof PresignBodyContentType[keyof typeof PresignBodyContentType];
 
 
@@ -547,4 +555,8 @@ export const GetFeedSort = {
   fresh: 'fresh',
   popular: 'popular',
 } as const;
+
+export type VerifyUpload200 = {
+  ok: boolean;
+};
 

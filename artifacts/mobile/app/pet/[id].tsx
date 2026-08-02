@@ -48,6 +48,7 @@ import {
   useUnarchivePost,
   usePatchPetAvatar,
   usePresignAvatarUpload,
+  useVerifyUpload,
   getGetFeedQueryKey,
   getGetPetQueryKey,
   getGetMyPetsQueryKey,
@@ -168,6 +169,7 @@ export default function PetProfileScreen() {
 
   // ── Avatar mutations ──────────────────────────────────────────────────────
   const { mutateAsync: presignAvatarUpload } = usePresignAvatarUpload();
+  const { mutateAsync: verifyUpload        } = useVerifyUpload();
   const { mutateAsync: patchAvatar, isPending: isSavingAvatar } = usePatchPetAvatar({
     mutation: {
       onSuccess: () => {
@@ -272,6 +274,10 @@ export default function PetProfileScreen() {
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      setAvatarError("This photo is too large (max 10 MB). Please choose a smaller one.");
+      return;
+    }
     await processAvatarAsset(asset.uri, asset.width, asset.height);
   }, [processAvatarAsset]);
 
@@ -292,6 +298,10 @@ export default function PetProfileScreen() {
     });
     if (result.canceled || !result.assets?.[0]) return;
     const asset = result.assets[0];
+    if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
+      setAvatarError("This photo is too large (max 10 MB). Please choose a smaller one.");
+      return;
+    }
     await processAvatarAsset(asset.uri, asset.width, asset.height);
   }, [processAvatarAsset]);
 
@@ -325,6 +335,10 @@ export default function PetProfileScreen() {
           body:    blob,
         });
         if (!putRes.ok) throw new Error(`Upload failed (${putRes.status})`);
+
+        // Server-side magic-byte check — real security boundary.
+        await verifyUpload({ data: { mediaKey: key } });
+
         mediaKey = key;
       }
 

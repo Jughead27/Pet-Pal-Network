@@ -1,0 +1,38 @@
+BUG — deploy failing repeatedly, server crashes on database connection error
+
+CONTEXT: The last several deploy attempts have all failed the same way: 
+healthcheck returns 500, then the api-server artifact process exits with 
+"error=signal: terminated." Raw error logs show an uncaught/unhandled 
+error on a Node.js socket connected to the Neon Postgres database 
+(_host: ep-shiny-meadow-axmftrhm.c-4.us-east-2.aws.neon.tech), which 
+appears to be crashing the server process on startup rather than being 
+caught and recovered from.
+
+INVESTIGATE:
+1. Check whether the Postgres connection pool (Drizzle/pg client) has an 
+   `error` event handler attached. If a socket-level error (e.g. 
+   connection reset, which Neon's serverless compute can trigger when 
+   waking from suspend) has no listener, Node treats it as an uncaught 
+   exception and crashes the entire process — this matches the symptom 
+   exactly (immediate healthcheck failure + process termination on every 
+   attempt).
+2. Check server startup sequence: is the app trying to establish/verify 
+   the DB connection synchronously before the healthcheck endpoint is 
+   even listening? If so, a slow/failed first connection attempt could 
+   be causing the healthcheck to fail before the server has a chance to 
+   retry.
+3. Check whether this correlates with anything in the most recent code 
+   changes (upload validation, /uploads/verify route) — or whether it's 
+   purely an infra-level DB connection issue unrelated to recent code.
+
+FIX: Ensure the Postgres pool has a proper `error` event handler that 
+logs the error and allows the pool to reconnect, rather than letting it 
+propagate as an uncaught exception. The server should be resilient to a 
+transient Neon connection reset — not crash the whole process over it.
+
+ACCEPTANCE TEST:
+1. Republish and confirm the deploy succeeds (healthcheck passes, 
+   artifact processes stay running).
+2. If possible, simulate/force a DB connection drop and confirm the 
+   server logs the error and recovers instead of crashing.
+3. Confirm golden path works once live.

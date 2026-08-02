@@ -46,4 +46,6 @@ export * from './presignResult';
 export * from './speciesItem';
 export * from './speciesListResponse';
 export * from './treatResult';
+export * from './verifyUpload200';
+export * from './verifyUploadBody';
 export * from './viewerInfo';

@@ -410,6 +410,19 @@ export const TreatPostResponse = zod.object({
 
 
 /**
+ * After the client PUTs a file directly to R2 via the presigned URL, call this endpoint to verify that the file's actual binary signature matches an allowed image type (JPEG, PNG, or WebP). If the check fails the object is deleted from R2 and a 400 is returned. Must be called before using the mediaKey in a post or avatar update.
+ * @summary Verify an uploaded file's magic bytes
+ */
+export const VerifyUploadBody = zod.object({
+  "mediaKey": zod.string().describe('The mediaKey returned by \/uploads\/presign or \/uploads\/presign-avatar (must start with posts\/ or avatars\/)')
+}).describe('Request body for verifying an uploaded file\'s magic bytes')
+
+export const VerifyUploadResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * Returns a short-lived presigned PUT URL for uploading directly to R2, plus the mediaKey (under the "avatars/" prefix) to pass to PATCH /pets/{id}/avatar. Same validation as /uploads/presign (contentType, sizeBytes).
  * @summary Get a presigned upload URL for an avatar
  */
