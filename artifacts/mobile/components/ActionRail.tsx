@@ -670,7 +670,7 @@ export default function ActionRail({
           onTransientChange?.(false);
           shakeAnimation();
           if (status === 403) {
-            onToast?.('Your own pet? Sneaky. 🐾');
+            onToast?.('No self-treats — save it for a pet you follow. 🐾');
           } else {
             // 429 (daily treat limit) or any other unexpected rejection.
             onToast?.("You're all out of treats for today 🐾");

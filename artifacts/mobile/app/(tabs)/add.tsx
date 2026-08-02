@@ -483,7 +483,7 @@ export default function AddScreen() {
                 accessibilityLabel="Change photo"
               >
                 <ArrowClockwise size={13} color={colors.mutedForeground} weight="regular" />
-                <Text style={[s.previewControlText, { color: colors.mutedForeground }]}>Change</Text>
+                <Text style={[s.previewControlText, { color: colors.mutedForeground }]}>Change photo</Text>
               </TouchableOpacity>
             </View>
           </>
