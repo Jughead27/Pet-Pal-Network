@@ -39,7 +39,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import Button from '@/components/Button';
-import MediaImage from '@/components/MediaImage';
+import PetAvatar from '@/components/PetAvatar';
 import {
   useGetMyPets,
   useGetMyFollows,
@@ -48,7 +48,6 @@ import {
   useUnfollowBreed,
   useLeavePetPack,
   getGetMyFollowsQueryKey,
-  getBaseUrl,
   customFetch,
 } from '@workspace/api-client-react';
 import type { Pet, PackedPetItem, FollowedSpeciesItem, FollowedBreedItem } from '@workspace/api-client-react';
@@ -760,51 +759,7 @@ export default function ProfileScreen() {
   );
 }
 
-// ── PetThumbnail ──────────────────────────────────────────────────────────────
-
-interface PetThumbnailProps {
-  thumbnailUrl: string | null | undefined;
-  size:         number;
-  colors:       ReturnType<typeof useColors>;
-}
-
-/**
- * Circular pet avatar: shows the pet's latest-post photo when available,
- * or a paw-outline glyph when the pet has no posts or uses a seed key.
- * Handles the native absolute-URL requirement by prepending the base URL.
- */
-function PetThumbnail({ thumbnailUrl, size, colors }: PetThumbnailProps) {
-  const source = useMemo(() => {
-    if (!thumbnailUrl) return null;
-    let uri = thumbnailUrl;
-    if (Platform.OS !== 'web' && uri.startsWith('/')) {
-      uri = (getBaseUrl() ?? '') + uri;
-    }
-    return { uri };
-  }, [thumbnailUrl]);
-
-  if (!source) {
-    return (
-      <View
-        style={{
-          width: size, height: size, borderRadius: size / 2,
-          backgroundColor: colors.secondary,
-          alignItems: 'center', justifyContent: 'center',
-        }}
-      >
-        <PawPrint size={Math.round(size * 0.58)} weight="light" color={colors.mutedForeground} />
-      </View>
-    );
-  }
-
-  return (
-    <MediaImage
-      source={source}
-      style={{ width: size, height: size, borderRadius: size / 2 }}
-      resizeMode="cover"
-    />
-  );
-}
+// PetThumbnail extracted → shared components/PetAvatar.tsx
 
 // ── PetRow ────────────────────────────────────────────────────────────────────
 
@@ -824,7 +779,7 @@ function PetRow({ pet, colors, onPress }: PetRowProps) {
       accessibilityLabel={`View ${pet.name}'s profile`}
       style={[styles.petRow, { backgroundColor: colors.card, borderColor: colors.border }]}
     >
-      <PetThumbnail thumbnailUrl={pet.thumbnailUrl} size={44} colors={colors} />
+      <PetAvatar url={pet.thumbnailUrl} size={44} backgroundColor={colors.secondary} pawColor={colors.mutedForeground} />
       <View style={styles.petInfo}>
         <Text style={[styles.petName, { color: colors.foreground }]}>{pet.name}</Text>
         <Text style={[styles.petSubtitle, { color: colors.mutedForeground }]}>{subtitle}</Text>
@@ -867,7 +822,7 @@ function FollowRow({
         style={styles.followRowContent}
       >
         {thumbnailUrl !== undefined && (
-          <PetThumbnail thumbnailUrl={thumbnailUrl} size={40} colors={colors} />
+          <PetAvatar url={thumbnailUrl} size={40} backgroundColor={colors.secondary} pawColor={colors.mutedForeground} />
         )}
         {/* Name + species/breed column takes flex priority — name never truncates */}
         <View style={styles.petInfo}>
@@ -942,7 +897,7 @@ function FriendAvatarCluster({ pets, colors }: FriendAvatarClusterProps) {
   }
 
   if (pets.length === 1) {
-    return <PetThumbnail thumbnailUrl={pets[0].thumbnailUrl} size={40} colors={colors} />;
+    return <PetAvatar url={pets[0].thumbnailUrl} size={40} backgroundColor={colors.secondary} pawColor={colors.mutedForeground} />;
   }
 
   const CHIP    = 32;
@@ -957,7 +912,7 @@ function FriendAvatarCluster({ pets, colors }: FriendAvatarClusterProps) {
           key={pet.id}
           style={{ position: 'absolute', left: i * STEP, zIndex: visible.length - i }}
         >
-          <PetThumbnail thumbnailUrl={pet.thumbnailUrl} size={CHIP} colors={colors} />
+          <PetAvatar url={pet.thumbnailUrl} size={CHIP} backgroundColor={colors.secondary} pawColor={colors.mutedForeground} />
         </View>
       ))}
       {extra > 0 && (

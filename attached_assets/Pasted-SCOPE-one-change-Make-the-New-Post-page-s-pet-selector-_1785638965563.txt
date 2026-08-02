@@ -1,0 +1,17 @@
+SCOPE (one change): Make the New Post page's pet-selector avatars consistent with the profile page. Right now those pet chips show placeholder avatars but NOT the pets' actual avatar images. They should render each pet's real avatar image when it has one, and the Phosphor PawPrint placeholder when it doesn't — exactly like the profile page.
+
+NEW POST page (the pet-selector chips — "posting as [pet]" / avatar+name chips):
+- For each pet, render its ACTUAL avatar image (the same signed-R2-URL avatar the profile page uses) when the pet has one. This is the "no images" bug — the real photo isn't showing.
+- When a pet has NO avatar image, show the Phosphor PawPrint placeholder (weight regular/light), sized to fill the circle — matching the follow paw and the profile-page placeholder.
+- Best approach: reuse the SAME avatar component/logic the profile page already uses (image-or-PawPrint fallback) so the two surfaces can't drift. If the profile page's avatar rendering isn't already a shared component, extract it into one and use it in both places.
+
+DO NOT MODIFY: the profile page's existing avatar behavior (it's correct — match it), the follow paw (done), the nav bar, the rail icons, the reaction/pop system, counts, toasts, the compose flow logic (pet selection, Fit/adjust, posting), the API, or the schema. NO schema change. No new dependencies.
+
+PRESERVATION CLAUSE: only the New Post pet-chip avatar rendering changes (real image when present, PawPrint placeholder otherwise). Everything else byte-identical. Web, iOS, and Android render identically.
+
+ACCEPTANCE TEST (golden path):
+1. Sign in → open New Post: pets that HAVE an avatar image show that real photo in their selector chip; pets WITHOUT one show the PawPrint placeholder — visually consistent with the profile page.
+2. Select a pet → the compose flow (Fit/adjust, caption, post) still works normally.
+3. Profile page avatars unchanged; follow paw unchanged; boop/treat/nav unchanged → post flow → sign out.
+
+Commit your changes locally.

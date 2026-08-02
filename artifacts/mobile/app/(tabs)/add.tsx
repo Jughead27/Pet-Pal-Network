@@ -16,7 +16,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -46,7 +45,7 @@ import type { Pet } from '@workspace/api-client-react';
 import { compressImage } from '@/utils/compressImage';
 import FrameRefiner from '@/components/FrameRefiner';
 import FocalImage from '@/components/FocalImage';
-import PawIcon from '@/components/PawIcon';
+import PetAvatar from '@/components/PetAvatar';
 import { computeAutoFrame } from '@/utils/computeAutoFrame';
 import type { CropRect } from '@/utils/computeAutoFrame';
 import { signalPostSuccess } from '@/utils/feedScrollSignal';
@@ -529,13 +528,12 @@ export default function AddScreen() {
           {pets.length === 1 ? (
             // Single-pet: auto-selected — show a quiet "posting as" line
             <View style={s.postingAsRow}>
-              {pets[0].avatarUrl ? (
-                <Image source={{ uri: pets[0].avatarUrl }} style={s.postingAsAvatar} />
-              ) : (
-                <View style={[s.postingAsAvatarFallback, { backgroundColor: colors.secondary }]}>
-                  <PawIcon size={15} color={colors.mutedForeground} />
-                </View>
-              )}
+              <PetAvatar
+                url={pets[0].avatarUrl}
+                size={32}
+                backgroundColor={colors.secondary}
+                pawColor={colors.mutedForeground}
+              />
               <Text style={[s.postingAsName, { color: colors.foreground }]}>
                 {pets[0].name}
               </Text>
@@ -658,16 +656,12 @@ function PetChip({ pet, selected, colors, onPress }: PetChipProps) {
         },
       ]}
     >
-      {pet.avatarUrl ? (
-        <Image source={{ uri: pet.avatarUrl }} style={chipStyles.avatar} />
-      ) : (
-        <View style={[
-          chipStyles.avatarFallback,
-          { backgroundColor: selected ? 'rgba(255,255,255,0.25)' : colors.border },
-        ]}>
-          <PawIcon size={20} color={selected ? colors.primaryForeground : colors.mutedForeground} />
-        </View>
-      )}
+      <PetAvatar
+        url={pet.avatarUrl}
+        size={44}
+        backgroundColor={selected ? 'rgba(255,255,255,0.25)' : colors.border}
+        pawColor={selected ? colors.primaryForeground : colors.mutedForeground}
+      />
       <Text style={[
         chipStyles.name,
         { color: selected ? colors.primaryForeground : colors.foreground },
