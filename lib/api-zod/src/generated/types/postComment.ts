@@ -13,5 +13,7 @@ export interface PostComment {
   id: string;
   text: string;
   authorUsername: string;
+  /** Clerk user ID of the comment author — used by clients to determine ownership. */
+  authorId: string;
   createdAt: Date;
 }

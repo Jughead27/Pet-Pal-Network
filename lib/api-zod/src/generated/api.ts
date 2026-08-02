@@ -659,6 +659,18 @@ export const GetMyPetsResponse = zod.object({
 
 
 /**
+ * Soft-deletes a comment by setting deleted_at. Only the comment author may delete their own comment; the post owner cannot delete others' comments via this endpoint (use admin hide for moderation).
+ * @summary Delete own comment
+ */
+export const DeleteCommentParams = zod.object({
+  "id": zod.coerce.string(),
+  "commentId": zod.coerce.string()
+})
+
+export const DeleteCommentResponse = zod.void()
+
+
+/**
  * Returns comments on a post ordered by creation time
  * @summary Get post comments
  */
@@ -670,6 +682,7 @@ export const GetPostCommentsResponseItem = zod.object({
   "id": zod.string(),
   "text": zod.string(),
   "authorUsername": zod.string(),
+  "authorId": zod.string().describe('Clerk user ID of the comment author — used by clients to determine ownership.'),
   "createdAt": zod.coerce.date()
 }).describe('A comment on a post')
 export const GetPostCommentsResponse = zod.array(GetPostCommentsResponseItem)
@@ -695,6 +708,7 @@ export const CreateCommentResponse = zod.object({
   "id": zod.string(),
   "text": zod.string(),
   "authorUsername": zod.string(),
+  "authorId": zod.string().describe('Clerk user ID of the comment author — used by clients to determine ownership.'),
   "createdAt": zod.coerce.date()
 }).describe('A comment on a post')
 

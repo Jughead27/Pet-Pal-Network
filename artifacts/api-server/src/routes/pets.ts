@@ -183,7 +183,7 @@ router.get("/pets/:id", async (req, res) => {
       postedByUserId:   postsTable.postedByUserId,
       boopCount:        sql<number>`count(distinct ${boopsTable.id})::int`,
       treatCount:       sql<number>`count(distinct ${treatsTable.id})::int`,
-      commentCount:     sql<number>`count(distinct ${commentsTable.id})::int`,
+      commentCount:     sql<number>`count(distinct case when ${commentsTable.deletedAt} is null then ${commentsTable.id} end)::int`,
       viewerHasBooped:  sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
       viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
     })
@@ -242,7 +242,7 @@ router.get("/pets/:id", async (req, res) => {
           postedByUserId:   postsTable.postedByUserId,
           boopCount:        sql<number>`count(distinct ${boopsTable.id})::int`,
           treatCount:       sql<number>`count(distinct ${treatsTable.id})::int`,
-          commentCount:     sql<number>`count(distinct ${commentsTable.id})::int`,
+          commentCount:     sql<number>`count(distinct case when ${commentsTable.deletedAt} is null then ${commentsTable.id} end)::int`,
           viewerHasBooped:  sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
           viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
         })

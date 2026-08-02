@@ -9,7 +9,7 @@ import {
   configTable,
   usersTable,
 } from "@workspace/db";
-import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, sql } from "drizzle-orm";
 import { CreatePostBody } from "@workspace/api-zod";
 import { deleteObject } from "../lib/r2.js";
 import { notBlockedCommentAuthor, notHiddenByAdminComment } from "../lib/excludeBlocked.js";
@@ -103,12 +103,51 @@ router.get("/posts/:id/comments", async (req, res) => {
     .innerJoin(usersTable, eq(usersTable.id, commentsTable.userId))
     .where(and(
       eq(commentsTable.postId, id),
+      isNull(commentsTable.deletedAt),
       notBlockedCommentAuthor(userId),
       notHiddenByAdminComment(),
     ))
     .orderBy(asc(commentsTable.createdAt));
 
   res.json(rows);
+});
+
+/**
+ * DELETE /posts/:id/comments/:commentId
+ *
+ * Soft-deletes a comment by setting deleted_at.
+ * Only the comment's own author may delete it — the post owner cannot delete
+ * other users' comments via this endpoint (admin hide is the moderation path).
+ */
+router.delete("/posts/:id/comments/:commentId", async (req, res) => {
+  const { commentId } = req.params;
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+
+  const [comment] = await db
+    .select({ userId: commentsTable.userId })
+    .from(commentsTable)
+    .where(and(
+      eq(commentsTable.id, commentId),
+      isNull(commentsTable.deletedAt),
+    ))
+    .limit(1);
+
+  if (!comment) {
+    res.status(404).json({ error: "Comment not found" });
+    return;
+  }
+
+  if (comment.userId !== userId) {
+    res.status(403).json({ error: "You can only delete your own comments" });
+    return;
+  }
+
+  await db
+    .update(commentsTable)
+    .set({ deletedAt: new Date() })
+    .where(eq(commentsTable.id, commentId));
+
+  res.status(204).send();
 });
 
 /**

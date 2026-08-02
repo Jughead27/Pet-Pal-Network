@@ -73,7 +73,7 @@ router.get("/feed", async (req, res) => {
       petSpeciesId: petsTable.speciesId,
       boopCount:    sql<number>`count(distinct ${boopsTable.id})::int`,
       treatCount:   sql<number>`count(distinct ${treatsTable.id})::int`,
-      commentCount: sql<number>`count(distinct ${commentsTable.id})::int`,
+      commentCount: sql<number>`count(distinct case when ${commentsTable.deletedAt} is null then ${commentsTable.id} end)::int`,
       viewerHasBooped:  sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
       viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
       // Correlated EXISTS — whether the viewer follows this pet's Pack

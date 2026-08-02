@@ -44,6 +44,8 @@ import { PETS_INCLUDING_DELETED } from "../lib/petQueries.js";
 import { requireRole } from "../middlewares/requireRole";
 import { mediaTokenUrl } from "../lib/r2.js";
 import { writeAudit } from "../lib/writeAudit.js";
+import { purgeSoftDeletedPets } from "../lib/purgePets.js";
+import { purgeDeletedComments } from "../lib/purgeDeletedComments.js";
 
 const adminRouter = Router();
 
@@ -928,6 +930,44 @@ adminRouter.get("/admin/audit", async (req, res) => {
   ]);
 
   res.json({ entries, total: count });
+});
+
+// ─── Cron: purge soft-deleted rows ────────────────────────────────────────────
+
+/**
+ * GET /admin/cron/purge
+ *
+ * Hard-deletes rows that passed their 30-day soft-delete grace period:
+ *   • Pets (and their posts, reactions, pack-follows, ownership records, R2 media)
+ *   • Comments (no media — straight DB delete)
+ *
+ * NOT behind the requireRole("admin") middleware — this is called by an external
+ * scheduler, not an authenticated user.  Instead it checks X-Purge-Secret against
+ * the PURGE_SECRET environment variable.  If PURGE_SECRET is unset the route is
+ * disabled (returns 503) so it cannot be accidentally invoked in development.
+ *
+ * Scheduling (set schedule to "0 3 * * *" — 03:00 UTC daily):
+ *   Render:       create a Cron Job service pointing at GET /admin/cron/purge
+ *   Vercel:       add { "path": "/api/admin/cron/purge", "schedule": "0 3 * * *" } to vercel.json
+ *   Self-hosted:  node-cron inside the server process calling this URL with the secret header
+ */
+adminRouter.get("/admin/cron/purge", async (req, res) => {
+  const secret = process.env["PURGE_SECRET"];
+  if (!secret) {
+    res.status(503).json({ error: "PURGE_SECRET not configured — cron route disabled" });
+    return;
+  }
+  if (req.headers["x-purge-secret"] !== secret) {
+    res.status(401).json({ error: "Invalid or missing X-Purge-Secret header" });
+    return;
+  }
+
+  const [pets, comments] = await Promise.all([
+    purgeSoftDeletedPets(),
+    purgeDeletedComments(),
+  ]);
+
+  res.json({ ok: true, purged: { pets: pets.purged, comments: comments.purged } });
 });
 
 export default adminRouter;

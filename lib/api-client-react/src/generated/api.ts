@@ -2231,6 +2231,80 @@ export function useGetMyPets<TData = Awaited<ReturnType<typeof getMyPets>>, TErr
 
 
 
+export const getDeleteCommentUrl = (id: string,
+    commentId: string,) => {
+
+
+
+
+  return `/api/posts/${id}/comments/${commentId}`
+}
+
+/**
+ * Soft-deletes a comment by setting deleted_at. Only the comment author may delete their own comment; the post owner cannot delete others' comments via this endpoint (use admin hide for moderation).
+ * @summary Delete own comment
+ */
+export const deleteComment = async (id: string,
+    commentId: string, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteCommentUrl(id,commentId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteCommentMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteComment>>, TError,{id: string;commentId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteComment>>, TError,{id: string;commentId: string}, TContext> => {
+
+const mutationKey = ['deleteComment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteComment>>, {id: string;commentId: string}> = (props) => {
+          const {id,commentId} = props ?? {};
+
+          return  deleteComment(id,commentId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteCommentMutationResult = NonNullable<Awaited<ReturnType<typeof deleteComment>>>
+
+    export type DeleteCommentMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete own comment
+ */
+export const useDeleteComment = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteComment>>, TError,{id: string;commentId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteComment>>,
+        TError,
+        {id: string;commentId: string},
+        TContext
+      > => {
+      return useMutation(getDeleteCommentMutationOptions(options));
+    }
+
 export const getGetPostCommentsUrl = (id: string,) => {
 
 

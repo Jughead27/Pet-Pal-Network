@@ -1082,6 +1082,50 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /posts/{id}/comments/{commentId}:
+    delete:
+      operationId: deleteComment
+      tags: [posts]
+      summary: Delete own comment
+      description: >
+        Soft-deletes a comment by setting deleted_at. Only the comment author
+        may delete their own comment; the post owner cannot delete others'
+        comments via this endpoint (use admin hide for moderation).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: commentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Not the comment author
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: Comment not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /posts/{id}/comments:
     get:
       operationId: getPostComments
@@ -1434,6 +1478,9 @@ components:
           type: string
         authorUsername:
           type: string
+        authorId:
+          type: string
+          description: Clerk user ID of the comment author — used by clients to determine ownership.
         createdAt:
           type: string
           format: date-time
@@ -1441,6 +1488,7 @@ components:
         - id
         - text
         - authorUsername
+        - authorId
         - createdAt
 
     CommentBody:

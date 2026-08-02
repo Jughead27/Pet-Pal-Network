@@ -139,6 +139,8 @@ export interface PostComment {
   id: string;
   text: string;
   authorUsername: string;
+  /** Clerk user ID of the comment author — used by clients to determine ownership. */
+  authorId: string;
   createdAt: string;
 }
 
@@ -320,7 +322,7 @@ export interface PresignResult {
 export interface CreatePostBody {
   petId: string;
   mediaKey: string;
-  /** @maxLength 280 */
+  /** @maxLength 250 */
   caption?: string;
   isNursery?: boolean;
   /**
@@ -381,7 +383,7 @@ export interface PostCreated {
 export interface PatchPostBody {
   /**
      * New caption; null clears it.
-     * @maxLength 280
+     * @maxLength 250
      */
   caption?: string | null;
   /** Whether this is a Nursery (baby/hatchling) post. */

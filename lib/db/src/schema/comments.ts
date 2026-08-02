@@ -19,6 +19,10 @@ export const commentsTable = pgTable(
     // Set by admins during moderation. Hidden comments excluded from all reads;
     // comment author still sees their own comments via the owner path.
     hiddenByAdmin: boolean("hidden_by_admin").notNull().default(false),
+    // Soft-delete — set when the comment author removes their own comment.
+    // All read surfaces must filter isNull(deletedAt). Background purge handles
+    // the physical delete on the same ~30d schedule as posts/pets.
+    deletedAt:     timestamp("deleted_at"),
   },
   (table) => [
     index("comments_post_id_idx").on(table.postId),

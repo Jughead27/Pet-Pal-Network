@@ -1,10 +1,13 @@
 /**
  * CommentSheet — modal sheet showing server comments with a send input.
  *
- * Comments are fetched via useGetPostComments(postId).
- * New comments POST through useCreateComment; on success the returned
- * PostComment is appended to the query cache for instant display, and
- * onCommentPosted() is called so the parent page can bump its local count.
+ * Long-press behaviour (400 ms):
+ *   • Own comment  → opens a minimal inline delete panel (own-comment only).
+ *   • Other's comment → opens ReportFlow (unchanged).
+ *
+ * Delete is a soft-delete: DELETE /posts/:id/comments/:commentId sets
+ * deleted_at server-side. The cache row is removed optimistically so the
+ * comment disappears immediately; the next sheet open refetches to confirm.
  */
 
 import React, { useState, useRef } from 'react';
@@ -25,10 +28,12 @@ import ReportFlow from '@/components/ReportFlow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatCircle } from 'phosphor-react-native';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@clerk/clerk-expo';
 import { useColors } from '@/hooks/useColors';
 import {
   useGetPostComments,
   useCreateComment,
+  useDeleteComment,
   getGetPostCommentsQueryKey,
 } from '@workspace/api-client-react';
 import type { PostComment } from '@workspace/api-client-react';
@@ -46,10 +51,13 @@ interface Props {
 function CommentRow({
   comment,
   colors,
+  isOwn,
   onLongPress,
 }: {
   comment: PostComment;
   colors: ReturnType<typeof useColors>;
+  /** True when the viewer is the comment author — changes long-press hint. */
+  isOwn: boolean;
   onLongPress: () => void;
 }) {
   const initials = comment.authorUsername
@@ -69,11 +77,10 @@ function CommentRow({
   })();
 
   return (
-    // Long-press opens the report flow for this comment.
     <Pressable
       onLongPress={onLongPress}
       delayLongPress={400}
-      accessibilityHint="long-press to report"
+      accessibilityHint={isOwn ? 'long-press to delete' : 'long-press to report'}
       style={styles.commentRow}
     >
       <View style={[styles.avatar, { backgroundColor: colors.card }]}>
@@ -102,10 +109,14 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
+  const { userId } = useAuth();
   const [draft, setDraft] = useState('');
   const inputRef = useRef<TextInput>(null);
+
   // Report state — which comment is being reported (null = none open)
   const [reportingCommentId, setReportingCommentId] = useState<string | null>(null);
+  // Delete state — which own comment has the delete panel open (null = none)
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
 
   // Fetch server comments — disabled when no postId or sheet not visible
   const { data: serverComments, isLoading } = useGetPostComments(
@@ -117,6 +128,9 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
   // POST comment mutation
   const { mutate: postComment, isPending: isSending } = useCreateComment();
 
+  // DELETE comment mutation
+  const { mutate: deleteComment, isPending: isDeleting } = useDeleteComment();
+
   const handleSend = () => {
     const trimmed = draft.trim();
     if (!trimmed || !postId || isSending) return;
@@ -126,20 +140,45 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
       {
         onSuccess: (newComment) => {
           setDraft('');
-          // Append to query cache for instant display in the list before dismiss
           queryClient.setQueryData<PostComment[]>(
             getGetPostCommentsQueryKey(postId),
             (old) => [...(old ?? []), newComment],
           );
-          // Invalidate so the next open always refetches from the server —
-          // this guarantees true persistence is visible when the sheet reopens.
           void queryClient.invalidateQueries({
             queryKey: getGetPostCommentsQueryKey(postId),
           });
-          // Notify parent page to bump its comment count
           onCommentPosted?.();
-          // Auto-dismiss — nothing to cancel once submission succeeded
           onClose();
+        },
+      },
+    );
+  };
+
+  const handleDeleteConfirm = () => {
+    if (!deletingCommentId || !postId || isDeleting) return;
+    const commentId = deletingCommentId;
+
+    // Optimistic removal — comment disappears immediately
+    queryClient.setQueryData<PostComment[]>(
+      getGetPostCommentsQueryKey(postId),
+      (old) => (old ?? []).filter((c) => c.id !== commentId),
+    );
+    setDeletingCommentId(null);
+
+    deleteComment(
+      { id: postId, commentId },
+      {
+        onError: () => {
+          // Revert optimistic removal on failure
+          void queryClient.invalidateQueries({
+            queryKey: getGetPostCommentsQueryKey(postId),
+          });
+        },
+        onSettled: () => {
+          // Always refetch to reconcile server state
+          void queryClient.invalidateQueries({
+            queryKey: getGetPostCommentsQueryKey(postId),
+          });
         },
       },
     );
@@ -152,12 +191,6 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
-      {/*
-       * On web (iOS Safari), the container must use 100dvh so it tracks the
-       * VISUAL viewport — which does shrink when the keyboard opens — rather
-       * than the layout viewport (100vh / flex:1), which does not shrink.
-       * flex:1 is preserved for native where the OS handles keyboard avoidance.
-       */}
       <View
         style={[
           styles.container,
@@ -166,16 +199,10 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
         ]}
       >
 
-        {/*
-         * ── PINNED HEADER ──────────────────────────────────────────────────
-         * Lives OUTSIDE the KeyboardAvoidingView so it never moves when the
-         * keyboard opens or the input grows.  Cancel (left) and Post (right)
-         * are always visible regardless of keyboard state or text length.
-         */}
+        {/* ── PINNED HEADER ─────────────────────────────────────────────── */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={[styles.grabber, { backgroundColor: colors.border }]} />
           <View style={styles.headerRow}>
-            {/* Cancel — left */}
             <TouchableOpacity
               onPress={onClose}
               style={styles.headerActionLeft}
@@ -185,10 +212,8 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
               <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel</Text>
             </TouchableOpacity>
 
-            {/* Title — center */}
             <Text style={[styles.headerTitle, { color: colors.foreground }]}>Comments</Text>
 
-            {/* Post — right */}
             <TouchableOpacity
               onPress={handleSend}
               activeOpacity={0.7}
@@ -216,18 +241,12 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
           </View>
         </View>
 
-        {/*
-         * ── KEYBOARD-AWARE BODY ────────────────────────────────────────────
-         * KAV shrinks this region from the bottom when the keyboard appears,
-         * keeping the input bar above the keyboard.  The header above is
-         * unaffected because it sits outside this View.
-         */}
+        {/* ── KEYBOARD-AWARE BODY ───────────────────────────────────────── */}
         <KeyboardAvoidingView
           style={styles.fill}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
-          {/* Comments list — fills available space, scrollable */}
           {isLoading ? (
             <View style={styles.loadingState}>
               <ActivityIndicator color={colors.primary} />
@@ -241,7 +260,14 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
                 <CommentRow
                   comment={item}
                   colors={colors}
-                  onLongPress={() => setReportingCommentId(item.id)}
+                  isOwn={item.authorId === userId}
+                  onLongPress={() => {
+                    if (item.authorId === userId) {
+                      setDeletingCommentId(item.id);
+                    } else {
+                      setReportingCommentId(item.id);
+                    }
+                  }}
                 />
               )}
               contentContainerStyle={styles.listContent}
@@ -258,7 +284,7 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
             />
           )}
 
-          {/* Input bar — pinned above keyboard; Post lives in the header */}
+          {/* Input bar */}
           <View
             style={[
               styles.inputBar,
@@ -293,7 +319,68 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
 
       </View>
 
-      {/* Report flow — authorId from comments response */}
+      {/* ── DELETE PANEL — own comments only ──────────────────────────────
+          Shown as a slim overlay at the bottom of the sheet when the viewer
+          long-presses their own comment.  Typographic/minimal — no capsule
+          buttons, matches the exit-pattern weight of ReportFlow. */}
+      <Modal
+        visible={deletingCommentId !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setDeletingCommentId(null)}
+      >
+        <Pressable
+          style={styles.deleteBackdrop}
+          onPress={() => setDeletingCommentId(null)}
+          accessible={false}
+        >
+          <View
+            style={[
+              styles.deletePanel,
+              {
+                backgroundColor: colors.card,
+                borderTopColor: colors.border,
+                paddingBottom: insets.bottom + 16,
+              },
+            ]}
+          >
+            <View style={[styles.deletePanelGrabber, { backgroundColor: colors.border }]} />
+            <Text style={[styles.deletePanelTitle, { color: colors.foreground }]}>
+              Delete comment?
+            </Text>
+            <Text style={[styles.deletePanelBody, { color: colors.mutedForeground }]}>
+              This removes your comment for everyone. It can't be undone.
+            </Text>
+
+            <TouchableOpacity
+              onPress={handleDeleteConfirm}
+              disabled={isDeleting}
+              style={styles.deletePanelAction}
+              accessibilityRole="button"
+              accessibilityLabel="Delete comment"
+            >
+              {isDeleting ? (
+                <ActivityIndicator size="small" color="#E05252" />
+              ) : (
+                <Text style={styles.deleteConfirmText}>delete comment</Text>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setDeletingCommentId(null)}
+              style={styles.deletePanelAction}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text style={[styles.deleteCancelText, { color: colors.mutedForeground }]}>
+                cancel
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Report flow — other users' comments */}
       <ReportFlow
         visible={reportingCommentId !== null}
         onClose={() => setReportingCommentId(null)}
@@ -309,15 +396,10 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  // Web-only: ties height to the dynamic viewport so the container shrinks
-  // with the visual viewport when the iOS keyboard opens.  dvh is not a valid
-  // RN type so cast through unknown — it's applied only on web at runtime.
   containerWeb: { height: '100dvh' as unknown as number },
   fill:      { flex: 1 },
 
   // ── Pinned header ────────────────────────────────────────────────────────
-  // Sits OUTSIDE the KeyboardAvoidingView so it never shifts when the
-  // keyboard opens.  Cancel and Post are always visible.
   header: {
     paddingTop:        12,
     paddingBottom:     10,
@@ -335,7 +417,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems:   'center',
   },
-  // Both action slots share the same minWidth so the title stays centered.
   headerActionLeft: {
     minWidth:    64,
     minHeight:   44,
@@ -415,19 +496,18 @@ const styles = StyleSheet.create({
   },
 
   // ── Input bar ─────────────────────────────────────────────────────────────
-  // Post lives in the header; this bar holds only the TextInput.
   inputBar: {
     paddingHorizontal: 16,
     paddingTop:        10,
     borderTopWidth:    StyleSheet.hairlineWidth,
   },
   input: {
-    flex:             1, // fill inputBar width — prevents placeholder truncation on web
+    flex:             1,
     borderRadius:     20,
     borderWidth:      1,
     paddingHorizontal: 14,
     paddingVertical:  10,
-    fontSize:         16, // ≥16 prevents iOS Safari auto-zoom on focus
+    fontSize:         16,
     maxHeight:        120,
     lineHeight:       20,
   },
@@ -440,5 +520,53 @@ const styles = StyleSheet.create({
   cancelText: {
     fontFamily: 'Inter_500Medium',
     fontSize:   14,
+  },
+
+  // ── Delete panel ──────────────────────────────────────────────────────────
+  // Shown in a transparent modal so it floats above the comment sheet without
+  // disrupting the existing sheet stack.  Minimal typographic layout.
+  deleteBackdrop: {
+    flex:            1,
+    justifyContent:  'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  deletePanel: {
+    borderTopWidth:    StyleSheet.hairlineWidth,
+    borderTopLeftRadius:  16,
+    borderTopRightRadius: 16,
+    paddingTop:        12,
+    paddingHorizontal: 24,
+    gap:               4,
+  },
+  deletePanelGrabber: {
+    width:       36,
+    height:      4,
+    borderRadius: 2,
+    alignSelf:   'center',
+    marginBottom: 16,
+  },
+  deletePanelTitle: {
+    fontFamily:    'Inter_600SemiBold',
+    fontSize:      17,
+    marginBottom:  6,
+  },
+  deletePanelBody: {
+    fontFamily:  'Inter_400Regular',
+    fontSize:    14,
+    lineHeight:  20,
+    marginBottom: 20,
+  },
+  deletePanelAction: {
+    minHeight:      44,
+    justifyContent: 'center',
+  },
+  deleteConfirmText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize:   16,
+    color:      '#E05252',  // destructive red — same hue as system danger
+  },
+  deleteCancelText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   16,
   },
 });

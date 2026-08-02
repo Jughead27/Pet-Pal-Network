@@ -1,0 +1,56 @@
+DELETE OWN COMMENTS — soft-delete, own comments only
+
+CONTEXT: Delete-post and delete-pet already work via the existing 
+soft-delete pattern (deleted_at column, ~30d purge, owner-only, 
+server-enforced). Delete-comment was scoped out earlier and never came 
+back. Users currently have no way to remove their own comments — this 
+also likely matters for App Store review (Guideline 1.2, UGC apps 
+generally must let users remove their own content), given the 
+blocking/reporting/moderation work already shipped (including comment 
+reporting via long-press, already live).
+
+FIX: Add delete-own-comment, reusing the SAME soft-delete pattern already 
+used for posts and pets:
+  - Schema: add deleted_at to the comments table (same shape as the 
+    existing pattern — nullable timestamp).
+  - API: DELETE endpoint for a comment, owner-only (comment author, 
+    server-enforced against the authenticated user — not the post 
+    owner), sets deleted_at rather than hard-deleting.
+  - Read-gating: all existing comment read surfaces (comment list under a 
+    post, comment counts if any exist) must exclude soft-deleted 
+    comments — follow the same accessor pattern already used for 
+    active-pets filtering, applied to comments.
+  - UI: a quiet delete entry on the comment author's own comments only. 
+    Reuse the existing 400ms long-press-on-CommentRow interaction already 
+    built for report — for the comment's OWN author, long-press should 
+    surface a delete option (either alongside or instead of the report 
+    option, since you can't report your own comment); for other users' 
+    comments, long-press keeps its current report-only behavior. Keep 
+    the delete affordance typographic/minimal, matching the existing 
+    design system (no capsule/pill buttons). No confirmation dialog 
+    needed unless you think one's warranted for a destructive action — 
+    if you add one, keep it typographic/minimal, matching ReportFlow's 
+    exit patterns.
+  - Admin: admin comment-moderation (hide_by_admin, already on comments 
+    per the trust-layer work) stays untouched — this is a SEPARATE 
+    mechanism from user self-delete; both should coexist.
+
+DO NOT MODIFY: post soft-delete, pet soft-delete, admin hide/moderation 
+flows, comment reporting (ReportFlow/long-press for other users' 
+comments), the comment posting flow itself (font-size fix, auto-dismiss 
+behavior, persistence bug — tracked and fixed separately), anything 
+outside comment-delete.
+
+ACCEPTANCE TEST (live on pshpsh.net only):
+1. Post a comment as User A — confirm long-press now surfaces a delete 
+   option on User A's own comment, and using it removes it from the list 
+   immediately.
+2. Confirm the deleted comment does NOT reappear on refresh/reopen 
+   (proves read-gating, not just client-side hide).
+3. Confirm User B's long-press on User A's comment still shows report 
+   (not delete), and that a direct API call to delete someone else's 
+   comment is rejected server-side.
+4. Confirm admin hide/moderation on comments still works independently.
+5. Confirm comment reporting (long-press → report flow) is unaffected.
+6. Golden path unaffected (sign in → Home → boop persists → Nursery 
+   pager → post flow → sign out).
