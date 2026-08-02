@@ -1,0 +1,36 @@
+SCOPE (one change): Adopt the Phosphor icon set for the bottom nav bar and the right-rail action buttons, replacing the current stock icons. Icons only — no behavior changes.
+
+SETUP:
+- Install phosphor-react-native (peers: react / react-native / react-native-svg — react-native-svg is already in the app for PawIcon, so the peer is satisfied).
+- Import named components: import { House, Dog, BabyCarriage, User, HandTap, Bone, ChatCircle, ShareNetwork } from 'phosphor-react-native'.
+- Each renders as <IconName color={...} weight="light" size={...} />. weight="light" is the resting fine-line style; weight="fill" is the active/solid style.
+
+NAV BAR (bottom tabs) — replace the current tab icons:
+- Home → House
+- Sniff → Dog
+- Nursery → BabyCarriage
+- Profile → User
+State: inactive = weight="light" in the existing inactive/muted tab color; active = weight="fill" in the app's EXISTING active-nav teal token (reuse the current constant — do NOT introduce a new teal). Match the current tab icon size.
+
+RIGHT RAIL (action buttons) — replace:
+- Boop → HandTap, color #FF7A5C (coral)
+- Treat → Bone, color #F4C542 (gold)
+- Comment → ChatCircle, default foreground color
+- Share → ShareNetwork, default foreground color
+weight="light" for all four. Match the current rail icon size. Keep every existing behavior — boop/treat handlers, the pop/scatter reaction system, counts, the out-of-treats toast, and the self-treat toast — all untouched; only the glyph swaps.
+
+DO NOT MODIFY:
+- The boop/treat REACTION system (PopText, scatter geometry, word variety, colors), counts, toasts, or any tap handlers.
+- The follow-state paw (AddToPackLink) and the avatar-placeholder paw — leave them exactly as they are for now (they get unified in the next prompt).
+- Any other screen, the API/backend, or the schema. NO schema change.
+- Do not remove the old font-glyph icon dependencies in this pass, even if they go unused here — later cleanup.
+
+PRESERVATION CLAUSE: every behavior not named above stays byte-identical. Web, iOS, and Android render identically. No unrelated refactors.
+
+ACCEPTANCE TEST (end on the golden path):
+1. Sign in → Home loads; House/Dog/BabyCarriage/User tabs render; active tab shows the filled teal glyph, inactive tabs the light glyph.
+2. On a post: the rail shows HandTap (coral), Bone (gold), ChatCircle, ShareNetwork; boop still pops and persists, treat still works, and the out-of-treats + self-treat toasts still fire.
+3. The follow paw and avatar-placeholder paw are unchanged.
+4. Nursery pager works → post flow works → sign out.
+
+Commit your changes locally.

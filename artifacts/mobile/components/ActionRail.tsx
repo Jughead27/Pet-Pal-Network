@@ -25,7 +25,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { HandTap, Bone, ChatCircle, ShareNetwork } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { useBoopPost, useTreatPost } from '@workspace/api-client-react';
@@ -37,11 +37,11 @@ const TEACHING_KEY_TREAT = 'fishbook:teaching:treat';
 // ─── Icon helpers ─────────────────────────────────────────────────────────────
 
 function BoopIcon({ color, size }: { color: string; size: number }) {
-  return <MaterialCommunityIcons name="gesture-tap" size={size} color={color} />;
+  return <HandTap color={color} weight="light" size={size} />;
 }
 
 function TreatIcon({ color, size }: { color: string; size: number }) {
-  return <MaterialCommunityIcons name="bone" size={size} color={color} />;
+  return <Bone color={color} weight="light" size={size} />;
 }
 
 // ─── BoopRipple ───────────────────────────────────────────────────────────────
@@ -512,7 +512,7 @@ export default function ActionRail({
       {/* 3. Comment */}
       <ActionItem
         renderIcon={(color) => (
-          <Ionicons name="chatbubble-outline" size={20} color={color} />
+          <ChatCircle color={color} weight="light" size={20} />
         )}
         count={commentCount}
         onPress={onCommentPress}
@@ -522,7 +522,7 @@ export default function ActionRail({
       {/* 4. Share */}
       <ActionItem
         renderIcon={(color) => (
-          <Ionicons name="paper-plane-outline" size={20} color={color} />
+          <ShareNetwork color={color} weight="light" size={20} />
         )}
         onPress={onSharePress}
         testID="share-button"

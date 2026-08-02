@@ -3,11 +3,11 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, u
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@clerk/clerk-expo';
 import { Feather } from '@expo/vector-icons';
+import { House, Dog, BabyCarriage, User } from 'phosphor-react-native';
 import { BlurView } from 'expo-blur';
 import { Redirect, Tabs, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import SniffIcon from '@/components/SniffIcon';
-import HatchlingIcon from '@/components/HatchlingIcon';
+
 import { useGetMe, customFetch } from '@workspace/api-client-react';
 import * as SecureStore from 'expo-secure-store';
 
@@ -20,9 +20,6 @@ const TOS_BORDER = '#182030';
 // ─── TabLayout ────────────────────────────────────────────────────────────────
 //
 // Always uses the Classic (Tabs) layout so every tab renders its custom icon.
-// The NativeTabs / liquid-glass path was removed: NativeTabs only supports SF
-// symbols via <Icon>, so it cannot render SniffIcon or HatchlingIcon, causing
-// Expo Go to show a compass (safari SF symbol) and a dove (bird SF symbol).
 
 /** Returns true when an ApiError carries { error: "suspended" }. */
 function isSuspendedError(e: unknown): boolean {
@@ -244,17 +241,20 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color }) => <Feather name="home" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <House color={color} weight={focused ? 'fill' : 'light'} size={22} />
+          ),
         }}
       />
 
-      {/* Sniff — always the custom sniffing-dog SVG, never an SF symbol */}
       <Tabs.Screen
         name="discovery"
         options={{
           title: 'Sniff',
           tabBarAccessibilityLabel: 'Sniff',
-          tabBarIcon: ({ color }) => <SniffIcon size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <Dog color={color} weight={focused ? 'fill' : 'light'} size={22} />
+          ),
         }}
       />
 
@@ -307,12 +307,13 @@ export default function TabLayout() {
         }}
       />
 
-      {/* Nursery — always the custom hatchling SVG, never an SF symbol */}
       <Tabs.Screen
         name="nursery"
         options={{
           title: 'Nursery',
-          tabBarIcon: ({ color }) => <HatchlingIcon size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <BabyCarriage color={color} weight={focused ? 'fill' : 'light'} size={22} />
+          ),
         }}
       />
 
@@ -320,7 +321,9 @@ export default function TabLayout() {
         name="profile"
         options={{
           title: 'Profile',
-          tabBarIcon: ({ color }) => <Feather name="user" size={22} color={color} />,
+          tabBarIcon: ({ color, focused }) => (
+            <User color={color} weight={focused ? 'fill' : 'light'} size={22} />
+          ),
         }}
       />
     </Tabs>
