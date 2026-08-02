@@ -1,0 +1,25 @@
+SCOPE: Boop button reaction effect — restore the impact of the previous expanding ring, layered with the existing spark/text pop system (do not remove the current effects).
+
+CONTEXT: The current boop effect on press is a coral spark burst + the PopText scatter (Boop!/Boop boop!/Booped! text pops). This reads too delicate. Before the icon-family rework, boop press triggered an expanding coral ring ripple that felt more impactful. We want that impact back, layered with what we have now — not a full revert, an addition.
+
+CHANGE:
+On boop button press, in addition to the existing spark + PopText scatter (unchanged), add back an EXPANDING RING effect:
+- A coral (#FF7A5C) ring/circle centered on the HandTap button
+- Scales up from the button's size to roughly 2.5–3x, opacity fading from ~0.6 to 0 over the animation
+- Duration ~400-500ms, ease-out (fast start, slow finish — the classic "ripple" feel)
+- Use the existing Animated (no Reanimated in this codebase) — a scale + opacity Animated.Value pair, similar structure to whatever the pre-rework ring implementation used if still in git history/recoverable; otherwise build fresh with Animated.timing
+- Should layer naturally with the spark burst and PopText scatter — all three fire together on press, ring is the "impact" layer underneath/behind the spark and text
+- Preserve rapid-fire/stacking behavior (multiple boops in quick succession) — each press should retrigger its own ring instance without visual glitching or the previous ring's fade being interrupted
+
+DO NOT MODIFY: the spark burst visual, PopText scatter system, treat/Yum reaction system, boop server logic/persistence, rail icon set, any other rail button.
+
+PRESERVATION CLAUSE: existing spark + text pop behavior on boop press must remain exactly as-is — this is additive only, not a replacement of any current visual.
+
+ACCEPTANCE TEST (golden path):
+- Sign in
+- Home loads
+- Tap boop on a post — ring expands + fades alongside the spark + text pop, boop count increments and persists
+- Rapid-tap boop several times — rings stack/retrigger cleanly, no visual glitch, count still accurate
+- Nursery pager works
+- Post flow works
+- Sign out

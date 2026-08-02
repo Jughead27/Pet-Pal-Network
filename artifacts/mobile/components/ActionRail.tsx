@@ -128,6 +128,7 @@ function TreatIcon({ color, size, species }: { color: string; size: number; spec
 
 const SPARK_ANGLES = [0, 72, 144, 216, 288]; // 5 evenly distributed directions (°)
 const SPARK_CAP    = 4;                        // max live bursts at once
+const RING_CAP     = 6;                        // max live rings at once
 
 interface BoopSparkProps {
   color: string;
@@ -201,6 +202,76 @@ const sparkStyles = StyleSheet.create({
   },
 });
 
+// ─── BoopRing ─────────────────────────────────────────────────────────────────
+// Expanding coral ring that fires on each boop press — the "impact" layer that
+// sits underneath the spark burst and text pops.
+//
+// Starts at the icon's own diameter (28 px) and scales to 3× (~84 px) while
+// fading from 0.6 → 0 over 450 ms with an ease-out curve (fast start / slow
+// finish — the classic ripple feel).
+//
+// Each press spawns its own independent ring instance (same stacking pattern
+// as BoopSpark) so rapid tapping produces overlapping rings without glitching.
+// Cap: RING_CAP concurrent rings; extras are silently dropped.
+
+interface BoopRingProps {
+  color: string;
+  onDone: () => void;
+}
+
+function BoopRing({ color, onDone }: BoopRingProps) {
+  const ringScale   = useRef(new Animated.Value(1)).current;
+  const ringOpacity = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(ringScale, {
+        toValue: 3,
+        duration: 450,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(ringOpacity, {
+        toValue: 0,
+        duration: 450,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) onDone();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        ringStyles.ring,
+        {
+          borderColor: color,
+          opacity: ringOpacity,
+          transform: [{ scale: ringScale }],
+        },
+      ]}
+      pointerEvents="none"
+    />
+  );
+}
+
+// Ring: 28×28 circle centered in boopIconArea (40×32).
+// left = (40 - 28) / 2 = 6;  top = (32 - 28) / 2 = 2
+const ringStyles = StyleSheet.create({
+  ring: {
+    position: 'absolute',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    left: 6,
+    top: 2,
+  },
+});
+
 // ─── BoopRailItem ─────────────────────────────────────────────────────────────
 // Dedicated boop button with:
 //   • Spring squash-and-bounce: 0.85 → 1.25 → 1.0
@@ -234,6 +305,14 @@ function BoopRailItem({
     setSparks((prev) => prev.filter((s) => s !== id));
   }, []);
 
+  // Stack of live ring IDs — capped at RING_CAP for rapid-tap safety.
+  const [rings, setRings] = useState<number[]>([]);
+  const ringIdRef = useRef(0);
+
+  const removeRing = useCallback((id: number) => {
+    setRings((prev) => prev.filter((r) => r !== id));
+  }, []);
+
   const handlePress = useCallback(() => {
     if (!reducedMotion) {
       // Spring: quick squash → energetic overshoot → springy settle
@@ -263,6 +342,12 @@ function BoopRailItem({
         const id = ++sparkIdRef.current;
         setSparks((prev) => [...prev, id]);
       }
+
+      // Spawn an expanding coral ring — the impact layer behind the sparks.
+      if (rings.length < RING_CAP) {
+        const id = ++ringIdRef.current;
+        setRings((prev) => [...prev, id]);
+      }
     }
 
     // Medium impact — lands physically on a real phone
@@ -273,7 +358,7 @@ function BoopRailItem({
     }
 
     onPress();
-  }, [reducedMotion, scale, onPress]);
+  }, [reducedMotion, scale, sparks, rings, onPress]);
 
   const iconColor = isActive ? activeColor : colors.foreground;
   const countText = formatCount(count);
@@ -294,7 +379,15 @@ function BoopRailItem({
         accessibilityRole="button"
       >
         <View style={styles.boopIconArea}>
-          {/* Coral spark bursts — rendered behind the icon, overflow: visible */}
+          {/* Expanding ring — impact layer, rendered below sparks and icon */}
+          {rings.map((id) => (
+            <BoopRing
+              key={id}
+              color={activeColor}
+              onDone={() => removeRing(id)}
+            />
+          ))}
+          {/* Coral spark bursts — rendered above ring, below icon */}
           {sparks.map((id) => (
             <BoopSpark
               key={id}
