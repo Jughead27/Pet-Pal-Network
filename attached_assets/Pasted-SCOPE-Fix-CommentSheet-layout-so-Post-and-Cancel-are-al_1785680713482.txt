@@ -1,0 +1,23 @@
+SCOPE: Fix CommentSheet layout so "Post" and "Cancel" are always visible, regardless of keyboard state or text length.
+
+CONTEXT: Currently "Cancel" lives in a separate header, and "Post" sits inline next to the text input itself — so as the input grows with typed text and the keyboard opens, "Post" moves along with it and both can end up pushed off-screen. The only current workaround is pinching to zoom out, which is not acceptable.
+
+FIX:
+Consolidate into ONE header row: "Cancel" (left) and "Post" (right), in the same row, PINNED at a fixed position at the top of the sheet. This header must NOT move, resize, or scroll — not when the keyboard opens, not as the input grows, not regardless of how much text is typed.
+Below that fixed header, the text input area is the only thing that grows/scrolls, constrained to the space between the header and the keyboard (use KeyboardAvoidingView / equivalent so the input area shrinks to fit above the keyboard rather than pushing content upward past the fixed header).
+Preserve existing behavior: "Post" text color/opacity state (colors.primary when draft has text, mutedForeground@45% when empty), ActivityIndicator while sending, Cancel's existing dismiss behavior.
+
+DO NOT MODIFY: comment list rendering, empty state, handleSend/onClose logic, data flow, any other screen.
+
+PRESERVATION CLAUSE: only the header layout and keyboard-avoidance behavior change — button state logic and comment submission/cancel behavior stay exactly as already fixed.
+
+ACCEPTANCE TEST (golden path):
+- Sign in
+- Open a post with zero comments, tap comment
+- Type a long comment — confirm the keyboard opens and "Cancel"/"Post" remain visible and fixed at the top the entire time, at default zoom (no pinching required)
+- Submit the comment → appears in the list
+- Open comment input again, type something, tap Cancel → dismisses without posting, header still fixed throughout
+- Home loads, boop persists
+- Nursery pager works
+- Post flow works
+- Sign out

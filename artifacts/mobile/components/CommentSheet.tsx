@@ -146,56 +146,103 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
       onRequestClose={onClose}
     >
       <View style={[styles.container, { backgroundColor: colors.card }]}>
-        {/* Header */}
+
+        {/*
+         * ── PINNED HEADER ──────────────────────────────────────────────────
+         * Lives OUTSIDE the KeyboardAvoidingView so it never moves when the
+         * keyboard opens or the input grows.  Cancel (left) and Post (right)
+         * are always visible regardless of keyboard state or text length.
+         */}
         <View style={[styles.header, { borderBottomColor: colors.border }]}>
           <View style={[styles.grabber, { backgroundColor: colors.border }]} />
-          <Text style={[styles.headerTitle, { color: colors.foreground }]}>
-            Comments
-          </Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityRole="button" accessibilityLabel="Cancel">
-            <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel</Text>
-          </TouchableOpacity>
+          <View style={styles.headerRow}>
+            {/* Cancel — left */}
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.headerActionLeft}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel"
+            >
+              <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel</Text>
+            </TouchableOpacity>
+
+            {/* Title — center */}
+            <Text style={[styles.headerTitle, { color: colors.foreground }]}>Comments</Text>
+
+            {/* Post — right */}
+            <TouchableOpacity
+              onPress={handleSend}
+              activeOpacity={0.7}
+              disabled={!draft.trim() || isSending}
+              style={styles.headerActionRight}
+              accessibilityRole="button"
+              accessibilityLabel="Post comment"
+            >
+              {isSending ? (
+                <ActivityIndicator size="small" color={colors.primary} />
+              ) : (
+                <Text
+                  style={[
+                    styles.sendText,
+                    {
+                      color: draft.trim() ? colors.primary : colors.mutedForeground,
+                      opacity: draft.trim() ? 1 : 0.45,
+                    },
+                  ]}
+                >
+                  Post
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
 
-        {/* Comments list */}
-        {isLoading ? (
-          <View style={styles.loadingState}>
-            <ActivityIndicator color={colors.primary} />
-          </View>
-        ) : (
-          <FlatList
-            data={serverComments ?? []}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => (
-              <CommentRow
-                comment={item}
-                colors={colors}
-                onLongPress={() => setReportingCommentId(item.id)}
-              />
-            )}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            // Prevent this inner scroll from ever bubbling to the pager
-            nestedScrollEnabled
-            ListEmptyComponent={
-              <View style={styles.emptyState}>
-                <ChatCircle size={32} color={colors.mutedForeground} weight="regular" />
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
-                  No comments yet.{'\n'}Be the first to say something.
-                </Text>
-              </View>
-            }
-          />
-        )}
-
-        {/* Input */}
+        {/*
+         * ── KEYBOARD-AWARE BODY ────────────────────────────────────────────
+         * KAV shrinks this region from the bottom when the keyboard appears,
+         * keeping the input bar above the keyboard.  The header above is
+         * unaffected because it sits outside this View.
+         */}
         <KeyboardAvoidingView
+          style={styles.fill}
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
+          {/* Comments list — fills available space, scrollable */}
+          {isLoading ? (
+            <View style={styles.loadingState}>
+              <ActivityIndicator color={colors.primary} />
+            </View>
+          ) : (
+            <FlatList
+              style={styles.fill}
+              data={serverComments ?? []}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <CommentRow
+                  comment={item}
+                  colors={colors}
+                  onLongPress={() => setReportingCommentId(item.id)}
+                />
+              )}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+              ListEmptyComponent={
+                <View style={styles.emptyState}>
+                  <ChatCircle size={32} color={colors.mutedForeground} weight="regular" />
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                    No comments yet.{'\n'}Be the first to say something.
+                  </Text>
+                </View>
+              }
+            />
+          )}
+
+          {/* Input bar — pinned above keyboard; Post lives in the header */}
           <View
             style={[
-              styles.inputRow,
+              styles.inputBar,
               {
                 backgroundColor: colors.card,
                 borderTopColor: colors.border,
@@ -222,37 +269,12 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
               returnKeyType="send"
               onSubmitEditing={handleSend}
             />
-            <TouchableOpacity
-              onPress={handleSend}
-              activeOpacity={0.7}
-              disabled={!draft.trim() || isSending}
-              style={styles.sendBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Post comment"
-            >
-              {isSending ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : (
-                <Text
-                  style={[
-                    styles.sendText,
-                    {
-                      color: draft.trim()
-                        ? colors.primary
-                        : colors.mutedForeground,
-                      opacity: draft.trim() ? 1 : 0.45,
-                    },
-                  ]}
-                >
-                  Post
-                </Text>
-              )}
-            </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
+
       </View>
 
-      {/* Report flow — comment.  authorId comes from the comments response (field added server-side). */}
+      {/* Report flow — authorId from comments response */}
       <ReportFlow
         visible={reportingCommentId !== null}
         onClose={() => setReportingCommentId(null)}
@@ -268,30 +290,49 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  fill:      { flex: 1 },
+
+  // ── Pinned header ────────────────────────────────────────────────────────
+  // Sits OUTSIDE the KeyboardAvoidingView so it never shifts when the
+  // keyboard opens.  Cancel and Post are always visible.
   header: {
-    paddingTop: 12,
-    paddingBottom: 14,
+    paddingTop:        12,
+    paddingBottom:     10,
     paddingHorizontal: 16,
-    alignItems: 'center',
     borderBottomWidth: StyleSheet.hairlineWidth,
-    position: 'relative',
   },
   grabber: {
-    width: 36,
-    height: 4,
+    width:       36,
+    height:      4,
     borderRadius: 2,
-    marginBottom: 12,
+    marginBottom: 10,
+    alignSelf:   'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems:   'center',
+  },
+  // Both action slots share the same minWidth so the title stays centered.
+  headerActionLeft: {
+    minWidth:    64,
+    minHeight:   44,
+    justifyContent: 'center',
+    alignItems: 'flex-start',
+  },
+  headerActionRight: {
+    minWidth:    64,
+    minHeight:   44,
+    justifyContent: 'center',
+    alignItems: 'flex-end',
   },
   headerTitle: {
-    fontSize: 16,
-    fontWeight: '600' as const,
+    flex:       1,
+    textAlign:  'center',
+    fontSize:   16,
+    fontFamily: 'Inter_600SemiBold',
   },
-  closeBtn: {
-    position: 'absolute',
-    right: 16,
-    bottom: 14,
-    padding: 4,
-  },
+
+  // ── Keyboard-aware body ──────────────────────────────────────────────────
   loadingState: {
     flex: 1,
     alignItems: 'center',
@@ -299,89 +340,81 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingTop:  12,
     paddingBottom: 8,
-    flexGrow: 1,
+    flexGrow:    1,
   },
+
+  // ── Comment rows ─────────────────────────────────────────────────────────
   commentRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap:          12,
     marginBottom: 20,
   },
   avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width:         36,
+    height:        36,
+    borderRadius:  18,
+    alignItems:    'center',
+    justifyContent:'center',
   },
   avatarText: {
-    fontSize: 12,
+    fontSize:   12,
     fontWeight: '700' as const,
   },
   commentContent: {
     flex: 1,
-    gap: 3,
+    gap:  3,
   },
   commentAuthor: {
-    fontSize: 13,
+    fontSize:   13,
     fontWeight: '600' as const,
   },
   commentTime: {
-    fontSize: 12,
+    fontSize:   12,
     fontWeight: '400' as const,
   },
   commentText: {
-    fontSize: 14,
+    fontSize:   14,
     lineHeight: 20,
   },
   emptyState: {
-    flex: 1,
-    alignItems: 'center',
+    flex:           1,
+    alignItems:     'center',
     justifyContent: 'center',
     paddingVertical: 60,
-    gap: 12,
+    gap:            12,
   },
   emptyText: {
-    fontSize: 14,
-    textAlign: 'center',
+    fontSize:   14,
+    textAlign:  'center',
     lineHeight: 20,
   },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    gap: 8,
+
+  // ── Input bar ─────────────────────────────────────────────────────────────
+  // Post lives in the header; this bar holds only the TextInput.
+  inputBar: {
+    paddingHorizontal: 16,
+    paddingTop:        10,
+    borderTopWidth:    StyleSheet.hairlineWidth,
   },
   input: {
-    flex: 1,
-    borderRadius: 20,
-    borderWidth: 1,
+    borderRadius:     20,
+    borderWidth:      1,
     paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14,
-    maxHeight: 100,
-    lineHeight: 20,
+    paddingVertical:  10,
+    fontSize:         14,
+    maxHeight:        120,
+    lineHeight:       20,
   },
-  // Typographic "Post" send action — no background circle, no icon dependency.
-  // Sits flush right in the inputRow; touch target padded to 44 px min.
-  sendBtn: {
-    paddingHorizontal: 4,
-    paddingVertical: 10,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
+  // ── Header actions ────────────────────────────────────────────────────────
   sendText: {
     fontFamily: 'Inter_600SemiBold',
-    fontSize: 15,
+    fontSize:   15,
   },
-  // Typographic "Cancel" — replaces the Ionicons X in the header.
-  // Position is inherited from closeBtn (absolute, right: 16, bottom: 14).
   cancelText: {
     fontFamily: 'Inter_500Medium',
-    fontSize: 14,
+    fontSize:   14,
   },
 });
