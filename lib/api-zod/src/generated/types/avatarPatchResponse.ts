@@ -13,4 +13,8 @@ export interface AvatarPatchResponse {
   avatarUrl: string | null;
   avatarFocusX: number | null;
   avatarFocusY: number | null;
+  avatarCropX: number | null;
+  avatarCropY: number | null;
+  avatarCropW: number | null;
+  avatarCropH: number | null;
 }

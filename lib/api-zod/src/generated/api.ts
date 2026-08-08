@@ -224,18 +224,38 @@ export const patchPetAvatarBodyFocusXMax = 1;
 export const patchPetAvatarBodyFocusYMin = 0;
 export const patchPetAvatarBodyFocusYMax = 1;
 
+export const patchPetAvatarBodyCropXMin = 0;
+export const patchPetAvatarBodyCropXMax = 1;
+
+export const patchPetAvatarBodyCropYMin = 0;
+export const patchPetAvatarBodyCropYMax = 1;
+
+export const patchPetAvatarBodyCropWMin = 0;
+export const patchPetAvatarBodyCropWMax = 1;
+
+export const patchPetAvatarBodyCropHMin = 0;
+export const patchPetAvatarBodyCropHMax = 1;
+
 
 
 export const PatchPetAvatarBody = zod.object({
   "avatarKey": zod.string().nullable().describe('R2 media key for the new avatar. If it starts with \"posts\/\", the server copies it to an \"avatars\/\" key. Pass null to clear the avatar.\n'),
   "focusX": zod.number().min(patchPetAvatarBodyFocusXMin).max(patchPetAvatarBodyFocusXMax).nullable(),
-  "focusY": zod.number().min(patchPetAvatarBodyFocusYMin).max(patchPetAvatarBodyFocusYMax).nullable()
+  "focusY": zod.number().min(patchPetAvatarBodyFocusYMin).max(patchPetAvatarBodyFocusYMax).nullable(),
+  "cropX": zod.number().min(patchPetAvatarBodyCropXMin).max(patchPetAvatarBodyCropXMax).nullish().describe('Crop rect left edge (0–1). Set together with cropY\/cropW\/cropH.'),
+  "cropY": zod.number().min(patchPetAvatarBodyCropYMin).max(patchPetAvatarBodyCropYMax).nullish().describe('Crop rect top edge (0–1).'),
+  "cropW": zod.number().min(patchPetAvatarBodyCropWMin).max(patchPetAvatarBodyCropWMax).nullish().describe('Crop rect width (0–1).'),
+  "cropH": zod.number().min(patchPetAvatarBodyCropHMin).max(patchPetAvatarBodyCropHMax).nullish().describe('Crop rect height (0–1).')
 }).describe('Request body for setting or clearing a pet\'s avatar. Set avatarKey to null to clear the avatar.\n')
 
 export const PatchPetAvatarResponse = zod.object({
   "avatarUrl": zod.string().nullable(),
   "avatarFocusX": zod.number().nullable(),
-  "avatarFocusY": zod.number().nullable()
+  "avatarFocusY": zod.number().nullable(),
+  "avatarCropX": zod.number().nullable(),
+  "avatarCropY": zod.number().nullable(),
+  "avatarCropW": zod.number().nullable(),
+  "avatarCropH": zod.number().nullable()
 }).describe('Result of a pet avatar set or clear operation')
 
 
@@ -272,7 +292,11 @@ export const PatchPetResponse = zod.object({
   "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar (preferred) or most recent non-archived post. Null when neither exists or when the source key is a seed key (resolved client-side from bundled assets).\n'),
   "avatarUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar. Null when no avatar is set.'),
   "avatarFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.'),
-  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.')
+  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.'),
+  "avatarCropX": zod.number().nullable().describe('Crop rect left edge (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropY": zod.number().nullable().describe('Crop rect top edge (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropW": zod.number().nullable().describe('Crop rect width (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropH": zod.number().nullable().describe('Crop rect height (0–1 of natural image). Null for legacy focal-point avatars.')
 }).describe('A pet owned by a user')
 
 
@@ -379,7 +403,11 @@ export const GetPetResponse = zod.object({
 })).describe('All current owners of this pet (for \"About the owners\" display).'),
   "avatarUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar. Null when no avatar is set.'),
   "avatarFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.'),
-  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.')
+  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.'),
+  "avatarCropX": zod.number().nullable().describe('Crop rect left edge (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropY": zod.number().nullable().describe('Crop rect top edge (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropW": zod.number().nullable().describe('Crop rect width (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropH": zod.number().nullable().describe('Crop rect height (0–1 of natural image). Null for legacy focal-point avatars.')
 }).describe('Full pet profile including posts')
 
 
@@ -671,7 +699,11 @@ export const CreatePetResponse = zod.object({
   "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar (preferred) or most recent non-archived post. Null when neither exists or when the source key is a seed key (resolved client-side from bundled assets).\n'),
   "avatarUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar. Null when no avatar is set.'),
   "avatarFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.'),
-  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.')
+  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.'),
+  "avatarCropX": zod.number().nullable().describe('Crop rect left edge (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropY": zod.number().nullable().describe('Crop rect top edge (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropW": zod.number().nullable().describe('Crop rect width (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropH": zod.number().nullable().describe('Crop rect height (0–1 of natural image). Null for legacy focal-point avatars.')
 }).describe('A pet owned by a user')
 
 
@@ -743,7 +775,11 @@ export const GetMyPetsResponse = zod.object({
   "thumbnailUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar (preferred) or most recent non-archived post. Null when neither exists or when the source key is a seed key (resolved client-side from bundled assets).\n'),
   "avatarUrl": zod.string().nullable().describe('Stable media URL for the pet\'s avatar. Null when no avatar is set.'),
   "avatarFocusX": zod.number().nullable().describe('Horizontal focal point (0–1) for avatar cover-crop. Null when no avatar.'),
-  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.')
+  "avatarFocusY": zod.number().nullable().describe('Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.'),
+  "avatarCropX": zod.number().nullable().describe('Crop rect left edge (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropY": zod.number().nullable().describe('Crop rect top edge (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropW": zod.number().nullable().describe('Crop rect width (0–1 of natural image). Null for legacy focal-point avatars.'),
+  "avatarCropH": zod.number().nullable().describe('Crop rect height (0–1 of natural image). Null for legacy focal-point avatars.')
 }).describe('A pet owned by a user'))
 }).describe('The caller\'s pets')
 

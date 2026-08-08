@@ -135,6 +135,14 @@ export interface PetProfile {
   avatarFocusX: number | null;
   /** Vertical focal point (0–1) for avatar cover-crop. Null when no avatar. */
   avatarFocusY: number | null;
+  /** Crop rect left edge (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropX: number | null;
+  /** Crop rect top edge (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropY: number | null;
+  /** Crop rect width (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropW: number | null;
+  /** Crop rect height (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropH: number | null;
 }
 
 /**
@@ -215,6 +223,30 @@ export interface AvatarPatchBody {
      * @maximum 1
      */
   focusY: number | null;
+  /**
+     * Crop rect left edge (0–1). Set together with cropY/cropW/cropH.
+     * @minimum 0
+     * @maximum 1
+     */
+  cropX?: number | null;
+  /**
+     * Crop rect top edge (0–1).
+     * @minimum 0
+     * @maximum 1
+     */
+  cropY?: number | null;
+  /**
+     * Crop rect width (0–1).
+     * @minimum 0
+     * @maximum 1
+     */
+  cropW?: number | null;
+  /**
+     * Crop rect height (0–1).
+     * @minimum 0
+     * @maximum 1
+     */
+  cropH?: number | null;
 }
 
 /**
@@ -224,6 +256,10 @@ export interface AvatarPatchResponse {
   avatarUrl: string | null;
   avatarFocusX: number | null;
   avatarFocusY: number | null;
+  avatarCropX: number | null;
+  avatarCropY: number | null;
+  avatarCropW: number | null;
+  avatarCropH: number | null;
 }
 
 /**
@@ -247,6 +283,14 @@ export interface Pet {
   avatarFocusX: number | null;
   /** Vertical focal point (0–1) for avatar cover-crop. Null when no avatar. */
   avatarFocusY: number | null;
+  /** Crop rect left edge (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropX: number | null;
+  /** Crop rect top edge (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropY: number | null;
+  /** Crop rect width (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropW: number | null;
+  /** Crop rect height (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropH: number | null;
 }
 
 /**

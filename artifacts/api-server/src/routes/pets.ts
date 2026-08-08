@@ -122,6 +122,10 @@ router.get("/pets/:id", async (req, res) => {
       avatarKey:    petsTable.avatarKey,
       avatarFocusX: petsTable.avatarFocusX,
       avatarFocusY: petsTable.avatarFocusY,
+      avatarCropX:  petsTable.avatarCropX,
+      avatarCropY:  petsTable.avatarCropY,
+      avatarCropW:  petsTable.avatarCropW,
+      avatarCropH:  petsTable.avatarCropH,
     })
     .from(petsTable)
     .where(and(eq(petsTable.id, id), activePets));
@@ -225,6 +229,10 @@ router.get("/pets/:id", async (req, res) => {
       avatarUrl:             pet.avatarKey ? mediaTokenUrl(pet.avatarKey) : null,
       avatarFocusX:          pet.avatarFocusX ?? null,
       avatarFocusY:          pet.avatarFocusY ?? null,
+      avatarCropX:           pet.avatarCropX  ?? null,
+      avatarCropY:           pet.avatarCropY  ?? null,
+      avatarCropW:           pet.avatarCropW  ?? null,
+      avatarCropH:           pet.avatarCropH  ?? null,
       owners:                [],
       posts:                 [],
       archivedPosts:         [],
@@ -423,6 +431,10 @@ router.get("/pets/:id", async (req, res) => {
     avatarUrl:           pet.avatarKey ? mediaTokenUrl(pet.avatarKey) : null,
     avatarFocusX:        pet.avatarFocusX ?? null,
     avatarFocusY:        pet.avatarFocusY ?? null,
+    avatarCropX:         pet.avatarCropX  ?? null,
+    avatarCropY:         pet.avatarCropY  ?? null,
+    avatarCropW:         pet.avatarCropW  ?? null,
+    avatarCropH:         pet.avatarCropH  ?? null,
     owners:              ownerRows.map((o) => ({ userId: o.userId, username: o.username })),
     posts,
     archivedPosts,
@@ -581,6 +593,10 @@ router.get("/me/pets", async (req, res) => {
       avatarKey:      petsTable.avatarKey,
       avatarFocusX:   petsTable.avatarFocusX,
       avatarFocusY:   petsTable.avatarFocusY,
+      avatarCropX:    petsTable.avatarCropX,
+      avatarCropY:    petsTable.avatarCropY,
+      avatarCropW:    petsTable.avatarCropW,
+      avatarCropH:    petsTable.avatarCropH,
       recentMediaKey: sql<string | null>`(
         SELECT ${postsTable.mediaKey}
         FROM   ${postsTable}
@@ -614,6 +630,10 @@ router.get("/me/pets", async (req, res) => {
         avatarUrl,
         avatarFocusX: p.avatarFocusX ?? null,
         avatarFocusY: p.avatarFocusY ?? null,
+        avatarCropX:  p.avatarCropX  ?? null,
+        avatarCropY:  p.avatarCropY  ?? null,
+        avatarCropW:  p.avatarCropW  ?? null,
+        avatarCropH:  p.avatarCropH  ?? null,
       };
     }),
   });
@@ -757,10 +777,14 @@ router.patch("/pets/:id/avatar", async (req, res) => {
     return;
   }
 
-  const { avatarKey, focusX, focusY } = req.body as {
+  const { avatarKey, focusX, focusY, cropX, cropY, cropW, cropH } = req.body as {
     avatarKey: string | null;
     focusX:    number | null;
     focusY:    number | null;
+    cropX?:    number | null;
+    cropY?:    number | null;
+    cropW?:    number | null;
+    cropH?:    number | null;
   };
 
   let storedKey: string | null = null;
@@ -785,6 +809,10 @@ router.patch("/pets/:id/avatar", async (req, res) => {
       avatarKey:    storedKey,
       avatarFocusX: storedKey !== null ? (focusX ?? null) : null,
       avatarFocusY: storedKey !== null ? (focusY ?? null) : null,
+      avatarCropX:  storedKey !== null ? (cropX  ?? null) : null,
+      avatarCropY:  storedKey !== null ? (cropY  ?? null) : null,
+      avatarCropW:  storedKey !== null ? (cropW  ?? null) : null,
+      avatarCropH:  storedKey !== null ? (cropH  ?? null) : null,
     })
     .where(eq(petsTable.id, id));
 
@@ -792,6 +820,10 @@ router.patch("/pets/:id/avatar", async (req, res) => {
     avatarUrl:    storedKey ? mediaTokenUrl(storedKey) : null,
     avatarFocusX: storedKey !== null ? (focusX ?? null) : null,
     avatarFocusY: storedKey !== null ? (focusY ?? null) : null,
+    avatarCropX:  storedKey !== null ? (cropX  ?? null) : null,
+    avatarCropY:  storedKey !== null ? (cropY  ?? null) : null,
+    avatarCropW:  storedKey !== null ? (cropW  ?? null) : null,
+    avatarCropH:  storedKey !== null ? (cropH  ?? null) : null,
   });
 });
 

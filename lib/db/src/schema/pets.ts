@@ -31,6 +31,13 @@ export const petsTable = pgTable(
     avatarKey:    text("avatar_key"),
     avatarFocusX: real("avatar_focus_x"),
     avatarFocusY: real("avatar_focus_y"),
+    // Crop rect (0–1 fractions of the natural image) — set alongside focusX/Y
+    // by the new CropEditor. When present, FocalImage uses the rect branch for
+    // pixel-accurate WYSIWYG rendering across any container aspect ratio.
+    avatarCropX:  real("avatar_crop_x"),
+    avatarCropY:  real("avatar_crop_y"),
+    avatarCropW:  real("avatar_crop_w"),
+    avatarCropH:  real("avatar_crop_h"),
   },
   (table) => [
     index("pets_owner_id_idx").on(table.ownerId),

@@ -28,3 +28,4 @@
 - [Quota Requests Architecture](quota-requests-architecture.md) — member invite quota requests; separate from invite_requests (pre-signup); grant bumps quota +5, audit logged.
 - [Multi-Pet Tagging Architecture](multi-pet-tagging.md) — post_pets canonical source; posts.petId backward compat; ownership rules; GET /pets/search must precede /:id; api-zod index exports only generated/api.
 - [React TDZ in long components](react-tdz-hook-order.md) — `const` vars used by hooks/derived state must be declared BEFORE the line that reads them; TypeScript does not catch this, it crashes at runtime.
+- [CropEditor Architecture](crop-editor-architecture.md) — unified crop/frame editor (fixed window, image pans/zooms); avatar WYSIWYG fix via avatarCropX/Y/W/H DB columns.

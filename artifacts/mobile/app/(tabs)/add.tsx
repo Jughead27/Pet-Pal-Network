@@ -46,7 +46,7 @@ import {
 } from '@workspace/api-client-react';
 import type { Pet } from '@workspace/api-client-react';
 import { compressImage } from '@/utils/compressImage';
-import FrameRefiner from '@/components/FrameRefiner';
+import CropEditor from '@/components/CropEditor';
 import FocalImage from '@/components/FocalImage';
 import PetAvatar from '@/components/PetAvatar';
 import { computeAutoFrame } from '@/utils/computeAutoFrame';
@@ -472,7 +472,7 @@ export default function AddScreen() {
         </View>
       </Modal>
 
-      {/* ── Frame Refiner modal ─────────────────────────────────────────────── */}
+      {/* ── Crop Editor modal ─────────────────────────────────────────────── */}
       <Modal
         visible={refinerOpen && !!compressedUri && !!cropRect}
         animationType="slide"
@@ -481,13 +481,15 @@ export default function AddScreen() {
         onRequestClose={handleRefineCancel}
       >
         {compressedUri && cropRect ? (
-          <FrameRefiner
+          <CropEditor
             uri={compressedUri}
             naturalWidth={naturalSize.current.width  || 1}
             naturalHeight={naturalSize.current.height || 1}
             initialRect={cropRect}
             initialMode={cropMode}
-            feedAspect={feedAspect}
+            targetAspect={feedAspect}
+            title="Adjust framing"
+            cancelIcon="back"
             onConfirm={handleRefineConfirm}
             onCancel={handleRefineCancel}
           />

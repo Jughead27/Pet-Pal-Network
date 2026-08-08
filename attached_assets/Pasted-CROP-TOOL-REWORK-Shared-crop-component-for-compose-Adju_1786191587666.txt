@@ -1,0 +1,32 @@
+CROP TOOL REWORK — Shared crop component for compose Adjust + avatar edit
+
+PROBLEM:
+The current "Adjust" crop tool used in both post-compose and profile-picture edit has real usability issues flagged by our first external tester:
+1. Can't freely pan the photo within the crop frame.
+2. Zoom range is too limited.
+3. Aspect ratio is too restrictive/rigid.
+
+Additionally, avatar edit has a separate, more serious bug: the live crop preview shown while adjusting does NOT match what actually gets saved (WYSIWYG mismatch) — users see one framing while editing and get a different result after save.
+
+GOAL:
+Build a single shared crop component used by BOTH compose and avatar edit, meeting an Instagram/iOS-native-crop-tool standard:
+- Free two-finger pan (touch) and click-drag pan (web) — not constrained to preset positions.
+- Real pinch-to-zoom (touch) and scroll/pinch-zoom (web) with a meaningfully wider zoom range than currently allowed (should comfortably support zooming in tight on a small subject and zooming out to show full context).
+- Flexible aspect ratio appropriate to each surface (compose likely keeps its existing target ratio(s) but with much more forgiving pan/zoom freedom within them; avatar edit stays square/circle but with the same pan/zoom freedom).
+- The crop preview shown live during editing must be pixel-accurate to what gets saved — no separate rendering paths between preview and the final saved crop. Root-cause and fix the avatar-specific WYSIWYG mismatch as part of this (likely a coordinate-space or scale-factor mismatch between the preview transform and the final crop calculation — investigate both).
+
+DO NOT MODIFY:
+- Photo truth model (R2 stores full uncropped 2048px original; only the crop metadata/rendering changes).
+- Upload validation (magic-byte + size checks) — untouched.
+- Post-compose flow ordering (Photo → Pet → Caption → Nursery → Post) — untouched.
+- Any other screen's touch/pan behavior outside the crop tool itself.
+
+PRESERVATION CLAUSE:
+Do not refactor unrelated compose or avatar-edit code. Do not change API contracts for post/avatar upload endpoints unless the crop tool truly requires new crop metadata fields — if so, keep the change additive and backward compatible.
+
+ACCEPTANCE TEST (must end in the golden path):
+1. Compose: pick a photo, open Adjust — confirm free pan in all directions, wide zoom range (in and out), aspect ratio no longer feels clipped/restrictive.
+2. Avatar edit: same pan/zoom checks, PLUS explicitly compare the live preview against the actual saved avatar after confirming — they must match exactly (test with an off-center subject to catch any residual offset).
+3. Both surfaces: verify save/cancel still work cleanly, no regressions to existing crop_mode/format-agnostic groundwork.
+4. Golden path: sign in → Home → boop persists → Nursery pager → post flow (including using the reworked Adjust tool) → sign out.
+5. Verify identically on web, iOS, and Android.

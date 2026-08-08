@@ -27,4 +27,12 @@ export interface Pet {
   avatarFocusX: number | null;
   /** Vertical focal point (0–1) for avatar cover-crop. Null when no avatar. */
   avatarFocusY: number | null;
+  /** Crop rect left edge (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropX: number | null;
+  /** Crop rect top edge (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropY: number | null;
+  /** Crop rect width (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropW: number | null;
+  /** Crop rect height (0–1 of natural image). Null for legacy focal-point avatars. */
+  avatarCropH: number | null;
 }

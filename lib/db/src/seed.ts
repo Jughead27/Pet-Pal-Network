@@ -212,6 +212,24 @@ const SEED_DATA: { name: string; sortOrder: number; breeds: string[] }[] = [
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
+  // ── Additive schema migrations ─────────────────────────────────────────────
+  // This script runs during the BUILD phase (prod-post-build.sh).  The
+  // Replit Publish flow applies drizzle-kit push during the PROMOTE phase —
+  // AFTER the build.  On the first deploy that introduces new columns, those
+  // columns therefore do not yet exist when Drizzle generates its SELECT lists
+  // (which are explicit, not SELECT *).
+  //
+  // Guard: run any additive ALTER TABLE … ADD COLUMN IF NOT EXISTS statements
+  // here, before the first Drizzle query that touches the affected table.
+  // Each statement is idempotent — a no-op on all subsequent deploys.
+  //
+  // ⚠ Do NOT add DROP, RENAME, or destructive DDL here — those belong
+  // exclusively in the PROMOTE-phase drizzle-kit push.
+  await pool.query(`ALTER TABLE pets ADD COLUMN IF NOT EXISTS avatar_crop_x real`);
+  await pool.query(`ALTER TABLE pets ADD COLUMN IF NOT EXISTS avatar_crop_y real`);
+  await pool.query(`ALTER TABLE pets ADD COLUMN IF NOT EXISTS avatar_crop_w real`);
+  await pool.query(`ALTER TABLE pets ADD COLUMN IF NOT EXISTS avatar_crop_h real`);
+
   // ── Species / breeds — one-time setup, skip when already present ─────────
   // On every deploy after the first, the species table is already populated
   // and every INSERT below would be an ON CONFLICT DO NOTHING no-op.  The

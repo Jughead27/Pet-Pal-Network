@@ -26,7 +26,8 @@ import { useColumnWidth } from "@/hooks/useColumnWidth";
 import * as ImagePicker from "expo-image-picker";
 import MediaImage from "@/components/MediaImage";
 import FocalImage from "@/components/FocalImage";
-import CropFramer from "@/components/CropFramer";
+import CropEditor from "@/components/CropEditor";
+import type { CropRect } from "@/utils/computeAutoFrame";
 import { useQueryClient } from "@tanstack/react-query";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -378,8 +379,8 @@ export default function PetProfileScreen() {
     await processAvatarAsset(asset.uri, asset.width, asset.height);
   }, [processAvatarAsset]);
 
-  /** Called when CropFramer confirms the framing. Upload if needed, then PATCH. */
-  const handleAvatarFrameConfirm = useCallback(async (focusX: number, focusY: number) => {
+  /** Called when CropEditor confirms the framing. Upload if needed, then PATCH. */
+  const handleAvatarFrameConfirm = useCallback(async (rect: CropRect, _mode: 'cover' | 'contain') => {
     if (!petId || !avatarUri) return;
     setAvatarStep("saving");
     setAvatarError(null);
@@ -417,7 +418,15 @@ export default function PetProfileScreen() {
 
       await patchAvatar({
         id:   petId,
-        data: { avatarKey: mediaKey, focusX, focusY },
+        data: {
+          avatarKey: mediaKey,
+          focusX: null,
+          focusY: null,
+          cropX: rect.x,
+          cropY: rect.y,
+          cropW: rect.w,
+          cropH: rect.h,
+        },
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Something went wrong. Please try again.";
@@ -686,6 +695,10 @@ export default function PetProfileScreen() {
             <FocalImage
               source={heroAvatarSource}
               style={{ width: "100%", height: HERO_HEIGHT } as any}
+              cropX={pet.avatarCropX ?? null}
+              cropY={pet.avatarCropY ?? null}
+              cropW={pet.avatarCropW ?? null}
+              cropH={pet.avatarCropH ?? null}
               focusX={pet.avatarFocusX ?? 0.5}
               focusY={pet.avatarFocusY ?? 0.5}
             />
@@ -1223,7 +1236,7 @@ export default function PetProfileScreen() {
         </View>
       </Modal>
 
-      {/* ── Avatar CropFramer (full-screen modal, hero-aspect frame) ── */}
+      {/* ── Avatar CropEditor (full-screen modal, hero-aspect crop window) ── */}
       <Modal
         visible={avatarStep === "framing" && !!avatarUri}
         animationType="slide"
@@ -1231,13 +1244,16 @@ export default function PetProfileScreen() {
         onRequestClose={() => setAvatarStep("sheet")}
       >
         {avatarStep === "framing" && avatarUri && (
-          <CropFramer
+          <CropEditor
             uri={avatarUri}
             naturalWidth={avatarNatural.current.width || columnWidth}
             naturalHeight={avatarNatural.current.height || HERO_HEIGHT}
-            frameHeight={HERO_HEIGHT}
+            targetAspect={columnWidth / HERO_HEIGHT}
+            hideModetoggle
+            title="Set avatar"
+            cancelIcon="back"
             onConfirm={handleAvatarFrameConfirm}
-            onBack={() => setAvatarStep("sheet")}
+            onCancel={() => setAvatarStep("sheet")}
           />
         )}
       </Modal>

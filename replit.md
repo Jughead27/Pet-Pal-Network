@@ -71,6 +71,7 @@ A pet-only social network: pets are the profiles, humans are accounts that act o
 - REGRESSION RULE: before rewriting or substantially modifying any screen or component, enumerate its existing capabilities and preserve every one unless the prompt explicitly says to remove it. Losing existing functionality (e.g., a sign-out button, a navigation path, an empty state) is a failed delivery even if the new feature works.
 - After any delivery, verify the golden path still works: sign in → feed loads → boop persists → post a photo → sign out.
 - Express 5's router rejects * wildcard routes — use regex routes, and media routes can't use header auth for <img> loads — signed-URL tokens instead.
+- **seed.ts / drizzle-kit ordering**: seed.ts runs during the BUILD phase (`prod-post-build.sh`); `drizzle-kit push` runs during the PROMOTE phase (after build). Any new column added to a table that seed.ts queries will cause "column does not exist" on the first deploy, because Drizzle generates explicit column lists (not `SELECT *`) from the schema definition. Fix: add an idempotent `ALTER TABLE … ADD COLUMN IF NOT EXISTS` for the new column at the top of `main()` in seed.ts, before the first Drizzle query that touches that table. SQL type and nullability must exactly match the Drizzle schema (source of truth). The pattern and rationale mirror the existing `pet_owners` guard in the same file. This will recur on every future migration that adds columns to a seed.ts-queried table.
 
 ## User preferences
 

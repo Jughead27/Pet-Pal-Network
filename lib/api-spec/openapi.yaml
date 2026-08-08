@@ -1771,6 +1771,26 @@ components:
           format: float
           nullable: true
           description: Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.
+        avatarCropX:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect left edge (0–1 of natural image). Null for legacy focal-point avatars.
+        avatarCropY:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect top edge (0–1 of natural image). Null for legacy focal-point avatars.
+        avatarCropW:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect width (0–1 of natural image). Null for legacy focal-point avatars.
+        avatarCropH:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect height (0–1 of natural image). Null for legacy focal-point avatars.
       required:
         - id
         - name
@@ -1786,6 +1806,10 @@ components:
         - avatarUrl
         - avatarFocusX
         - avatarFocusY
+        - avatarCropX
+        - avatarCropY
+        - avatarCropW
+        - avatarCropH
 
     ArchivePostResponse:
       type: object
@@ -1908,6 +1932,34 @@ components:
           nullable: true
           minimum: 0
           maximum: 1
+        cropX:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Crop rect left edge (0–1). Set together with cropY/cropW/cropH.
+        cropY:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Crop rect top edge (0–1).
+        cropW:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Crop rect width (0–1).
+        cropH:
+          type: number
+          format: float
+          nullable: true
+          minimum: 0
+          maximum: 1
+          description: Crop rect height (0–1).
       required:
         - avatarKey
         - focusX
@@ -1928,10 +1980,30 @@ components:
           type: number
           format: float
           nullable: true
+        avatarCropX:
+          type: number
+          format: float
+          nullable: true
+        avatarCropY:
+          type: number
+          format: float
+          nullable: true
+        avatarCropW:
+          type: number
+          format: float
+          nullable: true
+        avatarCropH:
+          type: number
+          format: float
+          nullable: true
       required:
         - avatarUrl
         - avatarFocusX
         - avatarFocusY
+        - avatarCropX
+        - avatarCropY
+        - avatarCropW
+        - avatarCropH
 
     Pet:
       type: object
@@ -1981,6 +2053,26 @@ components:
           format: float
           nullable: true
           description: Vertical focal point (0–1) for avatar cover-crop. Null when no avatar.
+        avatarCropX:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect left edge (0–1 of natural image). Null for legacy focal-point avatars.
+        avatarCropY:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect top edge (0–1 of natural image). Null for legacy focal-point avatars.
+        avatarCropW:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect width (0–1 of natural image). Null for legacy focal-point avatars.
+        avatarCropH:
+          type: number
+          format: float
+          nullable: true
+          description: Crop rect height (0–1 of natural image). Null for legacy focal-point avatars.
       required:
         - id
         - ownerId
@@ -1993,6 +2085,10 @@ components:
         - avatarUrl
         - avatarFocusX
         - avatarFocusY
+        - avatarCropX
+        - avatarCropY
+        - avatarCropW
+        - avatarCropH
 
     SpeciesItem:
       type: object

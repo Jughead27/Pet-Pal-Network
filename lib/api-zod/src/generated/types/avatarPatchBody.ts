@@ -22,4 +22,28 @@ export interface AvatarPatchBody {
      * @maximum 1
      */
   focusY: number | null;
+  /**
+     * Crop rect left edge (0–1). Set together with cropY/cropW/cropH.
+     * @minimum 0
+     * @maximum 1
+     */
+  cropX?: number | null;
+  /**
+     * Crop rect top edge (0–1).
+     * @minimum 0
+     * @maximum 1
+     */
+  cropY?: number | null;
+  /**
+     * Crop rect width (0–1).
+     * @minimum 0
+     * @maximum 1
+     */
+  cropW?: number | null;
+  /**
+     * Crop rect height (0–1).
+     * @minimum 0
+     * @maximum 1
+     */
+  cropH?: number | null;
 }

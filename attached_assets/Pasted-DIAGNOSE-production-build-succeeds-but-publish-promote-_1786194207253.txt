@@ -1,0 +1,36 @@
+DIAGNOSE — production build succeeds but publish/promote fails ("2 builds failed")
+
+The last build (Build cbecd3a0, Deployment 8c8da602, started 2026-08-08 12:48 UTC) 
+completed successfully all the way through:
+- pnpm install, api-server build, Metro/Expo web bundle
+- seed.ts ran clean (all backfills reported 0 rows, confirming idempotency)
+- image layers pushed, "Pushed image manifest" logged at 12:50:14 UTC
+
+Despite this, the Replit dashboard shows "2 builds failed" and production is still 
+serving the deployment from 6 days ago (James published X days ago) — meaning this 
+build did NOT get promoted to production, even though the BUILD phase itself 
+succeeded.
+
+Please investigate what happened AFTER "Pushed image manifest" at 12:50:14 UTC for 
+this specific deployment/build — the PROMOTE phase, where the new container starts 
+up and Replit healthchecks it before routing traffic. I cannot find these logs 
+through the dashboard UI.
+
+Specifically:
+1. Find the actual promote-phase or startup logs for build cbecd3a0 / deployment 
+   8c8da602 — container startup output, crash traces, or healthcheck failure 
+   details from right after 12:50:14 UTC today.
+2. Identify why this build was marked "failed" despite the build phase completing 
+   cleanly — did the container crash on startup, fail healthchecks repeatedly and 
+   time out, or something else?
+3. Cross-check against the earlier root-caused issue this week (avatar_crop_x/y/w/h 
+   columns missing from prod DB, fixed via idempotent ADD COLUMN IF NOT EXISTS 
+   guards in seed.ts) — confirm whether that fix actually applied successfully in 
+   THIS build's seed run, or whether there's a related but distinct problem (e.g. 
+   application code elsewhere querying those columns before the guard runs, or a 
+   migration/seed ordering issue we haven't caught yet).
+4. Do not attempt any fix yet — report back the actual failure cause first so we 
+   can review before touching anything.
+
+Do not modify any code, schema, or configuration as part of this investigation — 
+diagnosis only.
