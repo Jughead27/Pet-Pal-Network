@@ -1,0 +1,45 @@
+CONTEXT: The signup/create-account page (app/(auth)/sign-up.tsx) needs three fixes, plus one addition to the Profile screen:
+1. Too much competing copy before the form — three stacked taglines instead of one clear message.
+2. The "create account" CTA has no border/fill, so it doesn't read as tappable.
+3. There's currently no Terms of Service / Privacy Policy consent mechanism anywhere on the signup page — a real compliance gap.
+4. ToS/Privacy Policy also need to be persistently accessible in-app at any time (not just at signup), which they currently are not — this is a separate, standard requirement, not just a signup-flow concern.
+
+GOAL:
+
+Part 1 — Copy trim (signup page):
+- Keep the headline: "a quiet corner of the internet, run by the animals."
+- Keep ONE supporting line: "no news, no noise, no metrics — just pets and the people who love them."
+- Remove "humans may appear. animals are the subject." from this screen entirely (leave the string/copy available elsewhere in the codebase if reusable — just don't render it here).
+
+Part 2 — Button styling (signup page):
+- Restyle "create account" as a proper hairline outline button: 1px border, transparent fill, bold label — matching the locked primary-CTA pattern. Reuse the existing shared button component/style if one exists for this pattern.
+- Apply the same visible, consistent treatment to "continue with google" — if it's meant as a secondary action, style it per the existing secondary-tier pattern (bold text link) rather than leaving it ambiguous/flat like today.
+
+Part 3 — Terms of Service / Privacy Policy consent (signup page):
+- Add a required, UNCHECKED checkbox below the password field and above the create-account button: "I agree to the Terms of Service and Privacy Policy" with "Terms of Service" and "Privacy Policy" as separate tappable links.
+- "create account" must be disabled (visually + functionally) until the checkbox is checked. Do not allow account creation without this consent.
+- This checkbox must also gate the Google OAuth signup path — if "continue with google" is tapped before the checkbox is checked, either disable that button too or show a clear inline message that consent is required first. Do not let OAuth signup bypass the consent requirement.
+- Style the checkbox + label plainly/small, consistent with the app's existing muted/utility copy register.
+- Create minimal placeholder pages at /terms and /privacy (a title + "content coming soon" note is sufficient — full legal copy is explicitly out of scope for this prompt) so the links don't 404.
+
+Part 4 — Persistent ToS/Privacy access (Profile screen):
+- Add "Terms of Service" and "Privacy Policy" as two small, quiet text links on the Profile screen, near the existing low-priority links (e.g. "send feedback," "sign out") — same whisper-tier styling, not a design centerpiece.
+- Link to the same /terms and /privacy routes created in Part 3.
+
+DO NOT MODIFY:
+- The actual authentication logic (Clerk email/password flow, Google OAuth flow) — only gate the trigger, don't touch how signup itself works.
+- The invite landing page or post-signup co-pet modal — both already fixed/shipped separately, unrelated to this prompt.
+- Any other screen's button styling — if a shared button component is reused, fine, but no other screen's appearance should change as a side effect.
+- Any other Profile screen content, layout, or ordering beyond adding the two new links near the existing low-priority link cluster.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Full legal copy for /terms and /privacy is explicitly out of scope — placeholder content only.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Load the signup page — confirm only ONE headline + ONE supporting line appear.
+2. Confirm "create account" renders as a visible hairline outline button.
+3. Confirm the ToS/Privacy checkbox is unchecked by default, and "create account" is disabled until it's checked.
+4. Tap the Terms of Service and Privacy Policy links on the signup page individually — confirm each opens without a 404.
+5. Attempt Google OAuth signup without checking the box — confirm it's blocked or clearly prompts for consent first.
+6. Check the box, complete a normal email/password signup — confirm account creation succeeds normally afterward.
+7. Go to Profile — confirm Terms of Service and Privacy Policy links are present near the existing quiet-link cluster, correctly styled, and both work.
+8. Golden path: load signup page → confirm trimmed copy + visible button → attempt signup with box unchecked (blocked) → check box → complete signup → visit Profile → confirm ToS/Privacy links present and working → sign out. Verified live on pshpsh.net.

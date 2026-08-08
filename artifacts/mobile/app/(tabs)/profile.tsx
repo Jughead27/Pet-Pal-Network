@@ -803,6 +803,33 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Legal links — same whisper tier as send feedback */}
+        {!confirmSignOut && (
+          <View style={styles.legalRow}>
+            <TouchableOpacity
+              onPress={() => router.push('/terms')}
+              activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel="Terms of Service"
+            >
+              <Text style={[styles.feedbackText, { color: colors.mutedForeground }]}>
+                terms of service
+              </Text>
+            </TouchableOpacity>
+            <Text style={[styles.legalDot, { color: colors.mutedForeground }]}> · </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/privacy')}
+              activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel="Privacy Policy"
+            >
+              <Text style={[styles.feedbackText, { color: colors.mutedForeground }]}>
+                privacy policy
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {confirmSignOut ? (
           // Confirmation row — inline, no modal/Alert, works on all platforms
           <View style={styles.signOutConfirmRow}>
@@ -1440,6 +1467,19 @@ const styles = StyleSheet.create({
     fontSize:      13,
     opacity:       0.7,
     letterSpacing: 0.1,
+  },
+
+  // Legal links — whisper tier, below send feedback
+  legalRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    paddingVertical: 6,
+    marginBottom:  8,
+  },
+  legalDot: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+    opacity:    0.4,
   },
 
   // Sign out

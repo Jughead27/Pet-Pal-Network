@@ -19,6 +19,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { getBaseUrl } from '@workspace/api-client-react';
+import Button from '@/components/Button';
 
 // Required for OAuth redirect to complete inside Expo Go.
 WebBrowser.maybeCompleteAuthSession();
@@ -66,6 +67,9 @@ export default function SignUpScreen() {
   const [ssoLoading, setSsoLoading] = useState(false);
   const [error, setError]           = useState<string | null>(null);
 
+  // ── ToS/Privacy consent — required before any signup path (email or OAuth)
+  const [tosAgreed, setTosAgreed] = useState(false);
+
   // ── Load invite code on mount ─────────────────────────────────────────────
   // Priority: URL param (from /invite/[code]) > SecureStore (from previous landing page visit)
   useEffect(() => {
@@ -98,6 +102,10 @@ export default function SignUpScreen() {
   // ── Step 1: Create account ────────────────────────────────────────────────
   const handleSignUp = useCallback(async () => {
     if (!isLoaded) return;
+    if (!tosAgreed) {
+      setError('please agree to the terms of service and privacy policy first.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -112,7 +120,7 @@ export default function SignUpScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isLoaded, signUp, email, password]);
+  }, [isLoaded, signUp, email, password, tosAgreed]);
 
   // ── Step 2: Verify email OTP ──────────────────────────────────────────────
   const handleVerify = useCallback(async () => {
@@ -418,7 +426,6 @@ export default function SignUpScreen() {
             <View style={s.sloganWrap}>
               <Text style={s.slogan1}>a quiet corner of the internet, run by the animals.</Text>
               <Text style={s.slogan2}>no news, no noise, no metrics — just pets and the people who love them.</Text>
-              <Text style={s.slogan2}>humans may appear. animals are the subject.</Text>
             </View>
           </View>
 
@@ -456,25 +463,51 @@ export default function SignUpScreen() {
             />
           </View>
 
+          {/* ── ToS / Privacy consent — gates BOTH signup paths ── */}
+          <Pressable
+            style={s.consentRow}
+            onPress={() => { setTosAgreed((v) => !v); setError(null); }}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: tosAgreed }}
+            accessibilityLabel="I agree to the Terms of Service and Privacy Policy"
+            hitSlop={6}
+          >
+            <View style={[s.checkbox, tosAgreed && s.checkboxChecked]}>
+              {tosAgreed && <Text style={s.checkboxMark}>✓</Text>}
+            </View>
+            <Text style={s.consentText}>
+              I agree to the{' '}
+              <Text style={s.consentLink} onPress={() => router.push('/terms')}>Terms of Service</Text>
+              {' '}and{' '}
+              <Text style={s.consentLink} onPress={() => router.push('/privacy')}>Privacy Policy</Text>
+            </Text>
+          </Pressable>
+
           {error ? <Text style={s.errorText}>{error}</Text> : null}
 
-          {/* ── Primary action ── */}
-          <Pressable
-            style={({ pressed }) => [
-              s.primaryAction, pressed && s.dimmed, (loading || !email || password.length < 8) && s.disabled,
-            ]}
+          {/* ── Primary action — shared hairline-outline CTA ── */}
+          <Button
+            variant="primary"
+            fullWidth
             onPress={handleSignUp}
-            disabled={loading || !email || password.length < 8}
+            disabled={loading || !email || password.length < 8 || !tosAgreed}
+            style={s.createBtn}
           >
             {loading
               ? <ActivityIndicator color={FG} size="small" />
               : <Text style={s.primaryActionText}>create account</Text>}
-          </Pressable>
+          </Button>
 
-          {/* ── Google SSO ── */}
+          {/* ── Google SSO — also gated on consent ── */}
           <Pressable
-            style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed]}
-            onPress={handleGoogle}
+            style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed, !tosAgreed && s.disabled]}
+            onPress={() => {
+              if (!tosAgreed) {
+                setError('please agree to the terms of service and privacy policy first.');
+                return;
+              }
+              handleGoogle();
+            }}
             disabled={ssoLoading}
           >
             {ssoLoading
@@ -632,6 +665,46 @@ const s = StyleSheet.create({
     lineHeight: 19,
   },
 
+  // ── ToS / Privacy consent ─────────────────────────────────────────────────
+  consentRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           10,
+    marginTop:     4,
+    marginBottom:  16,
+  },
+  checkbox: {
+    width:          18,
+    height:         18,
+    borderRadius:   4,
+    borderWidth:    1,
+    borderColor:    MUTED,
+    alignItems:     'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    borderColor: FG,
+  },
+  checkboxMark: {
+    color:      FG,
+    fontSize:   12,
+    lineHeight: 14,
+  },
+  consentText: {
+    flex:       1,
+    fontFamily: 'Inter_400Regular',
+    fontSize:   12,
+    color:      MUTED,
+    lineHeight: 18,
+  },
+  consentLink: {
+    color:               FG,
+    textDecorationLine:  'underline',
+  },
+  createBtn: {
+    marginTop: 8,
+  },
+
   // ── Actions ───────────────────────────────────────────────────────────────
   primaryAction: {
     paddingVertical: 16,
@@ -653,7 +726,7 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   secondaryActionText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
     color: MUTED,
     textAlign: 'center',
