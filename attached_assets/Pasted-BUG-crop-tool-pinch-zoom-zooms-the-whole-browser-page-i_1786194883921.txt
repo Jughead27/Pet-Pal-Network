@@ -1,0 +1,42 @@
+BUG — crop tool: pinch-zoom zooms the whole browser page instead of the image; pan only moves left/right
+
+On mobile web (pshpsh.net), the new CropEditor component does not correctly capture 
+touch gestures:
+
+1. PINCH-TO-ZOOM BROKEN: pinching on the crop image zooms the entire browser 
+   viewport/page (native browser zoom), not the image inside the crop frame. The 
+   component's own zoom logic is not receiving/handling the gesture at all.
+
+2. PAN RESTRICTED TO ONE AXIS: dragging only moves the image left/right — vertical 
+   pan does not work.
+
+Expected behavior (per original spec): pinch-to-zoom and pan should be fully 
+captured by the crop component itself, with the browser's native page-zoom/scroll 
+never triggering. This is standard practice for any in-page crop/photo editor (e.g. 
+Instagram, iOS Photos) — achieved via `touch-action: none` (or equivalent) on the 
+crop surface plus proper preventDefault() handling on touchmove/gesture events, so 
+the browser never takes over the gesture.
+
+Please investigate:
+- Whether the crop container has `touch-action` set correctly (should be `none` on 
+  the interactive crop surface, not just the outer screen).
+- Whether touchmove/wheel/gesture event handlers are calling preventDefault() 
+  correctly, and whether that's actually reaching the DOM node the user is touching 
+  (vs. a wrapper that doesn't propagate the block).
+  - Whether pan is incorrectly hard-coded or clamped to horizontal-only movement 
+  somewhere in the pan handler math.
+
+Test on actual mobile Safari on pshpsh.net (not desktop browser touch emulation) 
+before calling this fixed — this class of bug often only reproduces on real mobile 
+browsers.
+
+DO NOT MODIFY: anything outside the CropEditor component and its touch/gesture 
+handling. No schema, no other screens.
+
+ACCEPTANCE TEST:
+1. Open compose or avatar edit on an actual iPhone/Android device via pshpsh.net.
+2. Pinch to zoom — confirm ONLY the image inside the crop frame zooms; the browser 
+   page/viewport does not zoom at all.
+3. Drag in all directions (up/down/left/right/diagonal) — confirm free pan in every 
+   direction, not just horizontal.
+4. Confirm the crop frame itself stays fixed while the image moves/scales beneath it.

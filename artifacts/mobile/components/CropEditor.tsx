@@ -295,14 +295,15 @@ export default function CropEditor({
     }),
   ).current;
 
-  // ── Web scroll-to-zoom ─────────────────────────────────────────────────────
+  // ── Web scroll-to-zoom + touch gesture capture ────────────────────────────
   const outerRef = useRef<View>(null);
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     const el = outerRef.current as unknown as HTMLElement | null;
     if (!el) return;
 
-    const handler = (e: WheelEvent) => {
+    // Wheel: scroll-to-zoom on desktop web.
+    const wheelHandler = (e: WheelEvent) => {
       e.preventDefault();
       const { cropW: cw, cropH: ch } = cropRef.current;
       const { minScale: minS, maxScale: maxS } = limRef.current;
@@ -332,8 +333,20 @@ export default function CropEditor({
       setRenderOffset({ ...clamped });
     };
 
-    el.addEventListener('wheel', handler, { passive: false });
-    return () => el.removeEventListener('wheel', handler);
+    // touchmove: prevent browser page-scroll and pinch-to-zoom on mobile web.
+    // This is belt-and-suspenders alongside touch-action:none on the gesture
+    // target — mobile Safari does not always honour touch-action:none alone for
+    // pinch gestures, so an explicit non-passive preventDefault is required.
+    const touchMoveHandler = (e: TouchEvent) => {
+      e.preventDefault();
+    };
+
+    el.addEventListener('wheel',      wheelHandler,      { passive: false });
+    el.addEventListener('touchmove',  touchMoveHandler,  { passive: false });
+    return () => {
+      el.removeEventListener('wheel',     wheelHandler);
+      el.removeEventListener('touchmove', touchMoveHandler);
+    };
   }, []); // refs handle dynamic values; this only needs to run on mount
 
   // ── Image position (cover mode) ────────────────────────────────────────────
@@ -507,7 +520,14 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.85)',
   },
   gestureTarget: {
-    // transparent; exists only to receive gestures across the whole screen
+    // touch-action:none is the primary fix for mobile web:
+    // — tells the browser not to handle pinch-to-zoom or scroll on this element
+    //   so PanResponder receives all touch events instead of the browser taking over.
+    // — without this, pinch zooms the viewport and vertical pan is consumed by
+    //   native page-scroll, making the gesture target appear horizontal-only.
+    // userSelect:none prevents stray text selection during fast drags.
+    touchAction: 'none' as 'none',
+    userSelect:  'none' as 'none',
   },
   topBar: {
     position: 'absolute',
