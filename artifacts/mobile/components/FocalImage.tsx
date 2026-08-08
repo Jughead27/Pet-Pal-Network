@@ -168,16 +168,6 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
   // ── Contain mode: whole image + blurred background fill ──────────────────
   const isContain = mode === 'contain';
 
-  // Crop-contain: when a post has an explicit crop rect in 'cover' mode, we show
-  // the user's EXACT framing (contain-fit of the crop rect) with blur letterboxing
-  // filling any aspect-ratio gap — identical to the WYSIWYG view in the editor.
-  // avatar FocalImages have mode=null, not 'cover', so they keep rect-driven cover.
-  const hasCropRect =
-    typeof cropX === 'number' && typeof cropY === 'number' &&
-    typeof cropW === 'number' && typeof cropH === 'number' &&
-    cropW > 0 && cropH > 0;
-  const isCropContain = !isContain && hasCropRect && mode === 'cover';
-
   // ── Cover-fit position ────────────────────────────────────────────────────
   const imageStyle = useMemo(() => {
     const { w: cw, h: ch } = container;
@@ -200,34 +190,12 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
       return { position: 'absolute' as const, width: sw, height: sh, left, top };
     }
 
-    if (isCropContain) {
-      // Crop-contain: scale so the crop rect fits within the container without
-      // cutting anything — preserving the user's exact framing from the editor.
-      // Gaps (when crop aspect ≠ container aspect) are filled by the blur bg.
-      const cropPxW    = (cropW as number) * nw;
-      const cropPxH    = (cropH as number) * nh;
-      const s          = Math.min(cw / cropPxW, ch / cropPxH);
-      const imgW       = nw * s;
-      const imgH       = nh * s;
-      const imgLeft    = (cw - cropPxW * s) / 2 - (cropX as number) * imgW;
+    // Rect-driven cover: scale so the crop rect fills the container (full-bleed).
+    const hasCropRect =
+      typeof cropX === 'number' && typeof cropY === 'number' &&
+      typeof cropW === 'number' && typeof cropH === 'number' &&
+      cropW > 0 && cropH > 0;
 
-      // Vertical position: when containAlignBottom is set, anchor the bottom of
-      // the crop-rect display just above the overlay (same contract as isContain).
-      // This pushes the photo content up so the overlay lands cleanly in the blur
-      // letterbox pad below — never straddling the photo/blur boundary.
-      // Fall back to vertical-centre when the photo is tall enough that anchoring
-      // would push it off the top.
-      const displayCropH = (cropH as number) * imgH;
-      const centeredTop  = (ch - displayCropH) / 2 - (cropY as number) * imgH;
-      const anchoredTop  = containAlignBottom != null
-        ? ch - containAlignBottom - (cropY as number) * imgH - displayCropH
-        : centeredTop;
-      const imgTop = Math.max(anchoredTop, centeredTop);
-
-      return { position: 'absolute' as const, width: imgW, height: imgH, left: imgLeft, top: imgTop };
-    }
-
-    // Avatar / legacy: rect-driven cover (mode=null with cropRect keeps existing behaviour).
     if (hasCropRect) {
       // Rect-driven cover: scale so the crop rect fills the container.
       const cropPxW = (cropW as number) * nw;
@@ -267,14 +235,14 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
     const top  = -Math.max(0, Math.min(fy * (sh - ch), sh - ch));
 
     return { position: 'absolute' as const, width: sw, height: sh, left, top };
-  }, [container, natural, focusX, focusY, cropX, cropY, cropW, cropH, isContain, isCropContain, containAlignBottom]);
+  }, [container, natural, focusX, focusY, cropX, cropY, cropW, cropH, isContain, containAlignBottom]);
 
   // After initial failure + one retry, show the placeholder.
   if (retries > 1) {
     return <PawPlaceholder style={style as ViewStyle} />;
   }
 
-  if (isContain || isCropContain) {
+  if (isContain) {
     return (
       <View style={[style, styles.clip]} onLayout={handleLayout}>
         {/* Blurred background fill — covers letterbox bars in both contain and crop-contain */}
@@ -285,7 +253,7 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
           blurRadius={24}
           onError={handleError}
         />
-        {/* Foreground image: full-image contain (isContain) or crop-rect contain (isCropContain) */}
+        {/* Foreground image: whole photo, contain-fit */}
         {imageStyle ? (
           <Image
             source={effectiveSource}

@@ -1249,7 +1249,6 @@ export default function PetProfileScreen() {
             naturalWidth={avatarNatural.current.width || columnWidth}
             naturalHeight={avatarNatural.current.height || HERO_HEIGHT}
             targetAspect={columnWidth / HERO_HEIGHT}
-            hideModetoggle
             title="Set avatar"
             cancelIcon="back"
             onConfirm={handleAvatarFrameConfirm}

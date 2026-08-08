@@ -154,7 +154,7 @@ export default function AddScreen() {
       // Derive focal point from rect center for backward compat.
       setCropFocusX(rect.x + rect.w / 2);
       setCropFocusY(rect.y + rect.h / 2);
-      setCropMode('contain');
+      setCropMode('cover');
       setStep('form');
     } catch {
       setError('Failed to process image. Please try another photo.');
@@ -254,7 +254,7 @@ export default function AddScreen() {
     setCropFocusX(0.5);
     setCropFocusY(0.5);
     setCropRect(null);
-    setCropMode('contain');
+    setCropMode('cover');
     setRefinerOpen(false);
     setError(null);
     setPetSearchQuery('');
@@ -337,7 +337,7 @@ export default function AddScreen() {
       setCropFocusX(0.5);
       setCropFocusY(0.5);
       setCropRect(null);
-      setCropMode('contain');
+      setCropMode('cover');
       setPetSearchQuery('');
       setStep('idle');
       if (pets.length === 1) setSelectedPetIds(new Set([pets[0].id]));
@@ -486,7 +486,6 @@ export default function AddScreen() {
             naturalWidth={naturalSize.current.width  || 1}
             naturalHeight={naturalSize.current.height || 1}
             initialRect={cropRect}
-            initialMode={cropMode}
             targetAspect={feedAspect}
             showAspectPicker
             title="Adjust framing"

@@ -1,0 +1,26 @@
+CONTEXT: We're redesigning the crop/adjust screen in compose (and avatar edit, if it shares the component) to collapse the existing separate "Fit" and "Crop" modes into a single continuous-zoom canvas, and to add a new 4th aspect ratio option.
+
+GOAL:
+1. Remove the Fit/Crop mode toggle entirely. Replace with one canvas that always behaves like "Crop" mode (cover-fit within the chosen ratio frame, pinch-zoom + pan via the existing react-native-gesture-handler/reanimated engine).
+2. Zoom floor: the minimum allowed zoom is exactly the point where the photo's shorter dimension just touches the frame's edges on both sides (i.e., the photo can never be zoomed out past fully covering the frame — no gaps, no blur-letterbox needed for any newly-created post). Max zoom stays whatever the existing cap is.
+3. Add a new ratio option: "Tall" at 9:16, alongside the existing 1:1, 4:5, and Original. New locked order: Tall | 1:1 | 4:5 | Original.
+4. New smart-default logic: if the source photo is portrait-oriented (taller than wide), default the initial ratio selection to Tall. If landscape or square-ish, default to 4:5. (This replaces whatever the current Fit-related default logic is — Original should no longer be a smart default outcome, only a manual pick.)
+5. Default zoom on load, for whichever ratio is selected: land at the zoom floor (photo just covers the frame) — do not start zoomed in further than necessary.
+
+DO NOT MODIFY:
+- The gesture engine itself (pinch/pan handlers) — reuse as-is, just remove the mode-branching logic that switches its behavior between Fit and Crop.
+- The ratio-picker UI component's visual styling/layout (the recently-fixed flex-row-in-bottom-bar approach) — only add the new "Tall" chip using the same pattern as the existing three.
+- FocalImage.tsx's feed-rendering logic for EXISTING posts that already have isCropContain / letterboxed data — those must continue to render exactly as they do today. This change only affects the compose/adjust experience and how NEW posts are created going forward.
+- The boop/treat rail, post-detail screen, share card, or any non-compose screen.
+- Avatar edit's aspect ratio lock (it stays its own fixed wide-rectangle ratio, unaffected by this ratio set) — but if avatar edit shares the same underlying zoom-canvas component, it should get the same "no Fit mode, zoom floor = frame coverage" behavior for consistency, just with its own locked ratio and no ratio picker.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Do not modify auth, feed, admin, or any other feature area. If the crop component is shared with avatar edit, only change the shared zoom/mode logic — do not alter avatar edit's ratio lock, layout, or screen flow.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Open compose, pick a portrait photo — confirm it defaults to Tall ratio, loads with photo covering the frame edge-to-edge, no gaps.
+2. Pinch to zoom in, then back out — confirm it stops exactly at full-frame coverage and won't zoom out further (no letterbox/blur ever appears).
+3. Switch ratio to 1:1, then 4:5, then Original — confirm each reflows the crop correctly, zoom floor recalculates per ratio, no mode toggle is visible anywhere on screen.
+4. Pick a landscape photo — confirm it defaults to 4:5 instead of Tall.
+5. Post the photo — confirm the final feed result exactly matches what was shown in Adjust (WYSIWYG), full-bleed, no letterbox pad.
+6. Open an OLD existing post that has letterboxing from before this change — confirm it still renders correctly in the feed (unaffected).
+7. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow (using the new Adjust screen) → sign out. All on pshpsh.net, verified live (not Replit preview).

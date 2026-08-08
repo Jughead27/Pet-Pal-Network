@@ -35,7 +35,6 @@ import React, {
   useState,
 } from 'react';
 import {
-  Image,
   Platform,
   Pressable,
   StatusBar,
@@ -67,16 +66,12 @@ export interface CropEditorProps {
   targetAspect: number;
   /** Initial crop rect in 0–1 fractions. null → cover the window from centre. */
   initialRect?: CropRect | null;
-  /** Initial mode. Default 'cover'. */
-  initialMode?: 'cover' | 'contain';
   /**
-   * When true, shows a 3-option aspect-ratio picker (1:1 / 4:5 / Original)
+   * When true, shows the aspect-ratio picker (Tall | 1:1 | 4:5 | Original)
    * and picks a smart default based on photo orientation.
    * Use for compose; avatar stays locked to its targetAspect.
    */
   showAspectPicker?: boolean;
-  /** When true, hide the Crop / Fit toggle (avatar is always cover). */
-  hideModetoggle?: boolean;
   /** Top-bar title string. */
   title?: string;
   /** Leading button icon. 'back' (←) or 'cancel' (×). Default 'cancel'. */
@@ -164,9 +159,7 @@ export default function CropEditor({
   naturalHeight,
   targetAspect,
   initialRect,
-  initialMode = 'cover',
   showAspectPicker = false,
-  hideModetoggle = false,
   title = 'Adjust photo',
   cancelIcon = 'cancel',
   onConfirm,
@@ -175,22 +168,22 @@ export default function CropEditor({
   const { width: screenW, height: screenH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  const [mode, setMode] = useState<'cover' | 'contain'>(initialMode);
-
   // ── Aspect-ratio picker (compose only) ────────────────────────────────────
-  // Three fixed options: square, portrait standard, and the photo's own ratio.
+  // Four fixed options in display order: Tall | 1:1 | 4:5 | Original.
   const ratioOptions = useMemo(() => [
+    { label: 'Tall',     value: 9 / 16 },
     { label: '1:1',      value: 1 },
     { label: '4:5',      value: 4 / 5 },
     { label: 'Original', value: naturalWidth / naturalHeight },
   ], [naturalWidth, naturalHeight]);
 
-  // Smart default: landscape photos open in their own ratio; portrait/square → 4:5.
+  // Smart default: portrait photos → Tall (9:16); landscape / square → 4:5.
+  // "Original" is never a smart default — only an explicit user pick.
   const [activeAspect, setActiveAspect] = useState<number>(() => {
     if (!showAspectPicker) return targetAspect;
-    return (naturalWidth / naturalHeight) > 1
-      ? naturalWidth / naturalHeight   // landscape → original ratio
-      : 4 / 5;                         // portrait / square → 4:5
+    return (naturalWidth / naturalHeight) < 1
+      ? 9 / 16    // portrait → Tall
+      : 4 / 5;    // landscape / square → 4:5
   });
 
   // ── Layout ─────────────────────────────────────────────────────────────────
@@ -198,7 +191,7 @@ export default function CropEditor({
   // When the aspect-ratio picker is shown it adds one extra row inside the bottom
   // bar. Reserve that height so the crop window never slides under the bar.
   const PICKER_ROW_H = showAspectPicker ? 44 : 0;
-  const BOTTOM_BAR_H = Math.max(insets.bottom, 16) + (hideModetoggle ? 80 : 116) + PICKER_ROW_H;
+  const BOTTOM_BAR_H = Math.max(insets.bottom, 16) + 80 + PICKER_ROW_H;
   const availW = screenW;
   const availH = screenH - TOP_BAR_H - BOTTOM_BAR_H;
 
@@ -379,21 +372,6 @@ export default function CropEditor({
     };
   });
 
-  // ── Contain-mode image (whole photo fit to available space) ───────────────
-  const containImgStyle = useMemo(() => {
-    if (mode !== 'contain') return null;
-    const s = Math.min(availW / naturalWidth, availH / naturalHeight);
-    const w = naturalWidth  * s;
-    const h = naturalHeight * s;
-    return {
-      position: 'absolute' as const,
-      width:  w,
-      height: h,
-      left:   (availW - w) / 2,
-      top:    TOP_BAR_H + (availH - h) / 2,
-    };
-  }, [mode, availW, availH, TOP_BAR_H, naturalWidth, naturalHeight]);
-
   // ── Web: scroll-to-zoom + Safari pinch suppression ────────────────────────
   const outerRef = useRef<View>(null);
   useEffect(() => {
@@ -450,81 +428,57 @@ export default function CropEditor({
 
   // ── Confirm ────────────────────────────────────────────────────────────────
   const handleConfirm = useCallback(() => {
-    if (mode === 'contain') {
-      onConfirm({ x: 0, y: 0, w: 1, h: 1 }, 'contain');
-      return;
-    }
     const rect = stateToRect(
       scale.value,
       { x: offsetX.value, y: offsetY.value },
       cropW, cropH, naturalWidth, naturalHeight,
     );
     onConfirm(rect, 'cover');
-  }, [mode, onConfirm, cropW, cropH, naturalWidth, naturalHeight, scale, offsetX, offsetY]);
-
-  const isContain = mode === 'contain';
+  }, [onConfirm, cropW, cropH, naturalWidth, naturalHeight, scale, offsetX, offsetY]);
 
   return (
     <View ref={outerRef} style={styles.root}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      {isContain ? (
-        /* ── Contain mode: whole photo + blur fill ──────────────────────────── */
-        <>
-          <Image
-            source={{ uri }}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-            blurRadius={20}
-          />
-          {containImgStyle && (
-            <Image source={{ uri }} style={containImgStyle} resizeMode="contain" />
-          )}
-        </>
-      ) : (
-        /* ── Cover mode: panning/zooming image + crop window overlay ─────────── */
-        <>
-          {/* The photo — animated by Reanimated on the UI thread */}
-          <Animated.Image
-            source={{ uri }}
-            style={animatedImgStyle}
-            resizeMode="cover"
-          />
+      {/* ── Cover canvas: panning/zooming image + crop window ─────────────── */}
+      {/* The photo — animated by Reanimated on the UI thread */}
+      <Animated.Image
+        source={{ uri }}
+        style={animatedImgStyle}
+        resizeMode="cover"
+      />
 
-          {/* Dark overlay in 4 rects surrounding the crop window */}
-          <View pointerEvents="none" style={[styles.overlay, {
-            left: 0, top: 0, width: screenW, height: cropCY - cropH / 2,
-          }]} />
-          <View pointerEvents="none" style={[styles.overlay, {
-            left: 0, top: cropCY + cropH / 2,
-            width: screenW, height: screenH - (cropCY + cropH / 2),
-          }]} />
-          <View pointerEvents="none" style={[styles.overlay, {
-            left: 0, top: cropCY - cropH / 2,
-            width: cropCX - cropW / 2, height: cropH,
-          }]} />
-          <View pointerEvents="none" style={[styles.overlay, {
-            left: cropCX + cropW / 2, top: cropCY - cropH / 2,
-            width: screenW - (cropCX + cropW / 2), height: cropH,
-          }]} />
+      {/* Dark overlay in 4 rects surrounding the crop window */}
+      <View pointerEvents="none" style={[styles.overlay, {
+        left: 0, top: 0, width: screenW, height: cropCY - cropH / 2,
+      }]} />
+      <View pointerEvents="none" style={[styles.overlay, {
+        left: 0, top: cropCY + cropH / 2,
+        width: screenW, height: screenH - (cropCY + cropH / 2),
+      }]} />
+      <View pointerEvents="none" style={[styles.overlay, {
+        left: 0, top: cropCY - cropH / 2,
+        width: cropCX - cropW / 2, height: cropH,
+      }]} />
+      <View pointerEvents="none" style={[styles.overlay, {
+        left: cropCX + cropW / 2, top: cropCY - cropH / 2,
+        width: screenW - (cropCX + cropW / 2), height: cropH,
+      }]} />
 
-          {/* Crop window border */}
-          <View pointerEvents="none" style={[styles.cropBorder, {
-            left:   cropCX - cropW / 2,
-            top:    cropCY - cropH / 2,
-            width:  cropW,
-            height: cropH,
-          }]} />
+      {/* Crop window border */}
+      <View pointerEvents="none" style={[styles.cropBorder, {
+        left:   cropCX - cropW / 2,
+        top:    cropCY - cropH / 2,
+        width:  cropW,
+        height: cropH,
+      }]} />
 
-          {/* Gesture surface — full screen so any touch drives the image.
-              GestureDetector automatically sets touch-action:none on its
-              child, preventing browser scroll/zoom interference. */}
-          <GestureDetector gesture={composed}>
-            <View style={StyleSheet.absoluteFill} />
-          </GestureDetector>
-
-        </>
-      )}
+      {/* Gesture surface — full screen so any touch drives the image.
+          GestureDetector automatically sets touch-action:none on its
+          child, preventing browser scroll/zoom interference. */}
+      <GestureDetector gesture={composed}>
+        <View style={StyleSheet.absoluteFill} />
+      </GestureDetector>
 
       {/* ── Top bar ── */}
       <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
@@ -547,7 +501,7 @@ export default function CropEditor({
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
         {/* Ratio picker — only in cover mode; lives in the bar so it can never
             overlap the mode toggle regardless of crop-window height. */}
-        {showAspectPicker && !isContain && (
+        {showAspectPicker && (
           <View style={styles.ratioPicker}>
             <View style={styles.ratioScrim}>
               {ratioOptions.map((opt) => {
@@ -570,33 +524,6 @@ export default function CropEditor({
             </View>
           </View>
         )}
-        {!hideModetoggle && (
-          <View style={styles.modeToggle}>
-            <Pressable
-              style={[styles.modeBtn, mode === 'cover' && styles.modeBtnActive]}
-              onPress={() => setMode('cover')}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: mode === 'cover' }}
-              accessibilityLabel="Crop"
-            >
-              <Text style={[styles.modeBtnText, mode === 'cover' && styles.modeBtnTextActive]}>
-                Crop
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.modeBtn, mode === 'contain' && styles.modeBtnActive]}
-              onPress={() => setMode('contain')}
-              accessibilityRole="radio"
-              accessibilityState={{ checked: mode === 'contain' }}
-              accessibilityLabel="Fit — show whole photo"
-            >
-              <Text style={[styles.modeBtnText, mode === 'contain' && styles.modeBtnTextActive]}>
-                Fit
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
         <Pressable
           style={({ pressed }) => [styles.doneBtn, pressed && styles.doneBtnPressed]}
           onPress={handleConfirm}
@@ -654,29 +581,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 16,
     backgroundColor: 'rgba(0,0,0,0.55)',
-  },
-  modeToggle: {
-    flexDirection: 'row' as const,
-    marginBottom: 12,
-    borderRadius: 10,
-    overflow: 'hidden' as const,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-  },
-  modeBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center' as const,
-  },
-  modeBtnActive: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-  },
-  modeBtnText: {
-    color: 'rgba(240,244,248,0.6)',
-    fontSize: 14,
-    fontWeight: '600' as const,
-  },
-  modeBtnTextActive: {
-    color: '#F0F4F8',
   },
   doneBtn: {
     backgroundColor: '#2EBFA5',
