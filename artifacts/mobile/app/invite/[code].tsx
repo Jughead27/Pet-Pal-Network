@@ -5,7 +5,7 @@
  * bold "join pshpsh" action.
  *
  * On mount: optionally validates the code against the API.
- * On "join pshpsh": stores code in SecureStore → pushes to /(auth)/sign-up.
+ * On "join pshpsh": stores code (web-safe storage) → pushes to /(auth)/sign-up.
  *
  * Works for both signed-in and signed-out visitors.
  * Signed-in users who tap "join pshpsh" are redirected by the (auth) guard.
@@ -25,9 +25,9 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as SecureStore from 'expo-secure-store';
 import { getBaseUrl } from '@workspace/api-client-react';
 import Button from '@/components/Button';
+import { pendingInviteStorage } from '@/utils/pendingInviteStorage';
 
 // ── Portal design tokens ───────────────────────────────────────────────────────
 const BG    = '#060B10';
@@ -69,9 +69,7 @@ export default function InviteLandingScreen() {
   const handleJoin = async () => {
     if (!code) return;
     setStatus('joining');
-    try {
-      await SecureStore.setItemAsync('pendingInviteCode', code);
-    } catch { /* non-fatal */ }
+    await pendingInviteStorage.set(code);
     // Navigate to sign-up with the code bound as a param
     router.push({ pathname: '/(auth)/sign-up', params: { inviteCode: code } });
   };

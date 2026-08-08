@@ -18,7 +18,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getBaseUrl } from '@workspace/api-client-react';
-import * as SecureStore from 'expo-secure-store';
+import { pendingInviteStorage } from '@/utils/pendingInviteStorage';
 
 // Required for OAuth redirect to complete inside Expo Go.
 WebBrowser.maybeCompleteAuthSession();
@@ -225,8 +225,9 @@ export default function SignInScreen() {
         if (!signUp) { setError('sign-up unavailable. please try again.'); return; }
 
         // New Google user arriving at sign-in — gate: they must have an invite code.
-        // The code should have been stored in SecureStore by the /invite/[code] landing page.
-        const pendingCode = await SecureStore.getItemAsync('pendingInviteCode').catch(() => null);
+        // The code should have been stored by the /invite/[code] landing page
+        // (web-safe storage: localStorage on web, SecureStore on native).
+        const pendingCode = await pendingInviteStorage.get();
         if (!pendingCode) {
           // No invite code — block kindly. Show the invite request form.
           setError('pshpsh is invite-only. you\'ll need an invite link to join.');

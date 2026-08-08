@@ -1,0 +1,22 @@
+CONTEXT: The pending invite code (used to redeem an invite and trigger the post-signup co-pet confirmation modal) is currently stored and read exclusively via expo-secure-store. On web, expo-secure-store is a no-op (returns an empty module), so every call silently fails inside try/catch blocks — meaning invite codes are never persisted across the signup redirect on web, POST /api/invites/redeem never fires, and users who sign up via an invite link on the web app never get attributed to their inviter or shown the co-pet confirmation modal. This affects every web-based signup via invite link (the primary flow, since pshpsh is a PWA) and predates recent unrelated changes.
+
+GOAL: Replace the SecureStore-only persistence with a platform-aware storage wrapper: use localStorage (or an equivalent safe web storage) on web, and continue using SecureStore on native. Apply this consistently across all three call sites:
+1. app/invite/[code].tsx (~line 73) — where the pending invite code is first stored after landing on an invite link.
+2. app/(auth)/sign-up.tsx (~lines 82, 152) — wherever the code is stored/re-stored around the signup flow.
+3. app/(tabs)/_layout.tsx (~lines 70-89) — the post-auth redeem effect that reads the pending code and calls POST /api/invites/redeem.
+
+Create a small shared utility (e.g. a `pendingInviteStorage` helper with get/set/clear methods) that internally branches on platform — Platform.OS === 'web' uses localStorage, otherwise uses SecureStore — and use that utility in all three files instead of calling SecureStore directly. This avoids scattering platform-detection logic across three separate files.
+
+DO NOT MODIFY:
+- The actual redemption logic inside POST /api/invites/redeem itself, or the co_pet_ids data model — confirmed working correctly, this is purely a client-side storage/persistence fix.
+- The signup consent-gate (ToS checkbox) logic — confirmed unrelated and untouched.
+- Any other use of SecureStore elsewhere in the codebase that isn't part of this invite-code flow.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Keep the fix scoped to the three files identified plus the new shared storage utility.
+
+ACCEPTANCE TEST (must end in golden path):
+1. On web (pshpsh.net), open an invite link that carries a co-owned pet — confirm the invite code is now actually persisted (verifiable via localStorage inspection or by confirming the redeem call fires).
+2. Complete signup via that invite link on web — confirm POST /api/invites/redeem is called, the new user's invited_by is set correctly, and the post-signup co-pet confirmation modal appears with the correct pet.
+3. Confirm native app signup via invite link still works correctly (SecureStore path unaffected).
+4. Confirm a signup with NO invite code (organic/direct signup, if that's possible) is unaffected — no errors, no unexpected modal.
+5. Golden path: create an invite with a pet selected → open the link on pshpsh.net (web) → complete signup → confirm invited_by is set and co-pet modal appears with correct pet, accept it → sign out. Verified live on pshpsh.net.

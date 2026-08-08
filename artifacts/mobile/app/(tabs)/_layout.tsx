@@ -8,7 +8,7 @@ import { Redirect, Tabs, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { useGetMe, customFetch } from '@workspace/api-client-react';
-import * as SecureStore from 'expo-secure-store';
+import { pendingInviteStorage } from '@/utils/pendingInviteStorage';
 
 // ─── portal palette (TOS gate uses same visual system) ───────────────────────
 const TOS_BG    = '#060B10';
@@ -61,13 +61,14 @@ export default function TabLayout() {
 
   // Redeem any pending invite code that survived the OAuth round-trip.
   // This handles both: (a) password signup where code was set but session activated async,
-  // and (b) Google OAuth where the browser round-trip clears React state but not SecureStore.
+  // and (b) Google OAuth where the browser round-trip clears React state but not storage.
+  // Storage is platform-aware (localStorage on web, SecureStore on native).
   useEffect(() => {
     if (!isSignedIn) return;
     (async () => {
       let savedCode: string | null = null;
       try {
-        savedCode = await SecureStore.getItemAsync('pendingInviteCode');
+        savedCode = await pendingInviteStorage.get();
         if (!savedCode) return;
         // Best-effort — if expired/already used, endpoint returns ok:false (no throw).
         const result = await customFetch<{
@@ -87,7 +88,7 @@ export default function TabLayout() {
           });
         }
       } catch { /* silent — invite attribution is best-effort */ } finally {
-        await SecureStore.deleteItemAsync('pendingInviteCode').catch(() => {});
+        await pendingInviteStorage.clear();
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps

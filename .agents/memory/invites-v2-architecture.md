@@ -56,3 +56,11 @@ Remaining = effectiveQuota - COUNT(invites WHERE status IN ('active','used') AND
 
 **Why:**
 The spec requires invite attribution in a single transaction while keeping Clerk as the auth authority. Client-side gating + SecureStore survival + tabs-layout redemption achieves this without modifying requireClerkAuth or Clerk's session flow.
+
+## Web storage gotcha (fixed)
+expo-secure-store is an empty module on web — every call throws and silent
+catch blocks made invite codes vanish on pshpsh.net web signups (redeem never
+fired, invited_by NULL, co-pet modal skipped). All pendingInviteCode access now
+goes through `utils/pendingInviteStorage.ts` (localStorage on web, SecureStore
+on native). **Rule:** never call SecureStore directly for anything that must
+work on web; route through a platform-aware helper.

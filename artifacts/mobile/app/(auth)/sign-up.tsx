@@ -17,9 +17,9 @@ import * as Linking from 'expo-linking';
 import * as WebBrowser from 'expo-web-browser';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as SecureStore from 'expo-secure-store';
 import { getBaseUrl } from '@workspace/api-client-react';
 import Button from '@/components/Button';
+import { pendingInviteStorage } from '@/utils/pendingInviteStorage';
 
 // Required for OAuth redirect to complete inside Expo Go.
 WebBrowser.maybeCompleteAuthSession();
@@ -78,14 +78,14 @@ export default function SignUpScreen() {
         const code = params.inviteCode.trim();
         if (code) {
           setInviteCode(code);
-          // Persist for OAuth round-trip survival
-          await SecureStore.setItemAsync('pendingInviteCode', code).catch(() => {});
+          // Persist for OAuth round-trip survival (web-safe: localStorage on web)
+          await pendingInviteStorage.set(code);
           setInviteCodeChecked(true);
           return;
         }
       }
-      // Fallback: check SecureStore (set by landing page or previous OAuth prep)
-      const stored = await SecureStore.getItemAsync('pendingInviteCode').catch(() => null);
+      // Fallback: check storage (set by landing page or previous OAuth prep)
+      const stored = await pendingInviteStorage.get();
       setInviteCode(stored ?? null);
       setInviteCodeChecked(true);
     };
@@ -149,7 +149,7 @@ export default function SignUpScreen() {
     try {
       // Persist invite code so it survives the OAuth round-trip through the browser
       if (inviteCode) {
-        await SecureStore.setItemAsync('pendingInviteCode', inviteCode).catch(() => {});
+        await pendingInviteStorage.set(inviteCode);
       }
 
       const result = await startSSOFlow({
