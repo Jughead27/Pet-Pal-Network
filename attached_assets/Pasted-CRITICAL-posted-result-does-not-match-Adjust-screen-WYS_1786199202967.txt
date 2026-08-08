@@ -1,0 +1,71 @@
+CRITICAL — posted result does not match Adjust screen (WYSIWYG broken), plus 
+ratio-label visibility fix
+
+CONTEXT: The aspect-ratio picker (1:1/4:5/Original) was just shipped and the pinch/
+pan/zoom experience inside Adjust now works well. However, live testing found the 
+crop/ratio choice made in Adjust is NOT reflected in the final posted result — 
+screenshots show Adjust displaying a cropped 4:5-ish frame, but both the New Post 
+preview screen AND the live feed post render the Original/uncropped tall framing 
+instead. Whatever framing decision the user makes in Adjust is being lost somewhere 
+between Adjust and the saved/rendered post. This breaks the core WYSIWYG promise of 
+the editor and needs to be treated as blocking — it affects every post going 
+forward.
+
+BUG 1 (BLOCKING) — Adjust selection not carried through to posted result:
+Investigate the full pipeline: what crop/ratio state Adjust produces on "Done" → 
+what gets sent to the backend on post creation → what gets stored → what the New 
+Post preview screen renders → what the live feed post renders. Find where the 
+framing choice is being dropped or ignored, and fix it so the actual selection 
+(ratio + pan + zoom, exactly as shown in Adjust) is what's saved and what displays 
+everywhere afterward — New Post preview, feed, and post detail.
+
+TARGET BEHAVIOR (agreed direction): final post rendering should work like 
+Fit-style WYSIWYG universally, regardless of which ratio was picked in Adjust — 
+show exactly the framing the user selected, with blur letterboxing filling any 
+leftover space to match the feed's display shape. This applies whether the user 
+picked 1:1, 4:5, or Original — the posted result should always be a faithful, 
+uncropped-feeling representation of what they framed, never silently reverting to 
+the original full image.
+
+Confirm whether this WYSIWYG-break is specific to the new multi-ratio picker (i.e. 
+a regression introduced by that delivery) or whether it predates it — check git 
+history/diff for the ratio-picker delivery to see if crop-rect persistence logic 
+was touched or left alone. This will tell us whether this is a new bug or an 
+existing one just now surfaced by testing.
+
+BUG 2 (MINOR) — ratio labels hard to see:
+The 1:1 / 4:5 / Original text labels below the crop frame are low-contrast against 
+photo backgrounds and easy to miss. Add a subtle scrim/backing (consistent with 
+existing frosted-nav/scrim patterns elsewhere in the app) behind the label row so 
+they stay legible against any photo, light or dark. Keep the existing typographic 
+style (text-only, opacity-based active/inactive states) — just improve legibility, 
+don't change the visual language.
+
+DO NOT MODIFY:
+- The gesture engine (Pan/Pinch, shared values, GestureDetector) — confirmed 
+  working, do not touch.
+- Avatar edit's locked aspect ratio behavior.
+- The Home feed's existing cover-fit + focal-point rendering for posts that 
+  predate this fix (only new posts need to reflect corrected WYSIWYG behavior 
+  going forward — do not attempt to retroactively reprocess old posts).
+
+PRESERVATION CLAUSE: This is a data-integrity/correctness bug, not a cosmetic one 
+— take the time to trace the actual pipeline rather than patching only the most 
+visible symptom.
+
+ACCEPTANCE TEST (must end in the golden path):
+1. On an actual mobile device via pshpsh.net: open compose, pick a photo, open 
+   Adjust, deliberately choose a DIFFERENT ratio than the default (e.g. switch to 
+   1:1 on a landscape photo) and pan/zoom to a distinctive, recognizable framing.
+2. Tap Done — confirm the New Post preview screen shows EXACTLY that framing, not 
+   the original full image.
+3. Post it — confirm the live feed post shows EXACTLY that framing (with blur 
+   letterboxing if the ratio doesn't match the feed's native display shape).
+4. Repeat with a different ratio choice (e.g. Original) to confirm this isn't 
+   ratio-specific.
+5. Confirm the ratio labels are now clearly legible against both a light-background 
+   and dark-background test photo.
+6. Golden path: sign in → Home → boop persists → Nursery pager → post flow → sign 
+   out.
+7. Confirm avatar edit and existing feed posts are unaffected.
+8. Verify on web, iOS, and Android.

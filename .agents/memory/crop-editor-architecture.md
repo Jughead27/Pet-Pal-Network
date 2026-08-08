@@ -92,7 +92,7 @@ Sends `{ avatarKey, focusX: null, focusY: null, cropX: rect.x, cropY: rect.y, cr
 Three fixed options: `1:1`, `4:5`, `Original` (naturalWidth/naturalHeight).  
 Smart default: landscape photo (ratio > 1) → Original; portrait/square → 4:5.
 
-Control: row of text labels (`TouchableOpacity`) floating 10px below the crop-frame border. Active label at full opacity + semibold; inactive at 45% opacity. No background, no capsule — matches hairline/typographic design language.
+Control: row of text labels (`TouchableOpacity`) floating 10px below the crop-frame border inside a dark pill scrim (`rgba(0,0,0,0.45)` background, `borderRadius:20`, `paddingHorizontal:16`, `paddingVertical:6`). Active label at full opacity + semibold; inactive at 45% opacity.
 
 Ratio change (`handleAspectChange`): primes all shared values immediately (cropWV/cropHV/minSV/maxSV + scale/offset) before `setActiveAspect`, so worklets have correct geometry without waiting for re-render. Resets to minScale, centered.
 
@@ -106,6 +106,26 @@ Avatar CropEditor uses `targetAspect={columnWidth / HERO_HEIGHT}` — the full-w
 
 `FrameRefiner` replaced by `CropEditor` with `targetAspect={feedAspect}` and `showAspectPicker`.
 `handleRefineConfirm(rect, mode)` signature unchanged — CropEditor's `onConfirm` matches it exactly.
+
+---
+
+---
+
+## Feed / Preview WYSIWYG rendering (FocalImage)
+
+**Problem (pre-existing, surfaced by ratio picker):** FocalImage `mode='cover'` + cropRect used *rect-driven cover* (`scale = max(cw/cropPxW, ch/cropPxH)`), which scales the crop rect to FILL the feed container. Since the crop window aspect (1:1, Original, etc.) rarely matches the feed container's portrait aspect, this further crops the user's chosen framing → WYSIWYG break.
+
+**Fix:** `isCropContain = !isContain && hasCropRect && mode === 'cover'` — new branch in FocalImage.
+
+When `isCropContain`:
+- Scale: `s = min(cw / cropPxW, ch / cropPxH)` (contain-fit of crop rect)
+- Position: `imgLeft = (cw - cropPxW*s) / 2 - cropX * imgW`, same for top
+- Rendering: blur background + positioned image (same JSX as `isContain`)
+- Result: the user's exact framing is preserved; gaps filled with blur letterboxing
+
+**Backward compat:** avatar uses `mode=null` (no mode prop) → `isCropContain=false` → stays on rect-driven cover. FeedPage `railBottom` also applies `FIT_RAIL_LIFT` for crop-contain posts (`cropMode === 'cover' && cropX != null`).
+
+**Key rule:** `mode='cover'` + cropRect = WYSIWYG blur letterbox (feed/preview). `mode=null` + cropRect = rect-driven cover (avatar). `mode='contain'` = full-image blur letterbox.
 
 ---
 

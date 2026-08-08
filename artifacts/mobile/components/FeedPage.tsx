@@ -206,7 +206,9 @@ export default function FeedPage({
   // Lift the rail so all four icons sit on the photo, not straddling the blur.
   // 120 = nominal petInfo height, 16 = containAlignBottom gap, 8 = margin.
   const FIT_RAIL_LIFT = 144;
-  const railBottom = post.cropMode === 'contain'
+  // Lift the reaction rail off the bottom for any post that shows blur letterboxing:
+  // explicit contain mode, or cover mode with a crop rect (crop-contain rendering).
+  const railBottom = (post.cropMode === 'contain' || (post.cropMode === 'cover' && post.cropX != null))
     ? bottomOffset + FIT_RAIL_LIFT
     : bottomOffset;
 

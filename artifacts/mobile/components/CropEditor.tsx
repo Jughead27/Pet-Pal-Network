@@ -527,23 +527,26 @@ export default function CropEditor({
               pointerEvents="box-none"
               style={[styles.ratioPicker, { top: cropCY + cropH / 2 + 10 }]}
             >
-              {ratioOptions.map((opt) => {
-                const active = Math.abs(activeAspect - opt.value) < 0.005;
-                return (
-                  <TouchableOpacity
-                    key={opt.label}
-                    onPress={() => handleAspectChange(opt.value)}
-                    hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }}
-                    accessibilityRole="radio"
-                    accessibilityState={{ checked: active }}
-                    accessibilityLabel={opt.label}
-                  >
-                    <Text style={[styles.ratioLabel, active && styles.ratioLabelActive]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
+              {/* Dark pill scrim keeps labels legible against any photo background */}
+              <View style={styles.ratioScrim}>
+                {ratioOptions.map((opt) => {
+                  const active = Math.abs(activeAspect - opt.value) < 0.005;
+                  return (
+                    <TouchableOpacity
+                      key={opt.label}
+                      onPress={() => handleAspectChange(opt.value)}
+                      hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+                      accessibilityRole="radio"
+                      accessibilityState={{ checked: active }}
+                      accessibilityLabel={opt.label}
+                    >
+                      <Text style={[styles.ratioLabel, active && styles.ratioLabelActive]}>
+                        {opt.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
             </View>
           )}
         </>
@@ -696,9 +699,15 @@ const styles = StyleSheet.create({
     position: 'absolute' as const,
     left: 0,
     right: 0,
+    alignItems: 'center' as const,  // centres the pill horizontally
+  },
+  ratioScrim: {
     flexDirection: 'row' as const,
-    justifyContent: 'center' as const,
     gap: 24,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   ratioLabel: {
     color: 'rgba(240,244,248,0.45)',
