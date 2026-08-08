@@ -615,10 +615,10 @@ export default function AddScreen() {
               onPress={pickImage}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityLabel="Add a photo / video"
+              accessibilityLabel="Add a photo"
             >
               <ImageSquare size={22} color={colors.foreground} weight="regular" />
-              <Text style={[s.sourceRowText, { color: colors.foreground }]}>Add a photo / video</Text>
+              <Text style={[s.sourceRowText, { color: colors.foreground }]}>Add a photo</Text>
               <CaretRight size={18} color={colors.mutedForeground} weight="regular" />
             </TouchableOpacity>
           </View>

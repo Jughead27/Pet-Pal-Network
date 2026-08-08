@@ -1,0 +1,21 @@
+CONTEXT: Video posting isn't built yet. The media picker in compose is currently unrestricted (or partially restricted), and "photo/video" language may still appear in UI copy in places beyond the original compose screen. This should be reversible/temporary — video groundwork (crop_mode, upload-validation video-limit constants) stays in place for when video actually ships.
+
+GOAL:
+1. Restrict the compose media picker to images only — no video file selection possible at the picker level.
+2. Remove "photo/video" (or similar dual-format) UI copy from the compose flow specifically, replacing with photo-only language (e.g. "add a photo" instead of "add a photo or video").
+3. Sweep the rest of the app for any other visible "video" references in user-facing copy (buttons, labels, placeholder text, onboarding copy, About/help text, etc.) and remove or rephrase them to be photo-only for now. This does not include internal/technical naming (variable names, crop_mode fields, database columns) — those stay untouched, this is user-facing copy only.
+4. Confirm this is easily reversible: the underlying groundwork (crop_mode, video-limit constants, any video-related schema) must remain completely intact — this prompt only affects what's picker-selectable and what's displayed to users, not the data model.
+
+DO NOT MODIFY:
+- crop_mode field, upload-validation video-limit constants, or any other backend/schema groundwork for future video support — must remain fully intact.
+- Any other compose functionality (crop tool, ratio picker, caption, pet tagging, posting flow) — untouched.
+- Any internal/technical naming that isn't user-facing.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a picker restriction + user-facing copy sweep, fully reversible, no data model changes.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Open compose, tap to add media — confirm only photos are selectable, no video option appears in the picker.
+2. Confirm compose copy reads "photo" only, not "photo/video," anywhere in that flow.
+3. Do a quick sweep of other screens (onboarding, About/help text if it exists, any other UI copy) — confirm no stray "video" references remain in user-facing text.
+4. Confirm crop_mode and video-limit constants are untouched in the codebase (spot-check, not required to be part of the visible test).
+5. Golden path: open compose → confirm photo-only picker and copy → complete a normal photo post → sign out. Verified live on pshpsh.net.

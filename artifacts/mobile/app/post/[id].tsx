@@ -27,7 +27,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { getGetFeedQueryKey, useRemovePostPetTag } from '@workspace/api-client-react';
+import { getGetFeedQueryKey, useRemovePostPetTag, customFetch } from '@workspace/api-client-react';
 import type { FeedPost, FeedResponse } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import { formatPostAge } from '@/utils/formatPostAge';
@@ -43,6 +43,10 @@ export default function PostDetailScreen() {
   const queryClient   = useQueryClient();
   const [reportOpen,     setReportOpen]     = useState(false);
   const [removingTagId,  setRemovingTagId]  = useState<string | null>(null);
+  // Direct block entry point — inline confirm, reuses the existing /api/blocks
+  // mechanism (same as the post-report "block this owner" step).
+  const [blockConfirm,   setBlockConfirm]   = useState(false);
+  const [blocking,       setBlocking]       = useState(false);
 
   const { mutateAsync: removeTag } = useRemovePostPetTag();
 
@@ -70,6 +74,26 @@ export default function PostDetailScreen() {
       setRemovingTagId(null);
     }
   }, [id, removingTagId, removeTag, queryClient]);
+
+  const handleBlockOwner = useCallback(async (ownerUserId: string) => {
+    if (blocking) return;
+    setBlocking(true);
+    try {
+      await customFetch<{ ok: boolean }>('/api/blocks', {
+        method: 'POST',
+        body: JSON.stringify({ blockedUserId: ownerUserId }),
+      });
+      // Their content is now hidden from the viewer — leave the post screen
+      // and drop the cached feed so it refetches without the blocked pet.
+      await queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
+      router.back();
+    } catch {
+      // Silent — row stays; user can retry.
+    } finally {
+      setBlocking(false);
+      setBlockConfirm(false);
+    }
+  }, [blocking, queryClient]);
 
   // Look up the post from the feed cache.
   const feedData = queryClient.getQueryData<FeedResponse>(getGetFeedQueryKey());
@@ -188,16 +212,64 @@ export default function PostDetailScreen() {
             <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>
               {formatPostAge(post.createdAt)}
             </Text>
-            <TouchableOpacity
-              onPress={() => setReportOpen(true)}
-              accessibilityRole="button"
-              accessibilityLabel="Report this post"
-              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            >
-              <Text style={[styles.reportWhisper, { color: colors.mutedForeground }]}>
-                report
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.whisperCluster}>
+              {/* Direct block — only when the viewer doesn't own this pet */}
+              {(() => {
+                const ownerUserId = (post.pet as unknown as { ownerId?: string }).ownerId;
+                const viewerOwnsPet = (post.taggedPets ?? []).find((tp) => tp.id === post.pet.id)?.viewerOwnsPet;
+                if (!ownerUserId || viewerOwnsPet) return null;
+                return blockConfirm ? (
+                  <>
+                    <Text style={[styles.reportWhisper, { color: colors.mutedForeground }]}>
+                      block this owner?
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => handleBlockOwner(ownerUserId)}
+                      disabled={blocking}
+                      accessibilityRole="button"
+                      accessibilityLabel="Confirm block"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.reportWhisper, { color: '#EF4444', opacity: blocking ? 0.4 : 1 }]}>
+                        yes
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setBlockConfirm(false)}
+                      disabled={blocking}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel block"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.reportWhisper, { color: colors.mutedForeground }]}>
+                        cancel
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setBlockConfirm(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Block this pet's owner"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={[styles.reportWhisper, { color: colors.mutedForeground }]}>
+                      block
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
+              <TouchableOpacity
+                onPress={() => setReportOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Report this post"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Text style={[styles.reportWhisper, { color: colors.mutedForeground }]}>
+                  report
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </ScrollView>
@@ -301,6 +373,12 @@ const styles = StyleSheet.create({
     fontSize:   12,
     opacity:    0.4,
     fontFamily: 'Inter_400Regular',
+  },
+  // block + report whispers share the right side of the timestamp row
+  whisperCluster: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           14,
   },
   // "report" — smallest muted text, barely visible, per copy-law spec
   reportWhisper: {

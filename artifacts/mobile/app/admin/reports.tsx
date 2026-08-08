@@ -21,7 +21,7 @@ import {
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowLeft, ArrowClockwise, ImageSquare, ChatCircle } from 'phosphor-react-native';
+import { ArrowLeft, ArrowClockwise, ImageSquare, ChatCircle, User } from 'phosphor-react-native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { customFetch } from '@workspace/api-client-react';
@@ -41,15 +41,22 @@ interface TargetPreviewComment {
   hiddenByAdmin: boolean;
 }
 
+interface TargetPreviewUser {
+  type:        'user';
+  username:    string | null;
+  displayName: string | null;
+  suspended:   boolean;
+}
+
 interface Report {
   id:               string;
-  targetType:       'post' | 'comment';
+  targetType:       'post' | 'comment' | 'user';
   targetId:         string;
   reason:           string;
   note:             string | null;
   createdAt:        string;
   reporterUsername: string | null;
-  targetPreview:    TargetPreviewPost | TargetPreviewComment;
+  targetPreview:    TargetPreviewPost | TargetPreviewComment | TargetPreviewUser;
   contentOwnerId:   string | null;
 }
 
@@ -84,16 +91,35 @@ export default function AdminReportsScreen() {
 
   const reports = data?.reports ?? [];
 
+  // Suspended users — read-only list + unsuspend trigger (endpoint pre-existing)
+  const { data: suspendedData, refetch: refetchSuspended } = useQuery({
+    queryKey: ['admin-suspended-users'],
+    queryFn:  () => customFetch<{ users: { id: string; username: string | null; displayName: string | null }[] }>('/api/admin/suspended-users'),
+  });
+  const suspendedUsers = suspendedData?.users ?? [];
+  const [unsuspendingIds, setUnsuspendingIds] = useState<Set<string>>(new Set());
+
+  const handleUnsuspend = useCallback(async (targetUserId: string) => {
+    setUnsuspendingIds((s) => new Set(s).add(targetUserId));
+    try {
+      await customFetch(`/api/admin/users/${targetUserId}/unsuspend`, { method: 'POST' });
+      await refetchSuspended();
+    } finally {
+      setUnsuspendingIds((s) => { const n = new Set(s); n.delete(targetUserId); return n; });
+    }
+  }, [refetchSuspended]);
+
   const mutateReport = useCallback(async (reportId: string, action: 'dismiss' | 'hide' | 'suspend') => {
     if (pendingIds.has(reportId)) return;
     addPending(reportId);
     try {
       await customFetch(`/api/admin/reports/${reportId}/${action}`, { method: 'POST' });
       await refetch();
+      if (action === 'suspend') await refetchSuspended();
     } finally {
       removePending(reportId);
     }
-  }, [pendingIds, refetch]);
+  }, [pendingIds, refetch, refetchSuspended]);
 
   const renderReport = useCallback(({ item }: { item: Report }) => {
     const isPending = pendingIds.has(item.id);
@@ -114,7 +140,9 @@ export default function AdminReportsScreen() {
             <View style={[styles.thumbnailPlaceholder, { backgroundColor: colors.secondary, borderColor: colors.border }]}>
               {preview.type === 'post'
                 ? <ImageSquare size={18} color={colors.mutedForeground} weight="regular" />
-                : <ChatCircle size={18} color={colors.mutedForeground} weight="regular" />
+                : preview.type === 'comment'
+                  ? <ChatCircle size={18} color={colors.mutedForeground} weight="regular" />
+                  : <User size={18} color={colors.mutedForeground} weight="regular" />
               }
             </View>
           )}
@@ -130,9 +158,16 @@ export default function AdminReportsScreen() {
               <Text numberOfLines={2} style={[styles.caption, { color: colors.mutedForeground }]}>
                 "{preview.text}"
               </Text>
+            ) : preview.type === 'user' ? (
+              <Text numberOfLines={1} style={[styles.caption, { color: colors.mutedForeground }]}>
+                member: {preview.displayName?.trim() || preview.username || 'a pshpsh member'}
+              </Text>
             ) : null}
-            {preview.hiddenByAdmin && (
+            {preview.type !== 'user' && preview.hiddenByAdmin && (
               <Text style={[styles.badge, { color: colors.mutedForeground }]}>hidden</Text>
+            )}
+            {preview.type === 'user' && preview.suspended && (
+              <Text style={[styles.badge, { color: colors.mutedForeground }]}>suspended</Text>
             )}
           </View>
         </View>
@@ -162,15 +197,20 @@ export default function AdminReportsScreen() {
             >
               <Text style={[styles.actionText, { color: colors.mutedForeground }]}>dismiss</Text>
             </TouchableOpacity>
-            <Text style={[styles.actionSep, { color: colors.border }]}>·</Text>
-            <TouchableOpacity
-              onPress={() => mutateReport(item.id, 'hide')}
-              style={styles.actionBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Hide content"
-            >
-              <Text style={[styles.actionText, { color: colors.foreground }]}>hide content</Text>
-            </TouchableOpacity>
+            {/* "hide" only applies to content targets — user reports have nothing to hide */}
+            {item.targetType !== 'user' && (
+              <>
+                <Text style={[styles.actionSep, { color: colors.border }]}>·</Text>
+                <TouchableOpacity
+                  onPress={() => mutateReport(item.id, 'hide')}
+                  style={styles.actionBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Hide content"
+                >
+                  <Text style={[styles.actionText, { color: colors.foreground }]}>hide content</Text>
+                </TouchableOpacity>
+              </>
+            )}
             <Text style={[styles.actionSep, { color: colors.border }]}>·</Text>
             <TouchableOpacity
               onPress={() => mutateReport(item.id, 'suspend')}
@@ -217,10 +257,6 @@ export default function AdminReportsScreen() {
         <View style={styles.centered}>
           <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>Could not load reports.</Text>
         </View>
-      ) : reports.length === 0 ? (
-        <View style={styles.centered}>
-          <Text style={{ color: colors.mutedForeground, fontSize: 14 }}>No pending reports.</Text>
-        </View>
       ) : (
         <FlatList
           data={reports}
@@ -228,6 +264,40 @@ export default function AdminReportsScreen() {
           renderItem={renderReport}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
+          ListEmptyComponent={
+            <Text style={{ color: colors.mutedForeground, fontSize: 14, textAlign: 'center', paddingVertical: 24 }}>
+              No pending reports.
+            </Text>
+          }
+          ListFooterComponent={
+            suspendedUsers.length > 0 ? (
+              <View style={styles.suspendedSection}>
+                <Text style={[styles.suspendedHeading, { color: colors.mutedForeground }]}>
+                  Suspended users
+                </Text>
+                {suspendedUsers.map((u) => (
+                  <View
+                    key={u.id}
+                    style={[styles.suspendedRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  >
+                    <Text style={[styles.suspendedName, { color: colors.foreground }]} numberOfLines={1}>
+                      {u.displayName?.trim() || u.username || 'a pshpsh member'}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => handleUnsuspend(u.id)}
+                      disabled={unsuspendingIds.has(u.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Unsuspend ${u.displayName?.trim() || u.username || 'user'}`}
+                      style={[styles.unsuspendBtn, { borderColor: colors.border, opacity: unsuspendingIds.has(u.id) ? 0.4 : 1 }]}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.unsuspendText, { color: colors.foreground }]}>unsuspend</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : null
+          }
         />
       )}
     </View>
@@ -254,6 +324,42 @@ const styles = StyleSheet.create({
   fill:    { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   list:    { paddingHorizontal: 16, paddingTop: 12, gap: 12 },
+
+  suspendedSection: {
+    marginTop: 20,
+    gap: 8,
+  },
+  suspendedHeading: {
+    fontFamily:    'Inter_600SemiBold',
+    fontSize:      12,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  suspendedRow: {
+    flexDirection:  'row',
+    alignItems:     'center',
+    justifyContent: 'space-between',
+    borderWidth:    StyleSheet.hairlineWidth,
+    borderRadius:   10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  suspendedName: {
+    fontFamily: 'Inter_500Medium',
+    fontSize:   14,
+    flex: 1,
+  },
+  unsuspendBtn: {
+    borderWidth:  1,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+  },
+  unsuspendText: {
+    fontFamily: 'Inter_500Medium',
+    fontSize:   13,
+  },
 
   header: {
     flexDirection:   'row',

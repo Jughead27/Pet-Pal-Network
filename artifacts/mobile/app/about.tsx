@@ -7,6 +7,7 @@ import React from 'react';
 import { COLUMN_MAX_WIDTH } from '@/hooks/useColumnWidth';
 import {
   Image,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -73,6 +74,19 @@ export default function AboutScreen() {
         <Text style={s.closing}>follow pets, not people.</Text>
         <Text style={s.closing}>curl up, you're home.</Text>
 
+        {/* support contact */}
+        <Text style={s.body}>
+          need a human? email{' '}
+          <Text
+            style={s.emailLink}
+            onPress={() => Linking.openURL('mailto:support@pshpsh.net')}
+            accessibilityRole="link"
+          >
+            support@pshpsh.net
+          </Text>
+          .
+        </Text>
+
         {/* back whisper */}
         <Pressable
           onPress={() => router.canGoBack() ? router.back() : router.replace('/(auth)/sign-in')}
@@ -113,6 +127,9 @@ const s = StyleSheet.create({
     marginBottom:  32,
   },
 
+  emailLink: {
+    textDecorationLine: 'underline',
+  },
   body: {
     fontFamily:   'Inter_400Regular',
     fontSize:     15,

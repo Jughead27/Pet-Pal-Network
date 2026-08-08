@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, reportsTable, postsTable, commentsTable } from "@workspace/db";
+import { db, reportsTable, postsTable, commentsTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
@@ -22,7 +22,7 @@ function checkRateLimit(userId: string): boolean {
 }
 
 // ── Locked enum values ────────────────────────────────────────────────────────
-const VALID_TARGET_TYPES = new Set(["post", "comment"] as const);
+const VALID_TARGET_TYPES = new Set(["post", "comment", "user"] as const);
 const VALID_REASONS = new Set([
   "not_animal_content",
   "animal_cruelty",
@@ -33,7 +33,7 @@ const VALID_REASONS = new Set([
   "other",
 ] as const);
 
-type TargetType = "post" | "comment";
+type TargetType = "post" | "comment" | "user";
 type Reason = typeof VALID_REASONS extends Set<infer R> ? R : never;
 
 /**
@@ -84,8 +84,24 @@ router.post("/reports", async (req, res) => {
     ? note.trim().slice(0, 200) || null
     : null;
 
+  // Self-report guard for user targets.
+  if (targetType === "user" && trimmedTargetId === userId) {
+    res.status(400).json({ ok: false, error: "cannot report yourself" });
+    return;
+  }
+
   // ── Validate target exists ────────────────────────────────────────────────
-  if (targetType === "post") {
+  if (targetType === "user") {
+    const [target] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.id, trimmedTargetId))
+      .limit(1);
+    if (!target) {
+      res.status(404).json({ ok: false, error: "user not found" });
+      return;
+    }
+  } else if (targetType === "post") {
     const [post] = await db
       .select({ id: postsTable.id })
       .from(postsTable)

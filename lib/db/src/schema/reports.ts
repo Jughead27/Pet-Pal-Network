@@ -6,6 +6,7 @@ import { usersTable } from "./users";
 export const reportTargetTypeEnum = pgEnum("report_target_type", [
   "post",
   "comment",
+  "user",
 ]);
 
 // Locked list per spec — order is preserved in the DB type.

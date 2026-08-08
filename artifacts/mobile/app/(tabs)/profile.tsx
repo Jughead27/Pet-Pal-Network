@@ -874,6 +874,17 @@ export default function ProfileScreen() {
                 privacy policy
               </Text>
             </TouchableOpacity>
+            <Text style={[styles.legalDot, { color: colors.mutedForeground }]}> · </Text>
+            <TouchableOpacity
+              onPress={() => Linking.openURL('mailto:support@pshpsh.net')}
+              activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel="Email support"
+            >
+              <Text style={[styles.feedbackText, { color: colors.mutedForeground }]}>
+                support
+              </Text>
+            </TouchableOpacity>
           </View>
         )}
 

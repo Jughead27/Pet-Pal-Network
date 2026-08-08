@@ -1,0 +1,22 @@
+CONTEXT: The moderation report flow currently supports reporting a POST or a COMMENT via components/ReportFlow.tsx → POST /api/reports, with the admin Reports screen able to act on those (dismiss/hide/suspend). There is no way to report a USER directly — only content authored by them.
+
+GOAL: Extend the existing report system to accept a "user" target type, alongside the existing "post" and "comment" targets.
+1. Add a way to report a user directly from their profile (reuse the existing ReportFlow.tsx component/pattern — add "user" as a valid target type it can submit, alongside post/comment).
+2. Extend POST /api/reports to accept and correctly store a user-target report (not just post/comment).
+3. The admin Reports screen should correctly display user-targeted reports alongside post/comment ones, and the existing dismiss/suspend actions should work against a user-targeted report (suspend already operates on a user account, so this should mostly reuse existing logic — "hide" doesn't apply to a user-target report the same way it does content, so confirm/adjust that action's behavior appropriately for this target type, e.g. hide may not be a valid action for a user-target report).
+4. Reuse the existing reasons/categories UI pattern from post/comment reporting where sensible, adjusted for reporting a person rather than content if needed.
+
+DO NOT MODIFY:
+- Existing post/comment reporting — fully working, untouched, reuse the same underlying pattern.
+- The suspend/unsuspend/dismiss backend logic itself — reuse as-is, this only adds a new way to arrive at a report that can trigger those same actions.
+- The block feature — separate mechanism, unaffected by this change.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This extends the report system to a new target type, reusing existing components and endpoints wherever possible rather than duplicating logic.
+
+ACCEPTANCE TEST (must end in golden path):
+1. From a user's profile, confirm a way to report that user directly (not just their content) is available.
+2. Submit a user report — confirm it's correctly stored and appears in the admin Reports screen.
+3. As admin, confirm dismiss and suspend both work correctly against a user-targeted report.
+4. Confirm "hide" is either correctly disabled/not applicable for user-target reports, or adjusted to make sense for this target type — not left in a broken/confusing state.
+5. Confirm existing post/comment reporting still works exactly as before.
+6. Golden path: report a test user from their profile → confirm it appears in admin Reports → suspend from that report → confirm the user is suspended → sign out. Verified live on pshpsh.net.

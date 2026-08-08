@@ -92,7 +92,10 @@ adminRouter.get("/admin/reports", async (_req, res) => {
       pet_t.owner_id        AS "postOwnerId",
       c.text                AS "commentText",
       c.hidden_by_admin     AS "commentHiddenByAdmin",
-      c.user_id             AS "commentAuthorId"
+      c.user_id             AS "commentAuthorId",
+      tu.username           AS "targetUserUsername",
+      tu.display_name       AS "targetUserDisplayName",
+      tu.suspended          AS "targetUserSuspended"
     FROM reports r
     INNER JOIN users reporter ON reporter.id = r.reporter_id
     LEFT JOIN posts p ON r.target_type = 'post'
@@ -101,6 +104,8 @@ adminRouter.get("/admin/reports", async (_req, res) => {
                         AND pet_t.id = p.pet_id
     LEFT JOIN comments c ON r.target_type = 'comment'
                         AND c.id::text = r.target_id
+    LEFT JOIN users tu ON r.target_type = 'user'
+                      AND tu.id = r.target_id
     WHERE r.status = 'pending'
     ORDER BY
       CASE WHEN r.reason = 'animal_cruelty' THEN 0 ELSE 1 END,
@@ -123,15 +128,24 @@ adminRouter.get("/admin/reports", async (_req, res) => {
             mediaUrl:     r.postMediaKey ? mediaTokenUrl(r.postMediaKey as string) : null,
             hiddenByAdmin: Boolean(r.postHiddenByAdmin),
           }
-        : {
-            type:         "comment",
-            text:         r.commentText ?? null,
-            hiddenByAdmin: Boolean(r.commentHiddenByAdmin),
-          },
+        : r.targetType === "comment"
+          ? {
+              type:         "comment",
+              text:         r.commentText ?? null,
+              hiddenByAdmin: Boolean(r.commentHiddenByAdmin),
+            }
+          : {
+              type:        "user",
+              username:    r.targetUserUsername ?? null,
+              displayName: r.targetUserDisplayName ?? null,
+              suspended:   Boolean(r.targetUserSuspended),
+            },
     contentOwnerId:
       r.targetType === "post"
         ? (r.postOwnerId ?? null)
-        : (r.commentAuthorId ?? null),
+        : r.targetType === "comment"
+          ? (r.commentAuthorId ?? null)
+          : (r.targetId ?? null),
   }));
 
   res.json({ reports });
@@ -198,6 +212,9 @@ adminRouter.post("/admin/reports/:id/hide", async (req, res) => {
 
     if (!report) return null;
 
+    // "hide" doesn't apply to a user-target report — there's no content to hide.
+    if (report.targetType === "user") return { notApplicable: true as const };
+
     if (report.targetType === "post") {
       await tx
         .update(postsTable)
@@ -225,6 +242,11 @@ adminRouter.post("/admin/reports/:id/hide", async (req, res) => {
 
   if (!result) {
     res.status(404).json({ error: "Report not found" });
+    return;
+  }
+
+  if ("notApplicable" in result) {
+    res.status(400).json({ error: "hide is not applicable to user reports" });
     return;
   }
 
@@ -257,7 +279,15 @@ adminRouter.post("/admin/reports/:id/suspend", async (req, res) => {
 
   let ownerUserId: string | null = null;
 
-  if (report.targetType === "post") {
+  if (report.targetType === "user") {
+    // User-target report: the reported user IS the suspension target.
+    const [row] = await db
+      .select({ id: usersTable.id })
+      .from(usersTable)
+      .where(eq(usersTable.id, report.targetId))
+      .limit(1);
+    ownerUserId = row?.id ?? null;
+  } else if (report.targetType === "post") {
     const [row] = await db
       .select({ ownerId: petsTable.ownerId })
       .from(postsTable)
@@ -334,6 +364,25 @@ adminRouter.post("/admin/users/:userId/unsuspend", async (req, res) => {
   }
 
   res.json({ ok: true, userId: targetUserId, suspended: false });
+});
+
+/**
+ * GET /admin/suspended-users
+ *
+ * Read-only list of currently suspended accounts so admins can find and
+ * unsuspend them from the UI (the unsuspend action itself already exists).
+ */
+adminRouter.get("/admin/suspended-users", async (_req, res) => {
+  const rows = await db
+    .select({
+      id:          usersTable.id,
+      username:    usersTable.username,
+      displayName: usersTable.displayName,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.suspended, true));
+
+  res.json({ users: rows });
 });
 
 // ─── Invite requests ──────────────────────────────────────────────────────────

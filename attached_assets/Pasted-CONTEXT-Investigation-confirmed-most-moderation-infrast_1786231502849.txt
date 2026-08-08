@@ -1,0 +1,32 @@
+CONTEXT: Investigation confirmed most moderation infrastructure already exists and works correctly (report flow, admin dismiss/hide/suspend, bidirectional user blocking). Four small, contained gaps remain:
+1. Suspend has a working unsuspend endpoint (POST /admin/users/:userId/unsuspend) but no admin UI button to trigger it — API-only today.
+2. Reactions endpoints (boop/treat) have no block guard, unlike feed/comments/pet profiles which already correctly hide content between blocked users.
+3. Blocking someone is currently only reachable via the post-report flow's optional "block this owner" step — there's no direct way to block someone from their profile without going through a report first.
+4. There is no published contact/support information anywhere in the app (only the internal "send feedback" flow) — Apple's guideline requires an easily reachable support contact.
+
+GOAL:
+
+Part 1 — Admin unsuspend UI:
+- In the admin dashboard (wherever suspended users are visible, e.g. within Reports or a user detail view reached from there), add an "unsuspend" action/button for a suspended user that calls the existing POST /admin/users/:userId/unsuspend endpoint. No new backend logic needed — just a UI trigger for what already exists.
+
+Part 2 — Block guard on reactions:
+- Add the same block-check already used on feed/comments/pet-profile endpoints to the reactions endpoints (boop and treat). If either user in the interaction has blocked the other, the reaction should be prevented/hidden the same way other interactions already are.
+
+Part 3 — Direct block entry point:
+- Add a "block this person" action directly on a user's profile (or wherever makes sense given the existing pattern — e.g. near where "report" already lives, if a user has a dedicated profile view), independent of the report flow. Reuse the existing block mechanism (blocks table, existing endpoints) — this is just a new, more direct entry point into it.
+
+Part 4 — Published support contact:
+- Add a real, published support contact (e.g. a support email address) somewhere easily reachable — the About/Terms/Privacy pages and/or Profile's whisper-tier link cluster are reasonable spots. This should be an actual external contact method, not just the internal in-app feedback flow.
+
+DO NOT MODIFY:
+- The existing report flow, admin dismiss/hide/suspend logic, or the core block mechanism (blocks table, existing hide-logic across feed/comments/pet-profiles) — all confirmed working, reuse as-is.
+- Any other admin screen or Profile section not related to these four fixes.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. These are four small, independent additions reusing existing backend logic wherever it already exists.
+
+ACCEPTANCE TEST (must end in golden path):
+1. As admin, find a suspended user and confirm a working "unsuspend" button restores their access.
+2. As a blocked user, attempt to boop/treat the blocking user's post (or vice versa) — confirm it's now prevented, consistent with other blocked interactions.
+3. From a user's profile, confirm a direct "block" action is available without going through the report flow first.
+4. Confirm a real, published support contact is visible somewhere in the app (not just internal feedback).
+5. Golden path: suspend a test user as admin → unsuspend them → block a user directly from their profile → confirm reactions are blocked between you → confirm published contact info is visible → sign out. Verified live on pshpsh.net.

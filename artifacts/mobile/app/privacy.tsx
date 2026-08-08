@@ -7,6 +7,7 @@ import React from 'react';
 import { COLUMN_MAX_WIDTH } from '@/hooks/useColumnWidth';
 import {
   Image,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -60,7 +61,15 @@ export default function PrivacyScreen() {
           we use your email to send account and verification messages. that's it.
         </Text>
         <Text style={s.body}>
-          you can request deletion of your account and its content — during testing, send feedback from your profile and we'll handle it.
+          you can request deletion of your account and its content — during testing, send feedback from your profile or email{' '}
+          <Text
+            style={s.emailLink}
+            onPress={() => Linking.openURL('mailto:support@pshpsh.net')}
+            accessibilityRole="link"
+          >
+            support@pshpsh.net
+          </Text>
+          {' '}and we'll handle it.
         </Text>
         <Text style={s.body}>
           this is a tester draft. a complete privacy policy will be published before pshpsh opens to the public.
@@ -122,6 +131,9 @@ const s = StyleSheet.create({
     marginBottom:  32,
   },
 
+  emailLink: {
+    textDecorationLine: 'underline',
+  },
   body: {
     fontFamily:   'Inter_400Regular',
     fontSize:     15,

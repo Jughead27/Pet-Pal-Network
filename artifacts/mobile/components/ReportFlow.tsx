@@ -56,6 +56,11 @@ const REASONS: { value: Reason; label: string }[] = [
   { value: 'other',              label: 'other' },
 ];
 
+// Content-specific reasons don't make sense when reporting a person directly.
+const USER_REASONS: { value: Reason; label: string }[] = REASONS.filter((r) =>
+  ['animal_cruelty', 'spam', 'harassment', 'other'].includes(r.value),
+);
+
 const NOTE_MAX = 200;
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -63,9 +68,10 @@ const NOTE_MAX = 200;
 interface Props {
   visible:      boolean;
   onClose:      () => void;
-  targetType:   'post' | 'comment';
+  targetType:   'post' | 'comment' | 'user';
   targetId:     string;
-  /** Optional: when present, shows "block this owner" whisper in the done step. */
+  /** Optional: when present, shows "block this owner" whisper in the done step.
+      For targetType 'user', pass the same ID as targetId to enable blocking. */
   ownerUserId?: string;
 }
 
@@ -173,9 +179,9 @@ export default function ReportFlow({ visible, onClose, targetType, targetId, own
             showsVerticalScrollIndicator={false}
           >
             <Text style={[styles.heading, { color: colors.foreground }]}>
-              why are you reporting this?
+              {targetType === 'user' ? 'why are you reporting this person?' : 'why are you reporting this?'}
             </Text>
-            {REASONS.map(({ value, label }) => (
+            {(targetType === 'user' ? USER_REASONS : REASONS).map(({ value, label }) => (
               <Pressable
                 key={value}
                 onPress={() => handlePickReason(value)}
@@ -289,7 +295,7 @@ export default function ReportFlow({ visible, onClose, targetType, targetId, own
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
                 <Text style={[styles.blockWhisper, { color: colors.mutedForeground }]}>
-                  block this owner
+                  {targetType === 'user' ? 'block this person' : 'block this owner'}
                 </Text>
               </TouchableOpacity>
             )}

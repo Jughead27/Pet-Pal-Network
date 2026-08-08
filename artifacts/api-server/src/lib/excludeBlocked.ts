@@ -51,6 +51,26 @@ export function notBlockedCommentAuthor(viewerId: string) {
   )`;
 }
 
+/**
+ * Boolean flag: does a block relationship (either direction) exist between the
+ * viewer and ANY co-owner of the post's pet?  For reaction writes (boops,
+ * treats) — blocked users can't interact with content they can't see.
+ *
+ * REQUIRES: `postsTable` to be the FROM table (or joined) so that
+ * `"posts"."pet_id"` is a valid correlated column reference.
+ */
+export function blockedFromPostPetOwners(viewerId: string) {
+  return sql<boolean>`EXISTS (
+    SELECT 1
+    FROM   pet_owners po
+    JOIN   blocks b ON (
+             (b.blocker_id = ${viewerId}  AND b.blocked_id  = po.user_id)
+          OR (b.blocker_id = po.user_id   AND b.blocked_id  = ${viewerId})
+    )
+    WHERE  po.pet_id = ${postsTable.petId}
+  )`;
+}
+
 // ─── Admin-hide exclusion ─────────────────────────────────────────────────────
 
 /**

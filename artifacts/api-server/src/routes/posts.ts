@@ -15,7 +15,7 @@ import {
 import { and, asc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { CreatePostBody } from "@workspace/api-zod";
 import { deleteObject } from "../lib/r2.js";
-import { notBlockedCommentAuthor, notHiddenByAdminComment } from "../lib/excludeBlocked.js";
+import { notBlockedCommentAuthor, notHiddenByAdminComment, blockedFromPostPetOwners } from "../lib/excludeBlocked.js";
 import { isPetOwner } from "../lib/isPetOwner.js";
 import { activePets } from "../lib/petQueries.js";
 
@@ -350,11 +350,13 @@ router.post("/posts/:id/boops", async (req, res) => {
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
   const [post] = await db
-    .select({ id: postsTable.id })
+    .select({ id: postsTable.id, blocked: blockedFromPostPetOwners(userId) })
     .from(postsTable)
     .where(eq(postsTable.id, id));
 
-  if (!post) {
+  // Blocked either direction → the post is invisible to this user; 404 keeps
+  // that consistent (no information leak).
+  if (!post || post.blocked) {
     res.status(404).json({ error: "Not found" });
     return;
   }
@@ -380,12 +382,13 @@ router.post("/posts/:id/treats", async (req, res) => {
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
   const [postRow] = await db
-    .select({ postedByUserId: postsTable.postedByUserId })
+    .select({ postedByUserId: postsTable.postedByUserId, blocked: blockedFromPostPetOwners(userId) })
     .from(postsTable)
     .where(eq(postsTable.id, id))
     .limit(1);
 
-  if (!postRow) {
+  // Blocked either direction → invisible content; 404 like other blocked reads.
+  if (!postRow || postRow.blocked) {
     res.status(404).json({ error: "Not found" });
     return;
   }

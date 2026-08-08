@@ -7,6 +7,7 @@ import React from 'react';
 import { COLUMN_MAX_WIDTH } from '@/hooks/useColumnWidth';
 import {
   Image,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -63,7 +64,15 @@ export default function TermsScreen() {
           these terms will be replaced with a complete version before pshpsh opens to the public. we'll ask you to review and accept the updated terms at that time.
         </Text>
         <Text style={s.body}>
-          questions? send feedback from your profile.
+          questions? send feedback from your profile, or email us at{' '}
+          <Text
+            style={s.emailLink}
+            onPress={() => Linking.openURL('mailto:support@pshpsh.net')}
+            accessibilityRole="link"
+          >
+            support@pshpsh.net
+          </Text>
+          .
         </Text>
 
         {/* back whisper */}
@@ -122,6 +131,9 @@ const s = StyleSheet.create({
     marginBottom:  32,
   },
 
+  emailLink: {
+    textDecorationLine: 'underline',
+  },
   body: {
     fontFamily:   'Inter_400Regular',
     fontSize:     15,

@@ -64,6 +64,8 @@ import {
   getGetPetCoOwnershipRequestsQueryKey,
 } from "@workspace/api-client-react";
 import type { FeedPost, PackResult } from "@workspace/api-client-react";
+import { useAuth } from "@clerk/clerk-expo";
+import ReportFlow from "@/components/ReportFlow";
 import { resolveMediaKey } from "@/utils/mediaKey";
 import { compressImage } from "@/utils/compressImage";
 import AddToPackLink from "@/components/AddToPackLink";
@@ -98,6 +100,10 @@ export default function PetProfileScreen() {
   const petId = Array.isArray(rawId) ? rawId[0] : rawId;
 
   const { data: pet, isLoading, isError } = useGetPet(petId ?? "");
+  const { userId: myUserId } = useAuth();
+
+  // Report-a-user flow (from the Owners list) — reuses ReportFlow with a user target.
+  const [reportUserId, setReportUserId] = useState<string | null>(null);
 
   const [selectedPostId,  setSelectedPostId]  = useState<string | null>(null);
   const [packMembersOpen, setPackMembersOpen] = useState(false);
@@ -976,9 +982,25 @@ export default function PetProfileScreen() {
 
               {/* Owner list */}
               {owners.map((o) => (
-                <Text key={o.userId} style={[styles.ownerUsername, { color: colors.foreground }]}>
-                  {o.displayName?.trim() || 'a pshpsh member'}
-                </Text>
+                <View key={o.userId} style={styles.ownerRow}>
+                  <Text style={[styles.ownerUsername, { color: colors.foreground }]}>
+                    {o.displayName?.trim() || 'a pshpsh member'}
+                  </Text>
+                  {/* report whisper — never on your own row */}
+                  {o.userId !== myUserId && (
+                    <TouchableOpacity
+                      onPress={() => setReportUserId(o.userId)}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Report ${o.displayName?.trim() || 'this member'}`}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.ownerReportWhisper, { color: colors.mutedForeground }]}>
+                        report
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               ))}
 
               {/* Pending outgoing invites — shown to owners */}
@@ -1245,6 +1267,15 @@ export default function PetProfileScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* ── Report-a-user flow (Owners list) ── */}
+      <ReportFlow
+        visible={reportUserId !== null}
+        onClose={() => setReportUserId(null)}
+        targetType="user"
+        targetId={reportUserId ?? ''}
+        ownerUserId={reportUserId ?? undefined}
+      />
 
       {/* ── Pack Members Modal ── */}
       <Modal
@@ -2447,6 +2478,17 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.6,
     textTransform: "uppercase",
+  },
+  ownerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  ownerReportWhisper: {
+    fontSize: 11,
+    opacity: 0.35,
+    fontFamily: "Inter_400Regular",
   },
   ownersAddBtn: {
     fontFamily: "Inter_600SemiBold",

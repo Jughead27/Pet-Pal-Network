@@ -1,0 +1,13 @@
+CONTEXT: Before building content moderation, we need to know exactly what already exists vs. what's actually missing. The admin "Reports" screen's own subtitle claims "dismiss, hide, or suspend" as available actions, but there's currently no user-facing way to submit a report, so that screen has likely never been tested with real data. Separately, there may already be a user-to-user block feature (profile.tsx appears to reference "blocked" lists).
+
+GOAL: INVESTIGATE AND REPORT ONLY — no code changes in this prompt.
+1. Confirm whether ANY user-facing mechanism exists today to report/flag a post, comment, or user as inappropriate. If none exists, confirm that clearly.
+2. In the admin Reports screen's code: confirm whether "dismiss," "hide," and "suspend" are real, wired actions with actual backend logic — or whether some/all of them are UI placeholders with no real effect. Report on each of the three separately.
+3. If a "suspend" action exists: what does it actually do? Does it block the user from logging in/posting, or something else? Is it reversible?
+4. Confirm whether a user-to-user BLOCK feature already exists. If it exists: what does blocking someone actually do (hide their content from you, prevent them from seeing your content, prevent interaction, or some combination)? Is it accessible from a post or a user's profile today?
+5. Confirm whether there's any published contact/support information visible in the app or its public-facing pages (an email address, a contact form, etc.) — Apple's guideline requires this be easily reachable, not just internal "send feedback."
+6. Confirm whether there's an ACCOUNT DELETION mechanism anywhere (self-serve or admin-triggered) — needed for both moderation enforcement and GDPR/CCPA deletion rights.
+
+DO NOT MODIFY: Anything — this is read-only investigation. No code changes, no schema changes.
+
+ACCEPTANCE TEST: A clear written report answering all six points above, so we can scope an accurate build prompt from real findings rather than assumptions.
