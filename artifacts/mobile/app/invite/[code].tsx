@@ -37,11 +37,15 @@ const LOGO = require('@/assets/icon.png');
 
 type Status = 'loading' | 'valid' | 'invalid' | 'joining';
 
+interface CoPet { id: string; name: string; species: string | null }
+
 export default function InviteLandingScreen() {
   const insets           = useSafeAreaInsets();
   const router           = useRouter();
   const { code }         = useLocalSearchParams<{ code: string }>();
-  const [status, setStatus] = useState<Status>('loading');
+  const [status, setStatus]               = useState<Status>('loading');
+  const [inviterUsername, setInviterUsername] = useState<string | null>(null);
+  const [coPets, setCoPets]               = useState<CoPet[]>([]);
 
   // ── Validate code on mount ────────────────────────────────────────────────
   useEffect(() => {
@@ -50,8 +54,18 @@ export default function InviteLandingScreen() {
       try {
         const baseUrl = getBaseUrl() ?? '';
         const res  = await fetch(`${baseUrl}/api/invites/validate/${encodeURIComponent(code)}`);
-        const data = await res.json() as { valid: boolean };
-        setStatus(data.valid ? 'valid' : 'invalid');
+        const data = await res.json() as {
+          valid: boolean;
+          inviterUsername?: string | null;
+          coPets?: CoPet[];
+        };
+        if (data.valid) {
+          setInviterUsername(data.inviterUsername ?? null);
+          setCoPets(data.coPets ?? []);
+          setStatus('valid');
+        } else {
+          setStatus('invalid');
+        }
       } catch {
         // Network error — allow attempting anyway
         setStatus('valid');
@@ -125,6 +139,17 @@ export default function InviteLandingScreen() {
         <Text style={styles.sub}>
           someone who loves animals thinks you'd fit right in.
         </Text>
+        <Text style={styles.singleUseNote}>this invite is just for you — it can only be used once.</Text>
+
+        {/* Co-pet preview — only shown when the inviter pre-selected pets */}
+        {coPets.length > 0 && (
+          <Text style={styles.coPetPreview}>
+            {inviterUsername ? `@${inviterUsername}` : 'your inviter'}{' '}
+            wants to share{' '}
+            {coPets.map((p) => p.name).join(', ')}{' '}
+            with you — you'll confirm after sign-up.
+          </Text>
+        )}
 
         {/* Primary action */}
         <Pressable
@@ -225,7 +250,25 @@ const styles = StyleSheet.create({
     color:        MUTED,
     textAlign:    'center',
     lineHeight:   22,
-    marginBottom: 48,
+    marginBottom: 12,
+  },
+  singleUseNote: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     12,
+    color:        MUTED,
+    textAlign:    'center',
+    lineHeight:   18,
+    opacity:      0.65,
+    marginBottom: 16,
+  },
+  coPetPreview: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     13,
+    color:        MUTED,
+    textAlign:    'center',
+    lineHeight:   20,
+    marginBottom: 28,
+    paddingHorizontal: 8,
   },
 
   // Actions

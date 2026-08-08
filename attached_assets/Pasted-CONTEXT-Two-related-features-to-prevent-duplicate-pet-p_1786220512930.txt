@@ -1,0 +1,37 @@
+CONTEXT: Two related features to prevent duplicate pet profiles when multiple people share/co-own a pet, and to make sharing intentional rather than accidental:
+
+1. CO-OWNERSHIP AT INVITE-TIME: When an inviter (a user who already owns ≥1 pet) creates an invite, let them optionally select specific pets from their own pets to grant co-ownership of to the invitee. On invite acceptance, the invitee gets a one-tap confirm step (not silent auto-grant, since invite links are single-use but NOT recipient-bound — see below) to accept co-ownership of the selected pet(s).
+
+2. SEARCH-BEFORE-CREATE: On the "Add another pet" flow, add a live search step (reusing the existing GET /pets/search endpoint) before allowing pet creation. If a close match is found, surface it with a "request to be added as owner" option as an alternative to creating a new pet.
+
+GOAL:
+
+Part 1 — Co-ownership at invite-time:
+- On the invite-creation screen (profile.tsx or wherever "invite a friend" is initiated), IF the inviter owns at least one pet, show an optional, skippable multi-select list of their own pets: "Co-own any pets with this person?" If the inviter owns zero pets, skip this step entirely — do not show an empty picker.
+- Store the selected pet IDs on the invite record itself (e.g. a new co_owned_pet_ids array/join, tied to the invite id) — this is a concrete grant attached to the invite, not a separate pending-nudge state.
+- On invite acceptance (invite/[code].tsx or wherever redemption completes), if the invite has associated co_owned_pet_ids, show a lightweight one-tap confirm to the new user: "[Inviter name] added you as a co-owner of [pet name(s)] — accept?" with Accept / No thanks. On Accept, add rows to pet_owners for each pet. On decline or no action, no co-ownership is granted — do not auto-add without this confirm step (this matters because invite links are single-use but anonymous/not recipient-bound, so the person accepting isn't guaranteed to be who the inviter intended).
+- This must be fully additive: the existing per-pet "Owners" section on each pet's profile page (where any current owner can invite a co-owner at any time) must continue to work exactly as it does today, completely independent of this new invite-time flow.
+
+Part 2 — Search-before-create:
+- On the "Add another pet" step, as the user types a pet name, live-search using the existing GET /pets/search endpoint, SCOPED to: the user's Pack (pets they follow) + pets owned by people who invited them or whom they invited. Do NOT perform a broad/unscoped search across all pets on the platform — this must stay within that relationship scope.
+- If a close match is found, show it inline as an alternative to plain creation: e.g. "Is this already [Pet Name] on pshpsh, owned by [@username]? Request to be added as an owner" alongside the normal "create new pet" option. Selecting the request option should use the existing co-ownership request flow (co_ownership_requests table / existing request-to-join mechanism) rather than inventing a new one.
+- If no match is found, or the user ignores the suggestion, normal pet creation proceeds unchanged.
+
+DO NOT MODIFY:
+- The existing per-pet "Owners" section / invite-a-co-owner flow on pet profile pages — must remain fully functional, untouched, and independent of this new invite-time flow.
+- Invite single-use enforcement / race-condition fix, or the single-use messaging just shipped — unrelated, do not touch.
+- Invite quota logic (admin unlimited, adjustable quotas) — unrelated.
+- The GET /pets/search endpoint's core matching logic — reuse as-is via the new scope filter; do not change how it matches names/usernames.
+- Any pet deletion, pet editing, or non-invite/non-add-pet screen.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. If the invite-creation and invite-acceptance flows are spread across multiple files, apply changes consistently across all of them. Reuse the existing co-ownership request data model and pet_owners table — do not create a parallel/duplicate mechanism for granting ownership.
+
+ACCEPTANCE TEST (must end in golden path):
+1. As a user who owns at least one pet, create an invite — confirm the optional pet co-ownership picker appears, is skippable, and lists only your own pets.
+2. As a user who owns zero pets, create an invite — confirm no picker appears (graceful skip, no empty state shown).
+3. Select one or more pets during invite creation, send the invite, and accept it as a new user — confirm the one-tap co-ownership confirm prompt appears with the correct pet name(s) and inviter name, and that accepting correctly adds the new user to pet_owners for those pets.
+4. Decline the co-ownership confirm on acceptance — confirm no co-ownership is granted, but the invite/signup itself still completes normally.
+5. On "Add another pet," type a name matching an existing pet within your Pack or invite-chain scope — confirm the existing pet surfaces with a "request to be added as owner" option, and that selecting it correctly creates a co-ownership request (not a duplicate pet).
+6. Type a pet name with no matches in scope — confirm normal pet creation proceeds unaffected.
+7. Confirm the existing "Owners" section on a pet's profile page still works exactly as before, completely unaffected by this change.
+8. Golden path: sign in → Home loads → boop persists → Nursery pager → create an invite with a co-owned pet selected → accept it as a new user, confirm co-ownership → add a pet with a name matching an existing in-scope pet, confirm the suggestion appears → sign out. Verified live on pshpsh.net.

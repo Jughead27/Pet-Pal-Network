@@ -39,6 +39,10 @@ router.get("/pets/search", async (req, res) => {
   const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
   const excludeRaw = typeof req.query.exclude === "string" ? req.query.exclude : "";
   const excludeIds = excludeRaw.split(",").map((s) => s.trim()).filter(Boolean);
+  // Optional scope — "invite-chain" restricts to pets in the viewer's Pack or
+  // owned by someone in their invite chain (person who invited them, or people
+  // they have invited and who redeemed the invite).
+  const scope = typeof req.query.scope === "string" ? req.query.scope : "";
 
   if (q.length === 0) {
     res.json({ pets: [] });
@@ -47,10 +51,33 @@ router.get("/pets/search", async (req, res) => {
 
   const pattern = `%${q}%`;
 
+  // Build scope constraint (raw SQL — table names are literals, userId is parameterised)
+  const scopeCondition =
+    scope === "invite-chain"
+      ? or(
+          sql`EXISTS(
+            SELECT 1 FROM pack_follows pf
+            WHERE pf.pet_id = ${petsTable.id} AND pf.user_id = ${userId}
+          )`,
+          sql`EXISTS(
+            SELECT 1 FROM pet_owners po2
+            WHERE po2.pet_id = ${petsTable.id}
+            AND po2.user_id IN (
+              SELECT u.invited_by FROM users u
+              WHERE u.id = ${userId} AND u.invited_by IS NOT NULL
+              UNION
+              SELECT i.used_by FROM invites i
+              WHERE i.inviter_id = ${userId} AND i.used_by IS NOT NULL
+            )
+          )`,
+        )
+      : undefined;
+
   const whereConditions = [
     activePets,
     or(ilike(petsTable.name, pattern), ilike(usersTable.username, pattern)),
     ...(excludeIds.length > 0 ? [notInArray(petsTable.id, excludeIds)] : []),
+    ...(scopeCondition ? [scopeCondition] : []),
   ] as Parameters<typeof and>;
 
   const rows = await db

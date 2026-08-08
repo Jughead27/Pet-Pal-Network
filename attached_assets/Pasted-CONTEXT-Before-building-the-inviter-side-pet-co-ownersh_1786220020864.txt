@@ -1,0 +1,20 @@
+CONTEXT: Before building the inviter-side pet-co-ownership selection feature, we need to confirm and lock down how invite links currently behave — specifically whether each invite is single-use and tied to one specific recipient, or whether it's a generic/shareable link that anyone could redeem.
+
+GOAL:
+1. INVESTIGATE AND REPORT: Explain exactly how invites currently work today — is each invite record tied to a specific recipient (email/phone/contact) at creation time? Does the invite link become invalid/consumed after first use, or can it be reused by multiple people? Is there any existing enforcement preventing a second person from using the same link?
+2. ENFORCE SINGLE-USE: If invites are not currently strictly single-use (i.e., if a link could be opened and completed by more than one person), add server-side enforcement so that once an invite has been accepted/consumed, any further attempt to use that same invite link fails with a clear error (e.g. "this invite has already been used") rather than silently succeeding or creating a duplicate signup path.
+3. ADD MESSAGING: Update copy so both sides understand the invite is personal and single-use:
+   - On the invite-creation/send side: something indicating the invite is meant for one specific person and can only be used once (e.g. small helper text near the send action).
+   - On the invite-landing/signup side (where the invitee opens the link): a small line confirming this invite was sent specifically to them and is single-use (e.g. "this invite is just for you").
+   Keep both additions minimal and in the app's existing plain/utility copy register — this is informational, not a delight moment.
+
+DO NOT MODIFY:
+- The underlying invite quota / admin-unlimited-invites logic — unrelated to single-use enforcement.
+- Any other Profile, Admin, or invite-management screen not directly related to invite creation or invite-acceptance copy.
+- Co-ownership request/pet_owners logic — this prompt is scoped to invite consumption behavior and messaging only; the pet-selection-at-invite-time feature will be a separate follow-up prompt once this is confirmed sound.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. If invites are already strictly single-use and recipient-bound with proper enforcement, say so plainly in your report and skip step 2 — just add the messaging from step 3.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Report clearly: are invites currently single-use and recipient-bound? (yes/no, with the mechanism found)
+2. Generate an invite, complete signup with it — confirm the same link, opened a second time,

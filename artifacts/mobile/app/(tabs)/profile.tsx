@@ -24,7 +24,9 @@ import FeedbackFlow from '@/components/FeedbackFlow';
 import {
   ActivityIndicator,
   Linking,
+  Modal,
   Platform,
+  Pressable,
   ScrollView,
   Share,
   StyleSheet,
@@ -157,6 +159,10 @@ export default function ProfileScreen() {
   const [revokeToast, setRevokeToast]       = useState(false);
   const revokeToastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Pet co-ownership picker — shown before invite creation when user owns ≥1 pet
+  const [petPickerVisible,  setPetPickerVisible]  = useState(false);
+  const [selectedCoPetIds,  setSelectedCoPetIds]  = useState<Set<string>>(new Set());
+
   // isAdmin comes from inviteData (same fetch as effectiveQuota) — no /me race.
   // The server includes isAdmin: role === "admin" in every GET /api/invites/mine response.
   const isAdmin = inviteData?.isAdmin ?? false;
@@ -249,17 +255,17 @@ export default function ProfileScreen() {
   }, [signOut]);
 
   // ── Invite handlers ──────────────────────────────────────────────────────
-  const handleCallInFriend = useCallback(async () => {
-    if (creatingInvite) return;
+
+  /** Creates the invite (optionally with co-pet IDs), then shares the link. */
+  const createAndShareInvite = useCallback(async (coPetIds: string[]) => {
     setCreatingInvite(true);
     try {
       const result = await customFetch<{ ok: boolean; invite: { id: string; code: string } }>(
-        '/api/invites', { method: 'POST' },
+        '/api/invites', { method: 'POST', body: JSON.stringify({ petIds: coPetIds }) },
       );
       const link    = `https://pshpsh.net/invite/${result.invite.code}`;
       const message = `you've been called. ${link}`;
       if (Platform.OS === 'web') {
-        // Web Share API with clipboard fallback
         try {
           await (navigator as unknown as { share(o: object): Promise<void> }).share({ text: message, url: link });
         } catch {
@@ -273,8 +279,25 @@ export default function ProfileScreen() {
       await refetchInvites();
     } catch { /* silent — quota exceeded or network error */ } finally {
       setCreatingInvite(false);
+      setPetPickerVisible(false);
+      setSelectedCoPetIds(new Set());
     }
-  }, [creatingInvite, refetchInvites]);
+  }, [refetchInvites]);
+
+  /**
+   * Tap handler for "invite a friend".
+   * If the user owns ≥1 pet, open the co-ownership picker first.
+   * Otherwise create the invite directly (zero-pet users have nothing to share).
+   */
+  const handleCallInFriend = useCallback(() => {
+    if (creatingInvite) return;
+    if (pets.length > 0) {
+      setSelectedCoPetIds(new Set());
+      setPetPickerVisible(true);
+    } else {
+      void createAndShareInvite([]);
+    }
+  }, [creatingInvite, pets.length, createAndShareInvite]);
 
   const handleRevoke = useCallback(async (inviteId: string) => {
     setRevokingIds((prev) => new Set(prev).add(inviteId));
@@ -637,15 +660,20 @@ export default function ProfileScreen() {
                   : 'all your friends are in'}
             </Text>
             {(isAdmin || remaining > 0) && (
-              <Button
-                variant="primary"
-                label={creatingInvite ? undefined : 'invite a friend'}
-                onPress={handleCallInFriend}
-                disabled={creatingInvite}
-                style={{ alignSelf: 'flex-start', marginTop: 14, marginBottom: 4 }}
-              >
-                {creatingInvite && <ActivityIndicator size={14} color={colors.foreground} />}
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  label={creatingInvite ? undefined : 'invite a friend'}
+                  onPress={handleCallInFriend}
+                  disabled={creatingInvite}
+                  style={{ alignSelf: 'flex-start', marginTop: 14, marginBottom: 4 }}
+                >
+                  {creatingInvite && <ActivityIndicator size={14} color={colors.foreground} />}
+                </Button>
+                <Text style={[styles.inviteHint, { color: colors.mutedForeground }]}>
+                  each link is for one person and can only be used once.
+                </Text>
+              </>
             )}
             {/* Request more — non-admins only, when all quota is used up */}
             {!isAdmin && remaining === 0 && (
@@ -826,6 +854,81 @@ export default function ProfileScreen() {
         visible={feedbackVisible}
         onClose={() => setFeedbackVisible(false)}
       />
+
+      {/* ── Pet co-ownership picker ── */}
+      <Modal
+        visible={petPickerVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { if (!creatingInvite) setPetPickerVisible(false); }}
+      >
+        <View style={styles.pickerOverlay}>
+          <View style={[styles.pickerSheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.pickerTitle, { color: colors.foreground }]}>
+              co-own any pets with this person?
+            </Text>
+            <Text style={[styles.pickerSub, { color: colors.mutedForeground }]}>
+              optional — tap to select, then share the invite.
+            </Text>
+            {pets.map((pet) => {
+              const selected = selectedCoPetIds.has(pet.id);
+              return (
+                <TouchableOpacity
+                  key={pet.id}
+                  onPress={() => {
+                    setSelectedCoPetIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(pet.id)) next.delete(pet.id); else next.add(pet.id);
+                      return next;
+                    });
+                  }}
+                  activeOpacity={0.7}
+                  style={[
+                    styles.pickerRow,
+                    {
+                      borderColor:     selected ? colors.primary : colors.border,
+                      backgroundColor: selected ? `${colors.primary}18` : colors.background,
+                    },
+                  ]}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: selected }}
+                >
+                  <PetAvatar
+                    url={pet.thumbnailUrl}
+                    size={36}
+                    backgroundColor={colors.secondary}
+                    pawColor={colors.mutedForeground}
+                  />
+                  <Text style={[styles.pickerPetName, { color: colors.foreground }]} numberOfLines={1}>
+                    {pet.name}
+                  </Text>
+                  {selected && (
+                    <Text style={{ color: colors.primary, fontFamily: 'Inter_600SemiBold', fontSize: 14 }}>✓</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+            <View style={styles.pickerActions}>
+              <Button
+                variant="quiet"
+                label="Skip"
+                onPress={() => void createAndShareInvite([])}
+                disabled={creatingInvite}
+                style={{ flex: 1 }}
+              />
+              <Button
+                variant="primary"
+                label={creatingInvite ? undefined : selectedCoPetIds.size > 0 ? 'Continue' : 'Just invite'}
+                onPress={() => void createAndShareInvite([...selectedCoPetIds])}
+                disabled={creatingInvite}
+                style={{ flex: 1 }}
+              >
+                {creatingInvite && <ActivityIndicator size={14} color={colors.foreground} />}
+              </Button>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1207,6 +1310,59 @@ const styles = StyleSheet.create({
     fontSize:      17,
     lineHeight:    24,
     letterSpacing: -0.1,
+  },
+  inviteHint: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   12,
+    lineHeight: 18,
+    opacity:    0.55,
+    marginTop:  6,
+  },
+
+  // Pet co-ownership picker modal
+  pickerOverlay: {
+    flex:             1,
+    backgroundColor:  'rgba(0,0,0,0.55)',
+    justifyContent:   'center',
+    alignItems:       'center',
+    padding:          24,
+  },
+  pickerSheet: {
+    width:           '100%',
+    maxWidth:        420,
+    borderRadius:    20,
+    borderWidth:     StyleSheet.hairlineWidth,
+    padding:         24,
+    gap:             12,
+  },
+  pickerTitle: {
+    fontFamily:    'Inter_700Bold',
+    fontSize:      17,
+    letterSpacing: -0.2,
+  },
+  pickerSub: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     13,
+    lineHeight:   19,
+    marginBottom: 4,
+  },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           12,
+    borderWidth:   StyleSheet.hairlineWidth,
+    borderRadius:  12,
+    padding:       12,
+  },
+  pickerPetName: {
+    fontFamily: 'Inter_500Medium',
+    fontSize:   15,
+    flex:       1,
+  },
+  pickerActions: {
+    flexDirection: 'row',
+    gap:           10,
+    marginTop:     4,
   },
   // Brief revoke confirmation — shown for 2.5 s then hides
   revokeToast: {

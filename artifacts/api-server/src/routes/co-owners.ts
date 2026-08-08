@@ -334,6 +334,68 @@ router.delete("/pets/:id/co-ownership-requests/:requestId", async (req, res) => 
   res.json({ ok: true });
 });
 
+// ─── POST /pets/:id/request-co-ownership ─────────────────────────────────────
+// Any authenticated user who does NOT already own a pet can request to be added
+// as a co-owner.  A co_ownership_request row is created with:
+//   inviterUserId = pet's primary owner  (who must approve)
+//   inviteeUserId = requester            (who will be added on acceptance)
+// The pet owner sees this request in their incoming list and accepts/declines
+// via the standard co-ownership flow.
+router.post("/pets/:id/request-co-ownership", async (req, res) => {
+  const { id: petId } = req.params;
+  const requesterId = (req as any).auth.userId as string;
+
+  // Verify pet exists and is active
+  const [pet] = await db
+    .select({ id: petsTable.id, ownerId: petsTable.ownerId, name: petsTable.name })
+    .from(petsTable)
+    .where(and(eq(petsTable.id, petId), activePets))
+    .limit(1);
+
+  if (!pet) { res.status(404).json({ error: "Pet not found" }); return; }
+
+  // Reject self-request
+  if (pet.ownerId === requesterId) {
+    res.status(409).json({ error: "already_owner" });
+    return;
+  }
+
+  // Reject if already an owner via pet_owners
+  const [ownerRow] = await db
+    .select({ id: petOwnersTable.id })
+    .from(petOwnersTable)
+    .where(and(eq(petOwnersTable.petId, petId), eq(petOwnersTable.userId, requesterId)))
+    .limit(1);
+
+  if (ownerRow) { res.status(409).json({ error: "already_owner" }); return; }
+
+  // Reject if there is already a pending request from this requester for this pet
+  const [existing] = await db
+    .select({ id: coOwnershipRequestsTable.id })
+    .from(coOwnershipRequestsTable)
+    .where(
+      and(
+        eq(coOwnershipRequestsTable.petId, petId),
+        eq(coOwnershipRequestsTable.inviteeUserId, requesterId),
+        sql`${coOwnershipRequestsTable.status} = 'pending'`,
+      ),
+    )
+    .limit(1);
+
+  if (existing) { res.status(409).json({ error: "request_pending" }); return; }
+
+  const [request] = await db
+    .insert(coOwnershipRequestsTable)
+    .values({
+      petId,
+      inviterUserId: pet.ownerId, // pet owner must approve
+      inviteeUserId: requesterId,  // requester is added on acceptance
+    })
+    .returning({ id: coOwnershipRequestsTable.id });
+
+  res.status(201).json({ ok: true, requestId: request.id, petId, petName: pet.name });
+});
+
 // ─── DELETE /pets/:id/co-owners/me ───────────────────────────────────────────
 // Any owner can remove themselves.  Blocked if they are the last owner —
 // a pet must always have at least one owner.

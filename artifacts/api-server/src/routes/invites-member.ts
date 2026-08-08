@@ -77,26 +77,60 @@ router.post("/invites/redeem", async (req, res) => {
     return;
   }
 
-  // ONE transaction: set invitedBy + mark invite used + writeAudit
+  // ONE transaction: set invitedBy + mark invite used + writeAudit.
+  // The invite UPDATE predicates on status='active' so that if two concurrent
+  // requests both pass the SELECT check, only one can commit — the other gets
+  // 0 rows affected and we surface the already-used error instead of silently
+  // double-crediting the inviter.
+  let redeemed = false;
   await db.transaction(async (tx) => {
+    const updated = await tx
+      .update(invitesTable)
+      .set({ status: "used", usedBy: userId, usedAt: new Date() })
+      .where(and(eq(invitesTable.id, invite.id), eq(invitesTable.status, "active")))
+      .returning({ id: invitesTable.id });
+
+    if (!updated.length) {
+      // Lost the race — another request already consumed this invite.
+      return;
+    }
+
     await tx
       .update(usersTable)
       .set({ invitedBy: invite.inviterId })
       .where(eq(usersTable.id, userId));
 
-    await tx
-      .update(invitesTable)
-      .set({ status: "used", usedBy: userId, usedAt: new Date() })
-      .where(eq(invitesTable.id, invite.id));
-
     await writeAudit(tx, userId, "invite.used", "invite", invite.id, {
       inviterId: invite.inviterId,
       code: invite.code,
     });
+
+    redeemed = true;
   });
 
+  if (!redeemed) {
+    res.json({ ok: false, expired: true });
+    return;
+  }
+
+  // Attach co-pet info + inviter name to the response so the mobile client can
+  // show the one-tap co-ownership confirm without an extra round-trip.
+  const [inviterRow] = await db
+    .select({ username: usersTable.username })
+    .from(usersTable)
+    .where(eq(usersTable.id, invite.inviterId))
+    .limit(1);
+
+  const coPetRows: Array<{ id: string; name: string; species: string | null }> =
+    invite.coPetIds?.length
+      ? await db
+          .select({ id: petsTable.id, name: petsTable.name, species: petsTable.species })
+          .from(petsTable)
+          .where(inArray(petsTable.id, invite.coPetIds))
+      : [];
+
   logger.info({ userId, inviteId: invite.id, inviterId: invite.inviterId }, "Invite redeemed");
-  res.json({ ok: true });
+  res.json({ ok: true, coPets: coPetRows, inviterUsername: inviterRow?.username ?? null });
 });
 
 // ── Create ────────────────────────────────────────────────────────────────────
@@ -148,14 +182,29 @@ router.post("/invites", async (req, res) => {
     }
   }
 
+  // Optional co-ownership pet IDs — validate that each is actually owned by the caller
+  // so a malicious body cannot grant co-ownership of unrelated pets.
+  const { petIds } = req.body as { petIds?: unknown };
+  const validatedPetIds: string[] = [];
+  if (Array.isArray(petIds) && petIds.length > 0) {
+    const rawIds = [...new Set((petIds as unknown[]).filter((x): x is string => typeof x === "string"))];
+    if (rawIds.length > 0) {
+      const owned = await db
+        .select({ petId: petOwnersTable.petId })
+        .from(petOwnersTable)
+        .where(and(inArray(petOwnersTable.petId, rawIds), eq(petOwnersTable.userId, userId)));
+      validatedPetIds.push(...owned.map((r) => r.petId));
+    }
+  }
+
   const code = generateCode();
 
   const [invite] = await db
     .insert(invitesTable)
-    .values({ inviterId: userId, code })
+    .values({ inviterId: userId, code, coPetIds: validatedPetIds.length ? validatedPetIds : null })
     .returning();
 
-  logger.info({ userId, inviteId: invite.id, code: invite.code }, "Invite created");
+  logger.info({ userId, inviteId: invite.id, code: invite.code, coPetCount: validatedPetIds.length }, "Invite created");
   res.status(201).json({
     ok: true,
     invite: {
@@ -165,6 +214,62 @@ router.post("/invites", async (req, res) => {
       createdAt: invite.createdAt,
     },
   });
+});
+
+// ── Accept co-pets ────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/invites/accept-co-pets
+ *
+ * Called after a new user has redeemed an invite and explicitly accepted
+ * co-ownership of the pets the inviter pre-selected.
+ *
+ * Guard: invite.usedBy must equal the calling user — a third party who somehow
+ * obtained the code cannot claim co-ownership via someone else's redeemed link.
+ * Insertion is idempotent (ON CONFLICT DO NOTHING) so repeated taps are safe.
+ */
+router.post("/invites/accept-co-pets", async (req, res) => {
+  const { userId } = (req as Express.RequestWithAuth).auth!;
+  const { code }   = req.body as { code?: string };
+
+  if (!code?.trim()) {
+    res.status(400).json({ ok: false, error: "code is required" });
+    return;
+  }
+
+  const [invite] = await db
+    .select({
+      id:       invitesTable.id,
+      usedBy:   invitesTable.usedBy,
+      coPetIds: invitesTable.coPetIds,
+    })
+    .from(invitesTable)
+    .where(eq(invitesTable.code, code.trim()))
+    .limit(1);
+
+  if (!invite || invite.usedBy !== userId) {
+    res.status(403).json({ ok: false, error: "not authorized" });
+    return;
+  }
+
+  const petIds = invite.coPetIds ?? [];
+  if (!petIds.length) {
+    res.json({ ok: true });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    for (const petId of petIds) {
+      await tx
+        .insert(petOwnersTable)
+        .values({ petId, userId })
+        .onConflictDoNothing();
+    }
+    await writeAudit(tx, userId, "invite.co_pets_accepted", "invite", invite.id, { petIds });
+  });
+
+  logger.info({ userId, inviteId: invite.id, petCount: petIds.length }, "Invite co-pets accepted");
+  res.json({ ok: true });
 });
 
 // ── Mine ──────────────────────────────────────────────────────────────────────

@@ -16,7 +16,7 @@
  * No react-native-reanimated. Works on iOS, Android, and web.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -43,6 +43,7 @@ import {
   useGetSpecies,
   getGetSpeciesByIdBreedsQueryOptions,
   getGetMyPetsQueryKey,
+  customFetch,
 } from '@workspace/api-client-react';
 import type { BreedItem } from '@workspace/api-client-react';
 
@@ -70,6 +71,50 @@ export default function CreatePetScreen() {
 
   const bioRef         = useRef<TextInput>(null);
   const customBreedRef = useRef<TextInput>(null);
+  const searchTimer    = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Search-before-create ───────────────────────────────────────────────────
+  // As the user types a pet name (≥2 chars), live-search within their invite
+  // chain (Pack + people they invited / who invited them) to surface matches.
+  type SearchPet = { id: string; name: string; species: string | null; ownerUsername: string; isOwn: boolean };
+  const [nameSearchResults, setNameSearchResults] = useState<SearchPet[]>([]);
+  const [nameSearchLoading, setNameSearchLoading] = useState(false);
+  // ownershipRequested: 'sent' after a successful request, or null
+  const [ownershipRequested, setOwnershipRequested] = useState<'sent' | null>(null);
+
+  // Debounced name search — fires 400 ms after the user stops typing.
+  // Scoped to invite-chain so results are always relationship-relevant.
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    const q = name.trim();
+    if (q.length < 2) {
+      setNameSearchResults([]);
+      return;
+    }
+    searchTimer.current = setTimeout(async () => {
+      setNameSearchLoading(true);
+      try {
+        const data = await customFetch<{ pets: SearchPet[] }>(
+          `/api/pets/search?q=${encodeURIComponent(q)}&scope=invite-chain`,
+        );
+        // Only show pets the viewer does NOT already own
+        setNameSearchResults((data.pets ?? []).filter((p) => !p.isOwn));
+      } catch {
+        setNameSearchResults([]);
+      } finally {
+        setNameSearchLoading(false);
+      }
+    }, 400);
+    return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
+  }, [name]);
+
+  const handleRequestOwnership = useCallback(async (pet: SearchPet) => {
+    try {
+      await customFetch(`/api/pets/${pet.id}/request-co-ownership`, { method: 'POST' });
+      setOwnershipRequested('sent');
+      setNameSearchResults([]);
+    } catch { /* silent — duplicate/error handled on server */ }
+  }, []);
 
   // ── Server data ────────────────────────────────────────────────────────────
   const { data: speciesData, isLoading: speciesLoading } = useGetSpecies();
@@ -215,7 +260,7 @@ export default function CreatePetScreen() {
           <TextInput
             style={s.input}
             value={name}
-            onChangeText={setName}
+            onChangeText={(t) => { setName(t); setOwnershipRequested(null); }}
             placeholder="e.g. Finn"
             placeholderTextColor={colors.mutedForeground}
             selectionColor={colors.primary}
@@ -224,6 +269,36 @@ export default function CreatePetScreen() {
             autoFocus
           />
         </View>
+
+        {/* ── Search-before-create suggestions ── */}
+        {ownershipRequested === 'sent' ? (
+          <View style={[s.suggestionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[s.suggestionSent, { color: colors.mutedForeground }]}>
+              request sent — the owner will be notified.
+            </Text>
+          </View>
+        ) : nameSearchLoading ? null : nameSearchResults.map((pet) => (
+          <View
+            key={pet.id}
+            style={[s.suggestionCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+          >
+            <Text style={[s.suggestionText, { color: colors.foreground }]} numberOfLines={2}>
+              is this already{' '}
+              <Text style={{ fontFamily: 'Inter_600SemiBold' }}>{pet.name}</Text>
+              {pet.ownerUsername ? ` (owned by @${pet.ownerUsername})` : ''}?
+            </Text>
+            <TouchableOpacity
+              onPress={() => handleRequestOwnership(pet)}
+              activeOpacity={0.7}
+              style={[s.suggestionBtn, { borderColor: colors.border }]}
+              accessibilityRole="button"
+            >
+              <Text style={[s.suggestionBtnText, { color: colors.primary }]}>
+                request to be added as owner
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ))}
 
         {/* ── Species ── */}
         <View style={s.card}>
@@ -643,6 +718,38 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
       fontSize: 12,
       marginTop: 6,
       lineHeight: 16,
+    },
+
+    // Search-before-create suggestion card
+    suggestionCard: {
+      backgroundColor: c.card,
+      borderRadius:    c.radius,
+      borderWidth:     StyleSheet.hairlineWidth,
+      padding:         16,
+      marginBottom:    14,
+      gap:             10,
+    },
+    suggestionText: {
+      fontFamily: 'Inter_400Regular',
+      fontSize:   14,
+      lineHeight: 20,
+    },
+    suggestionBtn: {
+      borderWidth:     StyleSheet.hairlineWidth,
+      borderRadius:    c.radius - 4,
+      paddingVertical: 10,
+      alignItems:      'center',
+    },
+    suggestionBtnText: {
+      fontFamily: 'Inter_500Medium',
+      fontSize:   14,
+    },
+    suggestionSent: {
+      fontFamily: 'Inter_400Regular',
+      fontSize:   13,
+      lineHeight: 19,
+      textAlign:  'center',
+      opacity:    0.7,
     },
 
     // Submit

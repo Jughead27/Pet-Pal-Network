@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, inviteRequestsTable, invitesTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, inviteRequestsTable, invitesTable, usersTable, petsTable } from "@workspace/db";
+import { eq, inArray } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -90,20 +90,49 @@ router.post("/invites/request", async (req, res) => {
  * GET /api/invites/validate/:code
  *
  * Public endpoint — no auth required.
- * Returns { valid: boolean } for a given invite code.
- * Used by the landing page to confirm the link is still active before showing UI.
+ * Returns { valid, inviterUsername, coPets } for a given invite code.
+ * Used by the landing page to confirm the link is active and preview co-pets.
  */
 router.get("/invites/validate/:code", async (req, res) => {
   const { code } = req.params;
   if (!code) { res.json({ valid: false }); return; }
 
   const [invite] = await db
-    .select({ status: invitesTable.status })
+    .select({
+      status:    invitesTable.status,
+      inviterId: invitesTable.inviterId,
+      coPetIds:  invitesTable.coPetIds,
+    })
     .from(invitesTable)
     .where(eq(invitesTable.code, code.trim()))
     .limit(1);
 
-  res.json({ valid: invite?.status === "active" });
+  if (invite?.status !== "active") {
+    res.json({ valid: false });
+    return;
+  }
+
+  // Inviter username
+  const [inviterRow] = await db
+    .select({ username: usersTable.username })
+    .from(usersTable)
+    .where(eq(usersTable.id, invite.inviterId))
+    .limit(1);
+
+  // Co-pet preview (name + species only — no auth required here)
+  const coPets: Array<{ id: string; name: string; species: string | null }> =
+    invite.coPetIds?.length
+      ? await db
+          .select({ id: petsTable.id, name: petsTable.name, species: petsTable.species })
+          .from(petsTable)
+          .where(inArray(petsTable.id, invite.coPetIds))
+      : [];
+
+  res.json({
+    valid:           true,
+    inviterUsername: inviterRow?.username ?? null,
+    coPets,
+  });
 });
 
 export default router;

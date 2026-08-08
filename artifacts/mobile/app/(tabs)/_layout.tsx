@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@clerk/clerk-expo';
 import { House, Dog, BabyCarriage, User, Plus } from 'phosphor-react-native';
@@ -42,6 +42,15 @@ export default function TabLayout() {
   const [tosAccepted, setTosAccepted] = useState(false);
   const [tosAccepting, setTosAccepting] = useState(false);
 
+  // Co-ownership confirm — shown after invite redemption when the inviter
+  // pre-selected pets to share with the new user.
+  const [pendingCoPets, setPendingCoPets] = useState<{
+    code:            string;
+    coPets:          Array<{ id: string; name: string; species: string | null }>;
+    inviterUsername: string | null;
+  } | null>(null);
+  const [coPetsAccepting, setCoPetsAccepting] = useState(false);
+
   // Guard: only fire GET /me once Clerk has confirmed a live session.
   // Without `enabled`, the query fires during the initial render while
   // ClerkTokenSync's useEffect hasn't yet called setAuthTokenGetter — so the
@@ -56,14 +65,27 @@ export default function TabLayout() {
   useEffect(() => {
     if (!isSignedIn) return;
     (async () => {
+      let savedCode: string | null = null;
       try {
-        const code = await SecureStore.getItemAsync('pendingInviteCode');
-        if (!code) return;
-        // Best-effort — if the code is expired or already used, the endpoint returns ok:false (no throw)
-        await customFetch('/api/invites/redeem', {
+        savedCode = await SecureStore.getItemAsync('pendingInviteCode');
+        if (!savedCode) return;
+        // Best-effort — if expired/already used, endpoint returns ok:false (no throw).
+        const result = await customFetch<{
+          ok:              boolean;
+          coPets?:         Array<{ id: string; name: string; species: string | null }>;
+          inviterUsername?: string | null;
+        }>('/api/invites/redeem', {
           method: 'POST',
-          body:   JSON.stringify({ code }),
+          body:   JSON.stringify({ code: savedCode }),
         });
+        // If the invite carried co-pet grants, prompt the new user to accept.
+        if (result.ok && result.coPets?.length && savedCode) {
+          setPendingCoPets({
+            code:            savedCode,
+            coPets:          result.coPets,
+            inviterUsername: result.inviterUsername ?? null,
+          });
+        }
       } catch { /* silent — invite attribution is best-effort */ } finally {
         await SecureStore.deleteItemAsync('pendingInviteCode').catch(() => {});
       }
@@ -183,6 +205,7 @@ export default function TabLayout() {
   const isWeb = Platform.OS === 'web';
 
   return (
+    <View style={{ flex: 1 }}>
     <Tabs
       screenOptions={{
         headerShown: false,
@@ -333,6 +356,56 @@ export default function TabLayout() {
         }}
       />
     </Tabs>
+
+    {/* Co-ownership confirm overlay — surfaces after invite redemption */}
+    <Modal visible={pendingCoPets !== null} transparent animationType="fade">
+      <View style={gt.coPetsOverlay}>
+        <View style={gt.coPetsSheet}>
+          <Text style={gt.coPetsTitle}>
+            {pendingCoPets?.inviterUsername
+              ? `@${pendingCoPets.inviterUsername} added you as a co-owner`
+              : 'you were added as a co-owner'}
+          </Text>
+          <Text style={gt.coPetsBody}>
+            {pendingCoPets?.coPets.map((p) => p.name).join(', ')}
+          </Text>
+          <Text style={gt.coPetsSub}>want to accept co-ownership?</Text>
+          <Pressable
+            style={({ pressed }) => [
+              gt.agreeBtn,
+              { marginBottom: 8 },
+              pressed && gt.dimmed,
+              coPetsAccepting && gt.disabled,
+            ]}
+            disabled={coPetsAccepting}
+            onPress={async () => {
+              if (!pendingCoPets || coPetsAccepting) return;
+              setCoPetsAccepting(true);
+              try {
+                await customFetch('/api/invites/accept-co-pets', {
+                  method: 'POST',
+                  body: JSON.stringify({ code: pendingCoPets.code }),
+                });
+              } catch { /* silent */ } finally {
+                setCoPetsAccepting(false);
+                setPendingCoPets(null);
+              }
+            }}
+          >
+            {coPetsAccepting
+              ? <ActivityIndicator color={TOS_FG} size="small" />
+              : <Text style={gt.agreeTxt}>accept</Text>}
+          </Pressable>
+          <Pressable
+            style={({ pressed }) => [gt.signOutBtn, pressed && gt.dimmed]}
+            onPress={() => setPendingCoPets(null)}
+          >
+            <Text style={gt.signOutTxt}>no thanks</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+    </View>
   );
 }
 
@@ -416,4 +489,45 @@ const gt = StyleSheet.create({
 
   dimmed:   { opacity: 0.65 },
   disabled: { opacity: 0.35 },
+
+  // Co-ownership confirm modal (post-invite-redemption)
+  coPetsOverlay: {
+    flex:            1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent:  'center',
+    alignItems:      'center',
+    padding:         32,
+  },
+  coPetsSheet: {
+    width:           '100%',
+    maxWidth:        400,
+    backgroundColor: TOS_BG,
+    borderWidth:     StyleSheet.hairlineWidth,
+    borderColor:     TOS_BORDER,
+    borderRadius:    20,
+    padding:         28,
+  },
+  coPetsTitle: {
+    fontFamily:    'Inter_700Bold',
+    fontSize:      20,
+    color:         TOS_FG,
+    letterSpacing: -0.3,
+    marginBottom:  10,
+    textAlign:     'center',
+  },
+  coPetsBody: {
+    fontFamily:   'Inter_600SemiBold',
+    fontSize:     16,
+    color:        TOS_FG,
+    textAlign:    'center',
+    marginBottom: 6,
+  },
+  coPetsSub: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     14,
+    color:        TOS_MUTED,
+    textAlign:    'center',
+    marginBottom: 28,
+    lineHeight:   22,
+  },
 });
