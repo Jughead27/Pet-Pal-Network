@@ -27,6 +27,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 import { getBaseUrl } from '@workspace/api-client-react';
+import Button from '@/components/Button';
 
 // ── Portal design tokens ───────────────────────────────────────────────────────
 const BG    = '#060B10';
@@ -37,20 +38,11 @@ const LOGO = require('@/assets/icon.png');
 
 type Status = 'loading' | 'valid' | 'invalid' | 'joining';
 
-interface CoPet { id: string; name: string; species: string | null }
-
-/** "Ripley" · "Ripley and Finn" · "Ripley, Finn and Mochi" */
-function formatPetNames(names: string[]): string {
-  if (names.length <= 1) return names[0] ?? '';
-  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-}
-
 export default function InviteLandingScreen() {
   const insets           = useSafeAreaInsets();
   const router           = useRouter();
   const { code }         = useLocalSearchParams<{ code: string }>();
   const [status, setStatus] = useState<Status>('loading');
-  const [coPets, setCoPets] = useState<CoPet[]>([]);
 
   // ── Validate code on mount ────────────────────────────────────────────────
   useEffect(() => {
@@ -59,12 +51,8 @@ export default function InviteLandingScreen() {
       try {
         const baseUrl = getBaseUrl() ?? '';
         const res  = await fetch(`${baseUrl}/api/invites/validate/${encodeURIComponent(code)}`);
-        const data = await res.json() as {
-          valid: boolean;
-          coPets?: CoPet[];
-        };
+        const data = await res.json() as { valid: boolean };
         if (data.valid) {
-          setCoPets(data.coPets ?? []);
           setStatus('valid');
         } else {
           setStatus('invalid');
@@ -137,30 +125,19 @@ export default function InviteLandingScreen() {
         <Text style={styles.headline}>you're invited to pshpsh</Text>
         <Text style={styles.sub}>follow pets, not people.</Text>
 
-        {/* Co-pet preview — only shown when the inviter pre-selected pets.
-            Pronoun-based on purpose: never show the raw @username here. */}
-        {coPets.length > 0 && (
-          <Text style={styles.coPetPreview}>
-            they'd like to share {formatPetNames(coPets.map((p) => p.name))} with you — you'll
-            both be able to post {coPets.length > 1 ? 'their' : `${coPets[0].name}'s`} photos
-            and updates.
-          </Text>
-        )}
-
-        <Text style={styles.singleUseNote}>this invite is just for you — it can only be used once.</Text>
-
-        {/* Primary action */}
-        <Pressable
-          style={({ pressed }) => [styles.joinBtn, pressed && { opacity: 0.65 }]}
+        {/* Primary action — shared hairline-outline CTA */}
+        <Button
+          variant="primary"
           onPress={handleJoin}
           disabled={status === 'joining'}
-          accessibilityRole="button"
-          accessibilityLabel="Join pshpsh"
+          style={styles.joinBtn}
         >
           {status === 'joining'
             ? <ActivityIndicator color={FG} size="small" />
             : <Text style={styles.joinTxt}>join pshpsh</Text>}
-        </Pressable>
+        </Button>
+
+        <Text style={styles.singleUseNote}>this invite is just for you — it can only be used once.</Text>
 
         {/* Already have an account */}
         <Pressable
@@ -239,21 +216,11 @@ const styles = StyleSheet.create({
     opacity:      0.65,
     marginBottom: 16,
   },
-  coPetPreview: {
-    fontFamily:   'Inter_400Regular',
-    fontSize:     13,
-    color:        MUTED,
-    textAlign:    'center',
-    lineHeight:   20,
-    marginBottom: 28,
-    paddingHorizontal: 8,
-  },
 
   // Actions
   joinBtn: {
-    paddingVertical: 16,
-    alignItems:      'center',
-    marginBottom:    8,
+    marginTop:    12,
+    marginBottom: 20,
   },
   joinTxt: {
     fontFamily: 'Inter_700Bold',

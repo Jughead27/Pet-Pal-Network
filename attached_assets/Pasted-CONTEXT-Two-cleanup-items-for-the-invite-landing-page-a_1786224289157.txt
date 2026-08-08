@@ -1,0 +1,22 @@
+CONTEXT: Two cleanup items for the invite landing page (app/invite/[code].tsx):
+1. Remove the co-pet-sharing line entirely from this page. The real offer-and-accept moment already exists at the post-signup confirmation modal (which is unaffected by this prompt) — the landing-page mention was redundant and added visual clutter.
+2. The "join pshpsh" primary CTA currently renders as plain bold text with no border/fill, so it doesn't read as a tappable button. This violates the locked design law: primary CTAs on auth/onboarding screens must be a hairline outline button (1px border, transparent fill, bold label).
+
+GOAL:
+1. On the invite landing page, remove the co-pet-sharing line ("they'd like to share [pet] with you...") completely — do not reorder it, do not move it elsewhere on this page. The page should no longer reference pets/co-ownership at all.
+2. Final landing page content, top to bottom: logo → headline ("you're invited to pshpsh") → tagline ("follow pets, not people.") → "Join pshpsh" CTA → single-use note (small/muted, unchanged) → "already a member? sign in" (secondary, unchanged).
+3. Restyle "Join pshpsh" as a proper hairline outline button: 1px border, transparent fill, bold label — matching the existing locked primary-CTA pattern used elsewhere in auth/onboarding. Reuse the existing button component/style if one already exists in the codebase for this pattern, rather than creating a new one.
+
+DO NOT MODIFY:
+- The post-signup co-pet confirmation modal — untouched, still fires exactly as before for invites carrying co-pet grants. This prompt does not remove or alter that flow, only the landing-page pre-signup mention.
+- Any invite creation logic, co-ownership grant logic, or single-use enforcement — copy/display only on the landing page.
+- Any other screen's CTA styling — this fix is scoped to the invite landing page's "Join pshpsh" button only, though if a shared button component is being reused, that's fine as long as no other screen's behavior changes as a side effect.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a display-only change to app/invite/[code].tsx — no schema, no new fields, no logic changes.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Open an invite landing page for an invite that carries a co-owned pet — confirm NO mention of the pet or co-ownership appears anywhere on this page.
+2. Confirm the page reads cleanly top to bottom: logo, headline, tagline, CTA button, single-use note, sign-in link — nothing else.
+3. Confirm "Join pshpsh" now renders as a visible hairline outline button (border visible, transparent fill, bold label) rather than plain text.
+4. Complete signup from that invite — confirm the post-signup co-pet confirmation modal still appears and still works correctly (accept/decline), completely unaffected by this change.
+5. Golden path: open an invite link with a co-owned pet attached → confirm clean landing page with no pet mention → tap the now-visible Join button → complete signup → confirm co-pet modal still appears and functions → sign out. Verified live on pshpsh.net.
