@@ -526,10 +526,10 @@ export default function ProfileScreen() {
         ) : (
           <View style={styles.listGap}>
 
-            {/* ── PETS ── */}
+            {/* ── PETS I FOLLOW ── */}
             {packedPets.length > 0 && (
               <>
-                <Text style={[styles.subheading, { color: colors.mutedForeground }]}>Pets</Text>
+                <Text style={[styles.subheading, { color: colors.mutedForeground }]}>Pets I Follow</Text>
                 {packedPets.map((item) => (
                   <FollowRow
                     key={`pack-${item.id}`}
@@ -631,15 +631,15 @@ export default function ProfileScreen() {
           <>
             <Text style={[styles.inviteHeroText, { color: colors.foreground }]}>
               {isAdmin
-                ? '∞ friends to call in'
+                ? '∞ invites available'
                 : remaining > 0
-                  ? `you can call in ${remaining} ${remaining === 1 ? 'friend' : 'friends'}`
+                  ? `${remaining} ${remaining === 1 ? 'invite' : 'invites'} available`
                   : 'all your friends are in'}
             </Text>
             {(isAdmin || remaining > 0) && (
               <Button
                 variant="primary"
-                label={creatingInvite ? undefined : 'call in a friend'}
+                label={creatingInvite ? undefined : 'invite a friend'}
                 onPress={handleCallInFriend}
                 disabled={creatingInvite}
                 style={{ alignSelf: 'flex-start', marginTop: 14, marginBottom: 4 }}

@@ -1,0 +1,19 @@
+CONTEXT: Compose flow currently shows a library-pick preview screen after the user selects a photo, before advancing to the Adjust/Crop screen. This intermediate step is unnecessary now that Adjust opens directly into a ready-to-use cover-crop canvas with a smart-default ratio (Tall for portrait, 4:5 for landscape/square) and zoom-floor already applied.
+
+GOAL: Skip the library-pick preview screen entirely. As soon as the user selects a photo from their library, advance directly to the Adjust/Crop screen (CropEditor), with the smart-default ratio and zoom floor already applied exactly as they are today. No intermediate confirmation/preview step.
+
+DO NOT MODIFY:
+- CropEditor.tsx's internal behavior (ratio picker, smart defaults, zoom floor, gesture engine) — this change only removes a screen from the flow, it does not touch what happens once Adjust loads.
+- The rest of the compose order (Photo → Pet → Caption → Nursery → Post) — only the Photo step's internal flow changes (library pick → Adjust, instead of library pick → preview → Adjust).
+- Avatar edit flow — unaffected, scoped to main post compose only.
+- Any validation logic (file size checks, magic-byte upload verification) — must still run at the same point it does today, just without the now-removed preview screen in between.
+
+PRESERVATION CLAUSE: Do not touch unrelated files, screens, or feature areas. If the preview screen contains any logic beyond just "showing the picked photo before Adjust" (e.g. a cancel/re-pick option, file-size fast-feedback check), that logic must be preserved and relocated to the point of library selection or into the Adjust screen itself — not silently dropped.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Start a new post, pick a photo from the library — confirm the app lands directly on the Adjust/Crop screen with no intermediate preview screen.
+2. Confirm the smart-default ratio (Tall for portrait, 4:5 for landscape/square) and zoom floor are applied exactly as before.
+3. Confirm any "re-pick a different photo" or cancel option that existed on the old preview screen is still available somewhere in the new flow.
+4. Confirm fast file-size feedback (if it existed pre-upload) still fires at the appropriate point.
+5. Complete a full post: photo pick → Adjust → Pet → Caption → Nursery → Post — confirm no step is missing or reordered.
+6. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow (shortened) → sign out. All verified live on pshpsh.net.

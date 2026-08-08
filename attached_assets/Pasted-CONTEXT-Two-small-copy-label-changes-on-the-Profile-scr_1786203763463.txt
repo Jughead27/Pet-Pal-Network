@@ -1,0 +1,22 @@
+CONTEXT: Two small copy/label changes on the Profile screen, under "My Pack" and "Your Invites."
+
+GOAL:
+1. In the "My Pack" section, the eyebrow label currently reads "PETS" above the followed-pets list. Change it to "PETS I FOLLOW" to disambiguate it from "My Pets" (owned pets) above it.
+2. In the "Your Invites" section, drop the "call in" theming in favor of plain, unambiguous utility copy:
+   - Count line: "∞ friends to call in" → "∞ invites available" (or the equivalent non-infinite phrasing for non-admin users with a numeric quota, e.g. "5 invites available")
+   - Button label: "call in a friend" → "invite a friend"
+
+DO NOT MODIFY:
+- Any invite-flow logic, quota display logic, or the underlying invites API/data — this is copy-only, no behavior changes.
+- The reserved "you've been called" line — that stays as-is for the RECEIVING side of the invite loop (landing page / accepted invite), untouched by this change. This prompt only affects the SENDING side (Profile screen copy).
+- Any other section of the Profile screen (My Pets, admin links, feedback, sign out, etc.) — layout, order, and styling unchanged.
+- The visual design/hierarchy of both sections — hairline button style, spacing, etc. — unchanged, text content only.
+
+PRESERVATION CLAUSE: Do not touch unrelated files or screens. Do not rename any component, prop, or variable beyond what's needed to reflect the new copy — if internal variable/function names reference "call in," they may stay as-is (this is a UI copy change, not a rename pass) unless changing them is trivial and zero-risk.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Open Profile — confirm the followed-pets section now reads "PETS I FOLLOW" instead of "PETS."
+2. Confirm the invites section now reads "∞ invites available" (admin) or the correct numeric quota phrasing (non-admin), and the button reads "invite a friend."
+3. Confirm invite functionality itself (generating/sharing a link, quota decrementing) is completely unaffected — same behavior as before, just relabeled.
+4. Confirm the received-invite / accepted-invite copy ("you've been called") is untouched.
+5. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → Profile screen shows both updated labels → sign out. Verified live on pshpsh.net.

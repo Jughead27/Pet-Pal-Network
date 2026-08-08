@@ -194,6 +194,8 @@ export default function AddScreen() {
     }
 
     await processPickedAsset(asset);
+    // Skip the intermediate preview screen — open Adjust directly after picking.
+    setRefinerOpen(true);
   }, [processPickedAsset]);
 
   // ── Image capture — camera (native only) ──────────────────────────────────
