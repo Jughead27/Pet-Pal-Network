@@ -1,0 +1,28 @@
+CONTEXT: The sign-in page has the same over-copied pattern already fixed on signup and the invite landing page — two stacked taglines before the form — plus a button that doesn't read as tappable, and a line that doesn't fit this specific screen's purpose.
+
+GOAL:
+
+Part 1 — Copy trim:
+- Remove both "follow pets, not people." and "curl up, you're home." from the sign-in page. This is the app's highest-frequency, most purely-utility screen (returning users, not a conversion moment) — it doesn't need marketing taglines. Go straight from the "pshpsh" logo/wordmark to the email/password form.
+
+Part 2 — Button styling:
+- Restyle "sign in" as a proper hairline outline button: 1px border, transparent fill, bold label — matching the same locked primary-CTA pattern already applied to "create account" and "Join pshpsh." Reuse the existing shared button component.
+- Apply the same secondary-tier treatment to "continue with google" as was applied on the signup page, for visual consistency between the two auth screens.
+
+Part 3 — Remove misplaced copy:
+- Remove "pshpsh is invite-only." from this screen. That's context relevant to someone who doesn't have an account yet (i.e. belongs on a path for new users), not something a returning user entering their password needs to see.
+- If there is currently a "don't have an account?" or similar link/path on this screen for people without an account, keep that link but simplify its wording if needed — do not remove the actual path to getting an invite, only the standalone marketing-style line.
+
+DO NOT MODIFY:
+- The actual authentication logic (Clerk email/password flow, Google OAuth flow, "forgot password" flow) — copy/styling only.
+- The signup page, invite landing page, or any other screen — already fixed separately.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a copy and button-styling change scoped to the sign-in page only.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Load the sign-in page — confirm no taglines appear between the logo and the form.
+2. Confirm "sign in" renders as a visible hairline outline button.
+3. Confirm "continue with google" matches the secondary-tier styling used on the signup page.
+4. Confirm "pshpsh is invite-only." no longer appears on this screen, but any legitimate "don't have an account" path is still present and functional if it existed before.
+5. Complete a normal sign-in with valid credentials — confirm it still works exactly as before.
+6. Golden path: load sign-in page → confirm trimmed copy + visible button → sign in with valid credentials → land on Home → sign out. Verified live on pshpsh.net.

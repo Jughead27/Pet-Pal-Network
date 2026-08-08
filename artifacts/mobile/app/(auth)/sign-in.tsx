@@ -18,6 +18,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getBaseUrl } from '@workspace/api-client-react';
+import Button from '@/components/Button';
 import { pendingInviteStorage } from '@/utils/pendingInviteStorage';
 
 // Required for OAuth redirect to complete inside Expo Go.
@@ -292,12 +293,7 @@ export default function SignInScreen() {
           <Text style={s.slogan1}>{subtitle.line1}</Text>
           {subtitle.line2 ? <Text style={s.slogan2}>{subtitle.line2}</Text> : null}
         </View>
-      ) : (
-        <View style={s.sloganWrap}>
-          <Text style={s.slogan1}>follow pets, not people.</Text>
-          <Text style={s.slogan2}>curl up, you're home.</Text>
-        </View>
-      )}
+      ) : null}
     </View>
   );
 
@@ -651,16 +647,18 @@ export default function SignInScreen() {
 
           {error ? <Text style={s.errorText}>{error}</Text> : null}
 
-          {/* ── Primary action ── */}
-          <Pressable
-            style={({ pressed }) => [s.primaryAction, pressed && s.dimmed, (!email || !password || loading) && s.disabled]}
+          {/* ── Primary action — shared hairline-outline CTA ── */}
+          <Button
+            variant="primary"
+            fullWidth
             onPress={handleSignIn}
             disabled={!email || !password || loading}
+            style={s.signInBtn}
           >
             {loading
               ? <ActivityIndicator color={FG} size="small" />
               : <Text style={s.primaryActionText}>sign in</Text>}
-          </Pressable>
+          </Button>
 
           {/* ── Google SSO ── */}
           <Pressable
@@ -673,9 +671,8 @@ export default function SignInScreen() {
               : <Text style={s.secondaryActionText}>continue with google</Text>}
           </Pressable>
 
-          {/* ── Invite-only gate ── */}
+          {/* ── Path for people without an account ── */}
           <View style={s.inviteGate}>
-            <Text style={s.inviteGateText}>pshpsh is invite-only.</Text>
             <Pressable
               onPress={() => {
                 setInviteEmail(email);
@@ -685,7 +682,7 @@ export default function SignInScreen() {
               }}
               hitSlop={8}
             >
-              <Text style={s.inviteLink}>request an invite</Text>
+              <Text style={s.inviteLink}>don't have an account? request an invite</Text>
             </Pressable>
           </View>
 
@@ -851,10 +848,14 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   secondaryActionText: {
-    fontFamily: 'Inter_400Regular',
+    fontFamily: 'Inter_500Medium',
     fontSize: 14,
     color: MUTED,
     textAlign: 'center',
+  },
+
+  signInBtn: {
+    marginTop: 8,
   },
 
   // ── Whispers ──────────────────────────────────────────────────────────────
@@ -881,14 +882,6 @@ const s = StyleSheet.create({
   inviteGate: {
     alignItems: 'center',
     marginTop: 48,
-    gap: 8,
-  },
-  inviteGateText: {
-    fontFamily: 'Inter_400Regular',
-    fontSize: 13,
-    color: MUTED,
-    opacity: 0.7,
-    textAlign: 'center',
   },
   inviteLink: {
     fontFamily: 'Inter_400Regular',

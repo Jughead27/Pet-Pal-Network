@@ -1,0 +1,19 @@
+CONTEXT: A user should not be able to revoke an invite (or even see the revoke option) once that invite has already been used/redeemed by someone signing up. The invites table already has a status enum (active/used/revoked) — this fix should ensure that status is correctly respected everywhere the revoke action appears.
+
+GOAL:
+1. Find every place in the app where an invite can be revoked (e.g. Profile's invite list, admin Invite Management) and confirm whether the revoke option/button is currently shown regardless of the invite's status, or only for active ones.
+2. Where the revoke option is shown for an invite that is NOT status='active' (i.e. already used or already revoked), hide/remove that option — a used invite should show as used (e.g. "used" or similar plain state label) with no revoke action available at all.
+3. Add a server-side guard on the revoke endpoint itself: even if a revoke request somehow reaches the server for a non-active invite, reject it (e.g. 409 or similar) rather than allowing a used invite to be marked revoked after the fact.
+
+DO NOT MODIFY:
+- Invite creation logic, the co-pet grant flow, or single-use redemption logic — all confirmed working, untouched by this fix.
+- Any other admin screen not related to invite status/revocation.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a status-check fix applied consistently across UI and API — no schema changes needed since the status enum already exists.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Create an invite, confirm the revoke option is visible and functional while it's still unused (status='active').
+2. Redeem that invite by completing a signup with it, then check the same invite in whatever screen shows it (Profile invite list and/or admin Invite Management) — confirm the revoke option is now gone/hidden, and the invite shows as used instead.
+3. Attempt to hit the revoke endpoint directly for that now-used invite (if testable) — confirm the server rejects it rather than silently succeeding.
+4. Confirm revoking a still-active, unused invite continues to work normally.
+5. Golden path: create an invite → confirm revoke available while active → redeem it via signup → confirm revoke option no longer shown for that invite → sign out. Verified live on pshpsh.net.
