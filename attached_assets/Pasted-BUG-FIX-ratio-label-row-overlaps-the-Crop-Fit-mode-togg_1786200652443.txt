@@ -1,0 +1,38 @@
+BUG FIX — ratio-label row overlaps the Crop/Fit mode-toggle row
+
+CONTEXT: After the WYSIWYG contain-fit fix, live testing found the 1:1/4:5/Original 
+ratio labels and the Crop/Fit mode-toggle buttons are visually overlapping/stacked 
+on screen — "Original" renders directly on top of "Fit," and "1:1  4:5" renders 
+directly on top of "Crop," making them read as one garbled row instead of two 
+separate, legible controls. This is a LAYOUT/POSITIONING problem, not a contrast 
+problem — the previous contrast fix (dark pill background on the ratio labels) is 
+still valid and should stay, but the two rows need actual vertical separation so 
+they don't collide.
+
+GOAL: The ratio-label row (1:1 / 4:5 / Original) and the Crop/Fit mode-toggle row 
+must render as two clearly separate rows with proper spacing between them — no 
+overlap, no visual collision, both fully legible and independently tappable at all 
+times.
+
+Investigate the actual cause: likely an absolute-positioning or z-index issue where 
+both rows are anchored to the same coordinate space instead of being stacked in 
+normal document/flex flow. Fix the underlying layout so this can't regress instead 
+of nudging pixel offsets to "look right" on one screen size — test at a couple of 
+different device widths to confirm it holds.
+
+DO NOT MODIFY:
+- The gesture engine, WYSIWYG contain-fit rendering, or the crop rect data model — 
+  all confirmed working, do not touch.
+- Ratio-label pill background / contrast fix already shipped — keep it.
+
+ACCEPTANCE TEST (must end in the golden path):
+1. On an actual mobile device via pshpsh.net: open compose Adjust on a few 
+   different photos (portrait, landscape, square) — confirm the ratio-label row 
+   and Crop/Fit toggle row are always visually separate, with no overlapping text, 
+   regardless of photo shape or which ratio/mode is active.
+2. Confirm both rows remain fully legible and tappable.
+3. Re-confirm WYSIWYG still holds (crop choice matches posted result) — quick 
+   sanity check, not a full re-test.
+4. Golden path: sign in → Home → boop persists → Nursery pager → post flow → sign 
+   out.
+5. Verify on web, iOS, and Android.

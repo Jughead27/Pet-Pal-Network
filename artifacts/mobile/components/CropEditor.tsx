@@ -195,7 +195,10 @@ export default function CropEditor({
 
   // ── Layout ─────────────────────────────────────────────────────────────────
   const TOP_BAR_H    = insets.top + 56;
-  const BOTTOM_BAR_H = Math.max(insets.bottom, 16) + (hideModetoggle ? 80 : 116);
+  // When the aspect-ratio picker is shown it adds one extra row inside the bottom
+  // bar. Reserve that height so the crop window never slides under the bar.
+  const PICKER_ROW_H = showAspectPicker ? 44 : 0;
+  const BOTTOM_BAR_H = Math.max(insets.bottom, 16) + (hideModetoggle ? 80 : 116) + PICKER_ROW_H;
   const availW = screenW;
   const availH = screenH - TOP_BAR_H - BOTTOM_BAR_H;
 
@@ -520,35 +523,6 @@ export default function CropEditor({
             <View style={StyleSheet.absoluteFill} />
           </GestureDetector>
 
-          {/* Aspect-ratio picker — floats just below the crop-frame border.
-              Rendered after GestureDetector so it sits on top and receives taps. */}
-          {showAspectPicker && (
-            <View
-              pointerEvents="box-none"
-              style={[styles.ratioPicker, { top: cropCY + cropH / 2 + 10 }]}
-            >
-              {/* Dark pill scrim keeps labels legible against any photo background */}
-              <View style={styles.ratioScrim}>
-                {ratioOptions.map((opt) => {
-                  const active = Math.abs(activeAspect - opt.value) < 0.005;
-                  return (
-                    <TouchableOpacity
-                      key={opt.label}
-                      onPress={() => handleAspectChange(opt.value)}
-                      hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
-                      accessibilityRole="radio"
-                      accessibilityState={{ checked: active }}
-                      accessibilityLabel={opt.label}
-                    >
-                      <Text style={[styles.ratioLabel, active && styles.ratioLabelActive]}>
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </View>
-          )}
         </>
       )}
 
@@ -571,6 +545,31 @@ export default function CropEditor({
 
       {/* ── Bottom bar ── */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 16) + 8 }]}>
+        {/* Ratio picker — only in cover mode; lives in the bar so it can never
+            overlap the mode toggle regardless of crop-window height. */}
+        {showAspectPicker && !isContain && (
+          <View style={styles.ratioPicker}>
+            <View style={styles.ratioScrim}>
+              {ratioOptions.map((opt) => {
+                const active = Math.abs(activeAspect - opt.value) < 0.005;
+                return (
+                  <TouchableOpacity
+                    key={opt.label}
+                    onPress={() => handleAspectChange(opt.value)}
+                    hitSlop={{ top: 8, bottom: 8, left: 12, right: 12 }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: active }}
+                    accessibilityLabel={opt.label}
+                  >
+                    <Text style={[styles.ratioLabel, active && styles.ratioLabelActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+        )}
         {!hideModetoggle && (
           <View style={styles.modeToggle}>
             <Pressable
@@ -694,12 +693,10 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
   },
 
-  // Aspect-ratio picker
+  // Aspect-ratio picker — now in normal bottom-bar flex flow, not absolute
   ratioPicker: {
-    position: 'absolute' as const,
-    left: 0,
-    right: 0,
-    alignItems: 'center' as const,  // centres the pill horizontally
+    alignItems: 'center' as const,
+    marginBottom: 12,
   },
   ratioScrim: {
     flexDirection: 'row' as const,
