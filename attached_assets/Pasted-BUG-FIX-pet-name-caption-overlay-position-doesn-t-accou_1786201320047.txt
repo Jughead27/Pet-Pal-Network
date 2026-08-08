@@ -1,0 +1,48 @@
+BUG FIX — pet-name/caption overlay position doesn't account for blur-letterboxed 
+(crop-contain) posts
+
+CONTEXT: The pet-name/caption overlay (bottom scrim showing pet name, following-
+status, breed, "View full photo") was built assuming the old single-rendering-mode 
+feed, where the image always fills the tile edge-to-edge (cover-fit). Now that the 
+WYSIWYG fix allows posts to render with blur letterboxing (crop-contain — see 
+FocalImage.tsx isCropContain branch), the overlay's positioning does not account 
+for whether it's landing over actual photo content or over a blurred letterbox pad. 
+In a real screenshot, this produced an overlay placement that looked broken/
+mistaken — likely landing in the ambiguous zone between real image and blur pad, or 
+overlapping content it shouldn't.
+
+GOAL: The pet-name/caption overlay must always anchor sensibly relative to the 
+ACTUAL PHOTO CONTENT bounds, not the outer container bounds — regardless of 
+whether the post is rendering full-bleed (cover-fit) or letterboxed (crop-contain 
+with blur padding).
+
+Specifically:
+- For posts rendering with blur letterboxing (crop-contain), determine whether the 
+  overlay should sit over the blur pad area (treating it as "safe" negative space, 
+  similar to how Instagram/other apps place captions over letterboxed video) or 
+  should hug the edge of the actual photo content — pick whichever avoids ever 
+  rendering across the photo/blur boundary in a way that looks accidental. Use 
+  design judgment here consistent with the existing frosted-scrim/gradient pattern 
+  already used elsewhere in the app.
+- For posts still rendering full-bleed (cover-fit, no crop rect, or a crop rect 
+  that happens to fill the container), preserve exactly the current overlay 
+  behavior — no regression for the majority of existing/simple posts.
+
+DO NOT MODIFY:
+- The gesture engine, WYSIWYG contain-fit image rendering logic, or the crop rect 
+  data model — all confirmed working, do not touch.
+- The ratio-label/mode-toggle layout fix from the prior delivery — keep it intact.
+- Boop/treat action rail positioning (already patched for crop-contain posts in an 
+  earlier delivery) — do not regress that fix.
+
+ACCEPTANCE TEST (must end in the golden path):
+1. On an actual mobile device via pshpsh.net: find or create a few posts with 
+   different framing — a full-bleed cover-fit post, and a crop-contain post with 
+   visible blur letterboxing (e.g. a tall Original-ratio photo posted with padding).
+2. Confirm the pet-name/caption overlay looks intentional and legible on EVERY 
+   case — never overlapping oddly, never looking like a rendering mistake.
+3. Confirm existing full-bleed posts are completely unchanged from current 
+   behavior.
+4. Golden path: sign in → Home → boop persists → Nursery pager → post flow → sign 
+   out.
+5. Verify on web, iOS, and Android.

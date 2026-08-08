@@ -204,14 +204,26 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
       // Crop-contain: scale so the crop rect fits within the container without
       // cutting anything — preserving the user's exact framing from the editor.
       // Gaps (when crop aspect ≠ container aspect) are filled by the blur bg.
-      const cropPxW = (cropW as number) * nw;
-      const cropPxH = (cropH as number) * nh;
-      const s       = Math.min(cw / cropPxW, ch / cropPxH);
-      const imgW    = nw * s;
-      const imgH    = nh * s;
-      // Shift the full scaled image so the crop rect is centred in the container.
-      const imgLeft = (cw - cropPxW * s) / 2 - (cropX as number) * imgW;
-      const imgTop  = (ch - cropPxH * s) / 2 - (cropY as number) * imgH;
+      const cropPxW    = (cropW as number) * nw;
+      const cropPxH    = (cropH as number) * nh;
+      const s          = Math.min(cw / cropPxW, ch / cropPxH);
+      const imgW       = nw * s;
+      const imgH       = nh * s;
+      const imgLeft    = (cw - cropPxW * s) / 2 - (cropX as number) * imgW;
+
+      // Vertical position: when containAlignBottom is set, anchor the bottom of
+      // the crop-rect display just above the overlay (same contract as isContain).
+      // This pushes the photo content up so the overlay lands cleanly in the blur
+      // letterbox pad below — never straddling the photo/blur boundary.
+      // Fall back to vertical-centre when the photo is tall enough that anchoring
+      // would push it off the top.
+      const displayCropH = (cropH as number) * imgH;
+      const centeredTop  = (ch - displayCropH) / 2 - (cropY as number) * imgH;
+      const anchoredTop  = containAlignBottom != null
+        ? ch - containAlignBottom - (cropY as number) * imgH - displayCropH
+        : centeredTop;
+      const imgTop = Math.max(anchoredTop, centeredTop);
+
       return { position: 'absolute' as const, width: imgW, height: imgH, left: imgLeft, top: imgTop };
     }
 
@@ -255,7 +267,7 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
     const top  = -Math.max(0, Math.min(fy * (sh - ch), sh - ch));
 
     return { position: 'absolute' as const, width: sw, height: sh, left, top };
-  }, [container, natural, focusX, focusY, cropX, cropY, cropW, cropH, isContain, isCropContain]);
+  }, [container, natural, focusX, focusY, cropX, cropY, cropW, cropH, isContain, isCropContain, containAlignBottom]);
 
   // After initial failure + one retry, show the placeholder.
   if (retries > 1) {

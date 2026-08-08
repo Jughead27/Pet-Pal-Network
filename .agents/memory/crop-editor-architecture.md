@@ -127,6 +127,8 @@ When `isCropContain`:
 
 **Key rule:** `mode='cover'` + cropRect = WYSIWYG blur letterbox (feed/preview). `mode=null` + cropRect = rect-driven cover (avatar). `mode='contain'` = full-image blur letterbox.
 
+**Overlay anchoring (isCropContain):** `containAlignBottom` is now respected in the isCropContain useMemo branch. Formula: `anchoredTop = ch - containAlignBottom - cropY*imgH - displayCropH`; `centeredTop = (ch - displayCropH)/2 - cropY*imgH`; `imgTop = Math.max(anchoredTop, centeredTop)`. This anchors the photo content above the overlay for letterboxed posts and falls back to centering when the photo is too tall to shift further. Allows the overlay to sit cleanly in the blur pad.
+
 ---
 
 ## What was removed
