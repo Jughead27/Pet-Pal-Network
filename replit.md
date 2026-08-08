@@ -62,7 +62,7 @@ A pet-only social network: pets are the profiles, humans are accounts that act o
 ## Gotchas (hard-won — do not relearn)
 
 - Native behavior is verified in Expo Go on a physical device. The web preview lies about native.
-- NO `react-native-reanimated` imports anywhere — use React Native's built-in Animated API only. (The package remains in package.json solely as a required peer dependency; never import it, never add its babel plugin.)
+- NO `react-native-reanimated` imports anywhere **except `CropEditor.tsx`**, which is the approved exception — it uses Reanimated shared values + `useAnimatedStyle` for UI-thread gesture animation, and `react-native-gesture-handler` `GestureDetector` for Pan + Pinch. Everywhere else, use React Native's built-in Animated API only. Do not add the Reanimated babel plugin — `babel-preset-expo` (Expo 54) includes the worklet transform automatically.
 - NO NativeTabs / SF-symbol tab paths — classic Tabs only. NativeTabs silently swaps custom icons for Apple glyphs.
 - Icons are shared react-native-svg components (Svg, Path, Circle, Ellipse, Rect). Never raw `<svg>` markup, never per-platform icon forks.
 - The raised Add button requires `overflow: visible` on the nav bar and ALL ancestor containers — restyling the bar can silently reintroduce clipping.

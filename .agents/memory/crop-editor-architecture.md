@@ -11,22 +11,42 @@ Model: **fixed crop window, image pans/zooms underneath** (Instagram model).
 - `targetAspect` prop drives the crop window shape — compose passes `feedAspect`, avatar passes `columnWidth / HERO_HEIGHT`.
 - `hideModetoggle` — hides the Crop/Fit toggle; always true for avatar.
 - `cancelIcon` — 'back' (←) or 'cancel' (×); avatar uses 'back'.
-- Touch: `PanResponder` handles single-finger pan and two-finger pinch-to-zoom.
-- Web: same PanResponder (pointer events), plus native `wheel` listener attached to the outer `View` ref for scroll-to-zoom toward cursor.
-- State: refs for gesture math (`scaleRef`, `offsetRef`), `useState` for re-render.
 - Returns `CropRect` (0–1 fractions of natural image) + mode via `onConfirm`.
 
+### Gesture layer (current: RNGH + Reanimated)
+
+Uses **react-native-gesture-handler** `GestureDetector` + **react-native-reanimated** shared values.
+Both packages were already installed (`rngh@2.28.0`, `reanimated@4.1.7`).
+`GestureHandlerRootView` is already in `app/_layout.tsx` — no additional setup needed.
+`babel-preset-expo` in Expo 54 includes the Reanimated worklet transform automatically — **no babel.config.js change needed**.
+
+- **Pan**: `Gesture.Pan().minPointers(1).maxPointers(1)` — single-finger drag, all directions.
+- **Pinch**: `Gesture.Pinch()` — two-finger zoom toward the focal midpoint. Uses `onStart` (not `onBegin`) to capture initial focalX/focalY once both fingers are tracked.
+- **Composed**: `Gesture.Simultaneous(pan, pinch)` — maxPointers(1) on Pan makes them naturally exclusive by finger count; no conflict logic needed.
+- **Animated image**: `Animated.Image` from `react-native-reanimated` + `useAnimatedStyle` — runs on UI thread (no JS-bridge jank).
+- **Shared values**: `scale`, `offsetX`, `offsetY` for live state; `savedScale/X/Y`, `pinchFocalX/Y` for gesture-base; layout constants (`cropWV`, `cropHV`, `minSV`, `maxSV`, etc.) updated in `useEffect` so worklets can read current geometry.
+- **Web wheel**: native `wheel` listener writes directly to shared values (JS thread write is fine in Reanimated v4).
+- **Safari pinch fix**: `gesturestart` + `gesturechange` non-passive listeners calling `preventDefault()` — required because Safari ignores `touch-action:none` for pinch at the OS level.
+
+### replit.md rule exception
+
+`replit.md` has a "NO react-native-reanimated imports" rule (the package is a peer dep). CropEditor is the **explicit approved exception** — user approved direct import of both reanimated and gesture-handler in this component.
+
+### Worklet-safe helpers
+
+`clamp` and `clampOffset` have `'worklet'` directive — callable from both UI thread (gesture callbacks) and JS thread (useEffect re-clamp, wheel handler). `stateToRect` and `rectToState` are JS-thread only.
+
 ### Key geometry helpers
-- `clampOffset` — prevents image being pulled off the crop window (no gaps).
+- `clampOffset(ox, oy, scale, cropW, cropH, nw, nh)` — prevents image being pulled off the crop window (no gaps). Takes scalars not an object (minimises worklet allocation).
 - `stateToRect(scale, offset, cropW, cropH, nw, nh)` → CropRect for confirm.
 - `rectToState(rect, cropW, cropH, nw, nh, minScale, maxScale)` → initial scale+offset from an existing CropRect.
 
 ### Zoom range
-`minScale = max(cropW/naturalWidth, cropH/naturalHeight)` (just covers the crop window)  
+`minScale = max(cropW/naturalWidth, cropH/naturalHeight)` (just covers the crop window)
 `maxScale = minScale * 8` (8× range)
 
 ### Orientation/resize handling
-`useEffect` on `[minScale, maxScale, cropW, cropH]` re-clamps state so the image stays valid after orientation flip or window resize.
+`useEffect` on `[minScale, maxScale, cropW, cropH, cropCX, cropCY]` syncs layout shared values and re-clamps state after orientation flip or window resize.
 
 ---
 
@@ -41,6 +61,7 @@ Model: **fixed crop window, image pans/zooms underneath** (Instagram model).
 avatar_crop_x, avatar_crop_y, avatar_crop_w, avatar_crop_h
 ```
 Migration: `ALTER TABLE pets ADD COLUMN IF NOT EXISTS avatar_crop_x real` (×4).
+These guards live at the top of `main()` in `lib/db/src/seed.ts` — required because seed runs in BUILD phase before drizzle-kit push (PROMOTE phase).
 
 ### API changes (additive)
 - `PATCH /pets/:id/avatar` body: new optional `cropX, cropY, cropW, cropH` fields.
@@ -66,7 +87,7 @@ Sends `{ avatarKey, focusX: null, focusY: null, cropX: rect.x, cropY: rect.y, cr
 
 ## Compose integration (add.tsx)
 
-`FrameRefiner` replaced by `CropEditor` with `targetAspect={feedAspect}`. 
+`FrameRefiner` replaced by `CropEditor` with `targetAspect={feedAspect}`.
 `handleRefineConfirm(rect, mode)` signature unchanged — CropEditor's `onConfirm` matches it exactly.
 
 ---

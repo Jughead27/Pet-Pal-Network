@@ -1,0 +1,76 @@
+ARCHITECTURE FIX — replace hand-rolled PanResponder gesture math with 
+react-native-gesture-handler + react-native-reanimated for best-in-class crop UX
+
+CONTEXT: Two prior patches were applied to CropEditor.tsx (WYSIWYG rect model, 
+then touch-action/preventDefault). After the second patch, pan now works correctly 
+in all directions (vertical and horizontal) on real mobile devices via pshpsh.net. 
+However, pinch-to-zoom still does not work at all — pinching zooms the entire 
+browser page/viewport instead of the image inside the crop frame. This is the core 
+photo-posting flow — it needs to feel as good as Instagram's crop tool, not just 
+"functional."
+
+ROOT CAUSE: PanResponder (the current gesture system) has no native pinch 
+recognizer — pinch has to be manually reconstructed from raw touch-point distances, 
+which is fragile and known to behave inconsistently on React Native Web 
+specifically. Continuing to patch this approach is unlikely to reach production 
+quality.
+
+GOAL: Replace the gesture layer inside CropEditor.tsx with 
+react-native-gesture-handler + react-native-reanimated — the standard, proven 
+gesture system for React Native apps, with real Pinch and Pan gesture recognizers 
+that work consistently across web, iOS, and Android from one codebase.
+
+Requirements for the rebuilt CropEditor:
+- Pinch-to-zoom: smooth, center-fixed (zooms toward the pinch midpoint, not the 
+  image's fixed origin), wide zoom range (comfortably supports both tight close-ups 
+  and full-context zoom-out), and the pinch gesture must be FULLY captured by the 
+  component — the browser page/viewport must never zoom.
+- Pan: free movement in all directions (not just horizontal) at any zoom level, 
+  clamped so the image can never pan to reveal empty space outside the crop frame. 
+  (This already works correctly — preserve this behavior, don't regress it while 
+  fixing zoom.)
+- Feel: smooth, responsive, no jank — comparable to Instagram/iOS-native photo 
+  crop tools. Use Reanimated's worklet-based animations (runs on the UI thread) 
+  rather than JS-thread state updates, which is what makes this class of gesture 
+  feel instant rather than laggy.
+- Must work identically for BOTH surfaces that use CropEditor: post-compose Adjust 
+  and avatar/profile-picture edit.
+- Preserve the WYSIWYG fix already in place (crop rect model, avatar_crop_x/y/w/h) 
+  — the saved crop must still exactly match what was shown during editing.
+
+Check whether react-native-gesture-handler and react-native-reanimated are already 
+installed as dependencies; if not, add them and confirm they're compatible with the 
+current Expo SDK version and work correctly in the Expo web export (not just 
+native) — this is a web-first app, so web compatibility is not optional.
+
+DO NOT MODIFY:
+- Anything outside CropEditor.tsx and its direct gesture-handling logic.
+- The crop rect data model / API contract (avatar_crop_x/y/w/h, PATCH endpoint) — 
+  keep this fix isolated to the gesture/rendering layer.
+- The Home feed, its rendering pipeline (cover-fit + focal point), or any 
+  boop/treat interaction logic — the feed experience is already correct and 
+  well-liked and must remain completely untouched by this change.
+- Any other screen's touch or gesture behavior.
+
+PRESERVATION CLAUSE: This is a larger change than prior patches — take the time to 
+get the gesture math right rather than shipping a partial fix. If Reanimated/
+gesture-handler introduces any Metro bundler or web-build configuration changes, 
+flag them clearly in your report rather than silently modifying build config.
+
+ACCEPTANCE TEST (must end in the golden path):
+1. On an ACTUAL mobile device (not desktop browser touch emulation) via 
+   pshpsh.net: open compose, pick a photo, open Adjust.
+2. Pinch to zoom — confirm ONLY the image zooms; the browser page/viewport does 
+   NOT zoom at all, at any point during the gesture.
+3. Pan in all directions (up/down/left/right/diagonal) at multiple zoom levels — 
+   confirm smooth, free movement with no axis restriction (this already worked; 
+   confirm no regression).
+4. Repeat steps 2-3 on avatar/profile-picture edit.
+5. Confirm the WYSIWYG match still holds: crop an off-center, zoomed subject, 
+   save, and confirm the saved avatar matches exactly what was shown while editing.
+6. Golden path: sign in → Home → boop persists → Nursery pager → post flow (using 
+   the rebuilt Adjust tool) → sign out.
+7. Verify on web, iOS, and Android.
+8. Confirm the Home feed is visually and behaviorally unchanged — cover-fit 
+   framing, focal point, boop/treat interactions, all identical to before this 
+   change.

@@ -4,16 +4,27 @@
  * Model: fixed crop window (at targetAspect) centred on screen.
  * The user pans and pinch-zooms the image underneath — "Instagram model".
  *
- * Touch  : PanResponder for single-finger pan and two-finger pinch-to-zoom.
- * Web    : same PanResponder (RN Web uses pointer events), plus
- *          native wheel event for scroll-to-zoom (attached via ref).
+ * Gestures : react-native-gesture-handler Pan + Pinch via GestureDetector.
+ *             Both run as Reanimated worklets on the UI thread — no JS-bridge
+ *             jank during gestures.
+ *   Pan  — single-finger drag in any direction (maxPointers: 1).
+ *   Pinch — two-finger zoom toward the pinch midpoint (natural focal-point math).
+ *   Simultaneous() lets both be registered; maxPointers(1) on Pan makes them
+ *   naturally exclusive by finger count.
+ *
+ * Web desktop : GestureDetector (Pointer Events) + native wheel for scroll-to-zoom.
+ * Web Safari  : gesturestart/gesturechange listeners prevent native page-zoom
+ *               (Safari ignores touch-action:none for pinch in some iOS versions).
  *
  * Zoom range: 1× (image just covers the crop window) → 8× that scale.
- * No react-native-reanimated — standard Animated / PanResponder only.
  *
- * onConfirm(rect, mode) returns a CropRect (0–1 fractions of the
- * natural image) and the selected mode.
- * In contain mode the rect is {x:0,y:0,w:1,h:1} — FocalImage ignores it.
+ * Reanimated/gesture-handler setup notes:
+ *   — GestureHandlerRootView is already in app/_layout.tsx; nothing to add.
+ *   — babel-preset-expo (Expo 54) includes the Reanimated worklet transform
+ *     automatically; no explicit plugin entry in babel.config.js is required.
+ *
+ * onConfirm(rect, mode) returns a CropRect (0–1 fractions of the natural image)
+ * and the selected mode. In contain mode the rect is {x:0,y:0,w:1,h:1}.
  */
 
 import React, {
@@ -25,7 +36,6 @@ import React, {
 } from 'react';
 import {
   Image,
-  PanResponder,
   Platform,
   Pressable,
   StatusBar,
@@ -35,6 +45,11 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, X } from 'phosphor-react-native';
 import type { CropRect } from '@/utils/computeAutoFrame';
@@ -64,23 +79,36 @@ export interface CropEditorProps {
   onCancel: () => void;
 }
 
-// ─── Pure geometry helpers ─────────────────────────────────────────────────────
+// ─── Worklet-safe geometry helpers ────────────────────────────────────────────
+// The 'worklet' directive lets these run on the UI thread inside gesture
+// callbacks AND on the JS thread everywhere else — one implementation, both
+// contexts.
 
-const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+const clamp = (v: number, lo: number, hi: number): number => {
+  'worklet';
+  return Math.max(lo, Math.min(hi, v));
+};
 
-/** Clamp offset so the image always covers the crop window with no gaps. */
-function clampOffset(
-  offset: { x: number; y: number },
+/**
+ * Clamp offset so the image always covers the crop window — no empty gaps.
+ * Accepts scalars rather than an object so worklet allocation stays minimal.
+ */
+const clampOffset = (
+  ox: number,
+  oy: number,
   scale: number,
   cropW: number,
   cropH: number,
   nw: number,
   nh: number,
-): { x: number; y: number } {
+): { x: number; y: number } => {
+  'worklet';
   const maxX = Math.max(0, (scale * nw - cropW) / 2);
   const maxY = Math.max(0, (scale * nh - cropH) / 2);
-  return { x: clamp(offset.x, -maxX, maxX), y: clamp(offset.y, -maxY, maxY) };
-}
+  return { x: clamp(ox, -maxX, maxX), y: clamp(oy, -maxY, maxY) };
+};
+
+// ─── JS-thread-only geometry helpers ─────────────────────────────────────────
 
 /** Convert (scale, offset) → CropRect in natural-image fractions. */
 function stateToRect(
@@ -93,14 +121,13 @@ function stateToRect(
 ): CropRect {
   const displayW = scale * nw;
   const displayH = scale * nh;
-  // Top-left of the image, relative to the crop-window top-left:
-  const imgLeft = displayW / 2 - cropW / 2 - offset.x;
-  const imgTop  = displayH / 2 - cropH / 2 - offset.y;
+  const imgLeft  = displayW / 2 - cropW / 2 - offset.x;
+  const imgTop   = displayH / 2 - cropH / 2 - offset.y;
   return {
     x: clamp(imgLeft / displayW, 0, 1),
     y: clamp(imgTop  / displayH, 0, 1),
-    w: clamp(cropW / displayW, 0, 1),
-    h: clamp(cropH / displayH, 0, 1),
+    w: clamp(cropW   / displayW, 0, 1),
+    h: clamp(cropH   / displayH, 0, 1),
   };
 }
 
@@ -114,14 +141,13 @@ function rectToState(
   minScale: number,
   maxScale: number,
 ): { scale: number; offset: { x: number; y: number } } {
-  const sw = cropW / (rect.w * nw);
-  const sh = cropH / (rect.h * nh);
+  const sw    = cropW / (rect.w * nw);
+  const sh    = cropH / (rect.h * nh);
   const scale = clamp(Math.max(sw, sh), minScale, maxScale);
-  // Rect centre displacement from the image centre (in [−0.5, 0.5]).
-  const cx = rect.x + rect.w / 2 - 0.5;
-  const cy = rect.y + rect.h / 2 - 0.5;
-  const offset = { x: -cx * scale * nw, y: -cy * scale * nh };
-  return { scale, offset: clampOffset(offset, scale, cropW, cropH, nw, nh) };
+  const cx    = rect.x + rect.w / 2 - 0.5;
+  const cy    = rect.y + rect.h / 2 - 0.5;
+  const off   = clampOffset(-cx * scale * nw, -cy * scale * nh, scale, cropW, cropH, nw, nh);
+  return { scale, offset: off };
 }
 
 // ─── CropEditor ───────────────────────────────────────────────────────────────
@@ -163,211 +189,144 @@ export default function CropEditor({
 
   // ── Scale limits ───────────────────────────────────────────────────────────
   const minScale = Math.max(cropW / naturalWidth, cropH / naturalHeight);
-  const maxScale = minScale * 8;  // 8× zoom range
+  const maxScale = minScale * 8;
 
   // ── Initial state (computed once on mount) ─────────────────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const initState = useMemo(() => {
     if (initialRect && initialRect.w > 0 && initialRect.h > 0) {
-      return rectToState(
-        initialRect, cropW, cropH, naturalWidth, naturalHeight, minScale, maxScale,
-      );
+      return rectToState(initialRect, cropW, cropH, naturalWidth, naturalHeight, minScale, maxScale);
     }
     return { scale: minScale, offset: { x: 0, y: 0 } };
-  }, []); // run exactly once — captures mount-time geometry
+  }, []); // intentionally empty — captures mount-time geometry only
 
-  // ── State: refs = gesture truth, useState = render driver ─────────────────
-  const scaleRef  = useRef(initState.scale);
-  const offsetRef = useRef(initState.offset);
-  const [renderScale,  setRenderScale]  = useState(initState.scale);
-  const [renderOffset, setRenderOffset] = useState(initState.offset);
+  // ── Shared values: gesture truth (UI thread) ───────────────────────────────
+  const scale   = useSharedValue(initState.scale);
+  const offsetX = useSharedValue(initState.offset.x);
+  const offsetY = useSharedValue(initState.offset.y);
 
-  /** Commit new scale+offset to both refs and render state. */
-  const commit = useCallback((s: number, o: { x: number; y: number }) => {
-    scaleRef.current  = s;
-    offsetRef.current = o;
-    setRenderScale(s);
-    setRenderOffset({ ...o });
-  }, []);
+  // Saved at gesture-start; gesture worklets compute deltas from these.
+  const savedScale   = useSharedValue(initState.scale);
+  const savedOffsetX = useSharedValue(initState.offset.x);
+  const savedOffsetY = useSharedValue(initState.offset.y);
 
-  // Live refs read by gesture handlers and the wheel listener.
-  const cropRef     = useRef({ cropW, cropH, cropCX, cropCY });
-  cropRef.current   = { cropW, cropH, cropCX, cropCY };
-  const limRef      = useRef({ minScale, maxScale });
-  limRef.current    = { minScale, maxScale };
-  const natRef      = useRef({ nw: naturalWidth, nh: naturalHeight });
-  natRef.current    = { nw: naturalWidth, nh: naturalHeight };
-  const commitRef   = useRef(commit);
-  commitRef.current = commit;
+  // Pinch focal point relative to crop-window centre, recorded on gesture start.
+  const pinchFocalX = useSharedValue(0);
+  const pinchFocalY = useSharedValue(0);
 
-  // Re-clamp when the crop window or zoom limits change (e.g. orientation flip).
+  // Layout constants that worklets need to read.
+  // Written from the JS thread in useEffect; read on the UI thread in worklets.
+  const cropWV  = useSharedValue(cropW);
+  const cropHV  = useSharedValue(cropH);
+  const minSV   = useSharedValue(minScale);
+  const maxSV   = useSharedValue(maxScale);
+  const nwV     = useSharedValue(naturalWidth);
+  const nhV     = useSharedValue(naturalHeight);
+  const cropCXV = useSharedValue(cropCX);
+  const cropCYV = useSharedValue(cropCY);
+
+  // Keep layout shared values in sync with JS-thread layout math, and
+  // re-clamp scale/offset when geometry changes (e.g. orientation flip).
   useEffect(() => {
-    const s = clamp(scaleRef.current, minScale, maxScale);
-    const o = clampOffset(offsetRef.current, s, cropW, cropH, naturalWidth, naturalHeight);
-    commit(s, o);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [minScale, maxScale, cropW, cropH]);
+    cropWV.value  = cropW;
+    cropHV.value  = cropH;
+    minSV.value   = minScale;
+    maxSV.value   = maxScale;
+    cropCXV.value = cropCX;
+    cropCYV.value = cropCY;
 
-  // ── Gesture base state ─────────────────────────────────────────────────────
-  type PanBase   = { type: 'pan';   startOffset: { x: number; y: number } };
-  type PinchBase = {
-    type:        'pinch';
-    startDist:   number;
-    startScale:  number;
-    startOffset: { x: number; y: number };
-    /** Pinch midpoint relative to crop-window centre (screen px). */
-    midX: number;
-    midY: number;
-  };
-  const gestureBase = useRef<PanBase | PinchBase | null>(null);
+    const s   = Math.max(minScale, Math.min(maxScale, scale.value));
+    const off = clampOffset(offsetX.value, offsetY.value, s, cropW, cropH, naturalWidth, naturalHeight);
+    scale.value   = s;
+    offsetX.value = off.x;
+    offsetY.value = off.y;
+    // scale/offsetX/offsetY are stable shared-value references, not reactive deps.
+    // naturalWidth/naturalHeight are static props.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [minScale, maxScale, cropW, cropH, cropCX, cropCY]);
 
-  // ── PanResponder ───────────────────────────────────────────────────────────
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder:  () => true,
-      onPanResponderTerminationRequest: () => false,
+  // ── Gesture: single-finger pan ─────────────────────────────────────────────
+  const panGesture = Gesture.Pan()
+    .minPointers(1)
+    .maxPointers(1)   // fails when a second finger appears → Pinch takes over
+    .onBegin(() => {
+      savedOffsetX.value = offsetX.value;
+      savedOffsetY.value = offsetY.value;
+    })
+    .onUpdate((e) => {
+      const off = clampOffset(
+        savedOffsetX.value + e.translationX,
+        savedOffsetY.value + e.translationY,
+        scale.value,
+        cropWV.value, cropHV.value,
+        nwV.value, nhV.value,
+      );
+      offsetX.value = off.x;
+      offsetY.value = off.y;
+    });
 
-      onPanResponderGrant: (evt) => {
-        const ts = evt.nativeEvent.touches;
-        if (ts && ts.length >= 2) {
-          const t1 = ts[0], t2 = ts[1];
-          gestureBase.current = {
-            type:        'pinch',
-            startDist:   Math.hypot(t2.pageX - t1.pageX, t2.pageY - t1.pageY),
-            startScale:  scaleRef.current,
-            startOffset: { ...offsetRef.current },
-            midX: (t1.pageX + t2.pageX) / 2 - cropRef.current.cropCX,
-            midY: (t1.pageY + t2.pageY) / 2 - cropRef.current.cropCY,
-          };
-        } else {
-          gestureBase.current = {
-            type:        'pan',
-            startOffset: { ...offsetRef.current },
-          };
-        }
-      },
+  // ── Gesture: two-finger pinch-to-zoom ─────────────────────────────────────
+  // onStart (not onBegin) fires when the pinch is officially recognised with
+  // both fingers tracked, giving a valid focalX/focalY midpoint.
+  const pinchGesture = Gesture.Pinch()
+    .onStart((e) => {
+      savedScale.value   = scale.value;
+      savedOffsetX.value = offsetX.value;
+      savedOffsetY.value = offsetY.value;
+      // Focal point relative to crop-window centre (screen px).
+      pinchFocalX.value  = e.focalX - cropCXV.value;
+      pinchFocalY.value  = e.focalY - cropCYV.value;
+    })
+    .onUpdate((e) => {
+      const ss  = savedScale.value;
+      const nw  = nwV.value;
+      const nh  = nhV.value;
+      const fX  = pinchFocalX.value;
+      const fY  = pinchFocalY.value;
+      const sox = savedOffsetX.value;
+      const soy = savedOffsetY.value;
 
-      onPanResponderMove: (evt, gs) => {
-        const base = gestureBase.current;
-        if (!base) return;
-        const { cropW: cw, cropH: ch } = cropRef.current;
-        const { minScale: minS, maxScale: maxS } = limRef.current;
-        const { nw, nh } = natRef.current;
+      const newScale = clamp(ss * e.scale, minSV.value, maxSV.value);
 
-        const ts = evt.nativeEvent.touches;
+      // Keep the image point that was under the pinch midpoint stationary.
+      // Compute where that point sits in normalised image coords:
+      const imgPtX = (fX - sox) / (ss * nw);
+      const imgPtY = (fY - soy) / (ss * nh);
+      // Then find the offset that puts it back under the same focal point
+      // at the new scale:
+      const newOx = fX - imgPtX * newScale * nw;
+      const newOy = fY - imgPtY * newScale * nh;
 
-        if (ts && ts.length >= 2 && base.type === 'pinch') {
-          const t1 = ts[0], t2 = ts[1];
-          const dist = Math.hypot(t2.pageX - t1.pageX, t2.pageY - t1.pageY);
-          if (base.startDist <= 0) return;
+      const off = clampOffset(newOx, newOy, newScale, cropWV.value, cropHV.value, nw, nh);
+      scale.value   = newScale;
+      offsetX.value = off.x;
+      offsetY.value = off.y;
+    });
 
-          const newScale = clamp(base.startScale * (dist / base.startDist), minS, maxS);
+  // Simultaneous: both gestures are registered; they are naturally exclusive
+  // because Pan has maxPointers(1) and Pinch requires 2 fingers.
+  const composed = Gesture.Simultaneous(panGesture, pinchGesture);
 
-          // Keep the image point under the pinch midpoint stationary.
-          const { midX, midY, startOffset, startScale } = base;
-          const imgPtX = (midX - startOffset.x) / (startScale * nw);
-          const imgPtY = (midY - startOffset.y) / (startScale * nh);
-          const newOffset = {
-            x: midX - imgPtX * newScale * nw,
-            y: midY - imgPtY * newScale * nh,
-          };
-          const clamped = clampOffset(newOffset, newScale, cw, ch, nw, nh);
-          scaleRef.current  = newScale;
-          offsetRef.current = clamped;
-          setRenderScale(newScale);
-          setRenderOffset({ ...clamped });
-
-        } else if (base.type === 'pan') {
-          const newOffset = {
-            x: base.startOffset.x + gs.dx,
-            y: base.startOffset.y + gs.dy,
-          };
-          const clamped = clampOffset(newOffset, scaleRef.current, cw, ch, nw, nh);
-          offsetRef.current = clamped;
-          setRenderOffset({ ...clamped });
-        }
-      },
-
-      onPanResponderRelease: () => {
-        gestureBase.current = null;
-      },
-    }),
-  ).current;
-
-  // ── Web scroll-to-zoom + touch gesture capture ────────────────────────────
-  const outerRef = useRef<View>(null);
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const el = outerRef.current as unknown as HTMLElement | null;
-    if (!el) return;
-
-    // Wheel: scroll-to-zoom on desktop web.
-    const wheelHandler = (e: WheelEvent) => {
-      e.preventDefault();
-      const { cropW: cw, cropH: ch } = cropRef.current;
-      const { minScale: minS, maxScale: maxS } = limRef.current;
-      const { nw, nh } = natRef.current;
-
-      const factor   = Math.exp(-e.deltaY * 0.002);
-      const s        = scaleRef.current;
-      const newScale = clamp(s * factor, minS, maxS);
-
-      // Zoom toward the cursor position.
-      const elRect = el.getBoundingClientRect();
-      const { cropCX: ccx, cropCY: ccy } = cropRef.current;
-      const curX = e.clientX - elRect.left  - ccx;
-      const curY = e.clientY - elRect.top   - ccy;
-
-      const o = offsetRef.current;
-      const imgPtX = (curX - o.x) / (s * nw);
-      const imgPtY = (curY - o.y) / (s * nh);
-      const newOffset = {
-        x: curX - imgPtX * newScale * nw,
-        y: curY - imgPtY * newScale * nh,
-      };
-      const clamped = clampOffset(newOffset, newScale, cw, ch, nw, nh);
-      scaleRef.current  = newScale;
-      offsetRef.current = clamped;
-      setRenderScale(newScale);
-      setRenderOffset({ ...clamped });
-    };
-
-    // touchmove: prevent browser page-scroll and pinch-to-zoom on mobile web.
-    // This is belt-and-suspenders alongside touch-action:none on the gesture
-    // target — mobile Safari does not always honour touch-action:none alone for
-    // pinch gestures, so an explicit non-passive preventDefault is required.
-    const touchMoveHandler = (e: TouchEvent) => {
-      e.preventDefault();
-    };
-
-    el.addEventListener('wheel',      wheelHandler,      { passive: false });
-    el.addEventListener('touchmove',  touchMoveHandler,  { passive: false });
-    return () => {
-      el.removeEventListener('wheel',     wheelHandler);
-      el.removeEventListener('touchmove', touchMoveHandler);
-    };
-  }, []); // refs handle dynamic values; this only needs to run on mount
-
-  // ── Image position (cover mode) ────────────────────────────────────────────
-  const imgStyle = useMemo(() => {
-    const displayW = renderScale * naturalWidth;
-    const displayH = renderScale * naturalHeight;
+  // ── Animated style: image position (cover mode) ───────────────────────────
+  const animatedImgStyle = useAnimatedStyle(() => {
+    const s        = scale.value;
+    const displayW = s * nwV.value;
+    const displayH = s * nhV.value;
     return {
       position: 'absolute' as const,
       width:    displayW,
       height:   displayH,
-      left:     cropCX - displayW / 2 + renderOffset.x,
-      top:      cropCY - displayH / 2 + renderOffset.y,
+      left:     cropCXV.value - displayW / 2 + offsetX.value,
+      top:      cropCYV.value - displayH / 2 + offsetY.value,
     };
-  }, [renderScale, renderOffset, cropCX, cropCY, naturalWidth, naturalHeight]);
+  });
 
-  // ── Contain mode image (whole photo fit to available space) ────────────────
+  // ── Contain-mode image (whole photo fit to available space) ───────────────
   const containImgStyle = useMemo(() => {
     if (mode !== 'contain') return null;
-    const scale = Math.min(availW / naturalWidth, availH / naturalHeight);
-    const w = naturalWidth  * scale;
-    const h = naturalHeight * scale;
+    const s = Math.min(availW / naturalWidth, availH / naturalHeight);
+    const w = naturalWidth  * s;
+    const h = naturalHeight * s;
     return {
       position: 'absolute' as const,
       width:  w,
@@ -377,17 +336,73 @@ export default function CropEditor({
     };
   }, [mode, availW, availH, TOP_BAR_H, naturalWidth, naturalHeight]);
 
+  // ── Web: scroll-to-zoom + Safari pinch suppression ────────────────────────
+  const outerRef = useRef<View>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = outerRef.current as unknown as HTMLElement | null;
+    if (!el) return;
+
+    // Wheel: scroll-to-zoom on desktop web (writes directly to shared values).
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const s        = scale.value;
+      const factor   = Math.exp(-e.deltaY * 0.002);
+      const newScale = Math.max(minSV.value, Math.min(maxSV.value, s * factor));
+      const elRect   = el.getBoundingClientRect();
+      const curX     = e.clientX - elRect.left  - cropCXV.value;
+      const curY     = e.clientY - elRect.top   - cropCYV.value;
+      const ox       = offsetX.value;
+      const oy       = offsetY.value;
+      const nw       = nwV.value;
+      const nh       = nhV.value;
+      const imgPtX   = (curX - ox) / (s * nw);
+      const imgPtY   = (curY - oy) / (s * nh);
+      const off = clampOffset(
+        curX - imgPtX * newScale * nw,
+        curY - imgPtY * newScale * nh,
+        newScale,
+        cropWV.value, cropHV.value,
+        nw, nh,
+      );
+      scale.value   = newScale;
+      offsetX.value = off.x;
+      offsetY.value = off.y;
+    };
+
+    // gesturestart / gesturechange: non-standard Safari events that fire for
+    // native pinch-to-zoom. Preventing them is the only reliable way to stop
+    // Safari from zooming the page even when touch-action:none is applied,
+    // because iOS handles pinch at the OS level before Pointer Events fire.
+    const onGestureEvent = (e: Event) => e.preventDefault();
+
+    el.addEventListener('wheel',         onWheel,        { passive: false });
+    // TypeScript doesn't know these Safari-specific events; cast the options.
+    el.addEventListener('gesturestart',  onGestureEvent, { passive: false } as AddEventListenerOptions);
+    el.addEventListener('gesturechange', onGestureEvent, { passive: false } as AddEventListenerOptions);
+
+    return () => {
+      el.removeEventListener('wheel',         onWheel);
+      el.removeEventListener('gesturestart',  onGestureEvent);
+      el.removeEventListener('gesturechange', onGestureEvent);
+    };
+    // Shared-value references are stable; layout values are read via .value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── Confirm ────────────────────────────────────────────────────────────────
   const handleConfirm = useCallback(() => {
     if (mode === 'contain') {
       onConfirm({ x: 0, y: 0, w: 1, h: 1 }, 'contain');
       return;
     }
-    const { cropW: cw, cropH: ch } = cropRef.current;
-    const { nw, nh } = natRef.current;
-    const rect = stateToRect(scaleRef.current, offsetRef.current, cw, ch, nw, nh);
+    const rect = stateToRect(
+      scale.value,
+      { x: offsetX.value, y: offsetY.value },
+      cropW, cropH, naturalWidth, naturalHeight,
+    );
     onConfirm(rect, 'cover');
-  }, [mode, onConfirm]);
+  }, [mode, onConfirm, cropW, cropH, naturalWidth, naturalHeight, scale, offsetX, offsetY]);
 
   const isContain = mode === 'contain';
 
@@ -409,10 +424,14 @@ export default function CropEditor({
           )}
         </>
       ) : (
-        /* ── Cover mode: panning image + crop window overlay ────────────────── */
+        /* ── Cover mode: panning/zooming image + crop window overlay ─────────── */
         <>
-          {/* The photo — pans and zooms under the crop window */}
-          <Image source={{ uri }} style={imgStyle} resizeMode="cover" />
+          {/* The photo — animated by Reanimated on the UI thread */}
+          <Animated.Image
+            source={{ uri }}
+            style={animatedImgStyle}
+            resizeMode="cover"
+          />
 
           {/* Dark overlay in 4 rects surrounding the crop window */}
           <View pointerEvents="none" style={[styles.overlay, {
@@ -439,8 +458,12 @@ export default function CropEditor({
             height: cropH,
           }]} />
 
-          {/* Gesture target — full screen so any touch drives the image */}
-          <View style={[StyleSheet.absoluteFill, styles.gestureTarget]} {...panResponder.panHandlers} />
+          {/* Gesture surface — full screen so any touch drives the image.
+              GestureDetector automatically sets touch-action:none on its
+              child, preventing browser scroll/zoom interference. */}
+          <GestureDetector gesture={composed}>
+            <View style={StyleSheet.absoluteFill} />
+          </GestureDetector>
         </>
       )}
 
@@ -518,16 +541,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     borderWidth: 1.5,
     borderColor: 'rgba(255,255,255,0.85)',
-  },
-  gestureTarget: {
-    // touch-action:none is the primary fix for mobile web:
-    // — tells the browser not to handle pinch-to-zoom or scroll on this element
-    //   so PanResponder receives all touch events instead of the browser taking over.
-    // — without this, pinch zooms the viewport and vertical pan is consumed by
-    //   native page-scroll, making the gesture target appear horizontal-only.
-    // userSelect:none prevents stray text selection during fast drags.
-    touchAction: 'none' as 'none',
-    userSelect:  'none' as 'none',
   },
   topBar: {
     position: 'absolute',
