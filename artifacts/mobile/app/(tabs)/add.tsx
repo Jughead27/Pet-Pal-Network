@@ -488,6 +488,7 @@ export default function AddScreen() {
             initialRect={cropRect}
             initialMode={cropMode}
             targetAspect={feedAspect}
+            showAspectPicker
             title="Adjust framing"
             cancelIcon="back"
             onConfirm={handleRefineConfirm}

@@ -69,6 +69,12 @@ export interface CropEditorProps {
   initialRect?: CropRect | null;
   /** Initial mode. Default 'cover'. */
   initialMode?: 'cover' | 'contain';
+  /**
+   * When true, shows a 3-option aspect-ratio picker (1:1 / 4:5 / Original)
+   * and picks a smart default based on photo orientation.
+   * Use for compose; avatar stays locked to its targetAspect.
+   */
+  showAspectPicker?: boolean;
   /** When true, hide the Crop / Fit toggle (avatar is always cover). */
   hideModetoggle?: boolean;
   /** Top-bar title string. */
@@ -159,6 +165,7 @@ export default function CropEditor({
   targetAspect,
   initialRect,
   initialMode = 'cover',
+  showAspectPicker = false,
   hideModetoggle = false,
   title = 'Adjust photo',
   cancelIcon = 'cancel',
@@ -170,18 +177,35 @@ export default function CropEditor({
 
   const [mode, setMode] = useState<'cover' | 'contain'>(initialMode);
 
+  // ── Aspect-ratio picker (compose only) ────────────────────────────────────
+  // Three fixed options: square, portrait standard, and the photo's own ratio.
+  const ratioOptions = useMemo(() => [
+    { label: '1:1',      value: 1 },
+    { label: '4:5',      value: 4 / 5 },
+    { label: 'Original', value: naturalWidth / naturalHeight },
+  ], [naturalWidth, naturalHeight]);
+
+  // Smart default: landscape photos open in their own ratio; portrait/square → 4:5.
+  const [activeAspect, setActiveAspect] = useState<number>(() => {
+    if (!showAspectPicker) return targetAspect;
+    return (naturalWidth / naturalHeight) > 1
+      ? naturalWidth / naturalHeight   // landscape → original ratio
+      : 4 / 5;                         // portrait / square → 4:5
+  });
+
   // ── Layout ─────────────────────────────────────────────────────────────────
   const TOP_BAR_H    = insets.top + 56;
   const BOTTOM_BAR_H = Math.max(insets.bottom, 16) + (hideModetoggle ? 80 : 116);
   const availW = screenW;
   const availH = screenH - TOP_BAR_H - BOTTOM_BAR_H;
 
-  // Crop window: target aspect, maximised to fill available space.
+  // Crop window: active aspect (picker-selected or locked targetAspect), maximised.
+  const aspect = showAspectPicker ? activeAspect : targetAspect;
   const { cropW, cropH } = useMemo(() => {
-    const byW = { cropW: availW, cropH: availW / targetAspect };
+    const byW = { cropW: availW, cropH: availW / aspect };
     if (byW.cropH <= availH) return byW;
-    return { cropW: availH * targetAspect, cropH: availH };
-  }, [availW, availH, targetAspect]);
+    return { cropW: availH * aspect, cropH: availH };
+  }, [availW, availH, aspect]);
 
   // Centre of the crop window in screen coordinates.
   const cropCX = screenW / 2;
@@ -244,6 +268,37 @@ export default function CropEditor({
     // naturalWidth/naturalHeight are static props.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [minScale, maxScale, cropW, cropH, cropCX, cropCY]);
+
+  // ── Aspect change: reset image to fill-and-centre for the new frame ──────
+  const handleAspectChange = useCallback((newAspect: number) => {
+    // Compute the new crop window geometry (same logic as cropW/cropH useMemo).
+    const byW = { cropW: availW, cropH: availW / newAspect };
+    const newCropW = byW.cropH <= availH ? byW.cropW : availH * newAspect;
+    const newCropH = byW.cropH <= availH ? byW.cropH : availH;
+    const newMin   = Math.max(newCropW / naturalWidth, newCropH / naturalHeight);
+    const newMax   = newMin * 8;
+
+    // Prime shared values immediately so worklets see correct geometry
+    // before the re-render from setActiveAspect completes.
+    cropWV.value  = newCropW;
+    cropHV.value  = newCropH;
+    minSV.value   = newMin;
+    maxSV.value   = newMax;
+
+    // Reset zoom and pan: fill the new frame centred.
+    scale.value        = newMin;
+    offsetX.value      = 0;
+    offsetY.value      = 0;
+    savedScale.value   = newMin;
+    savedOffsetX.value = 0;
+    savedOffsetY.value = 0;
+
+    setActiveAspect(newAspect);
+  }, [
+    availW, availH, naturalWidth, naturalHeight,
+    cropWV, cropHV, minSV, maxSV,
+    scale, offsetX, offsetY, savedScale, savedOffsetX, savedOffsetY,
+  ]);
 
   // ── Gesture: single-finger pan ─────────────────────────────────────────────
   const panGesture = Gesture.Pan()
@@ -464,6 +519,33 @@ export default function CropEditor({
           <GestureDetector gesture={composed}>
             <View style={StyleSheet.absoluteFill} />
           </GestureDetector>
+
+          {/* Aspect-ratio picker — floats just below the crop-frame border.
+              Rendered after GestureDetector so it sits on top and receives taps. */}
+          {showAspectPicker && (
+            <View
+              pointerEvents="box-none"
+              style={[styles.ratioPicker, { top: cropCY + cropH / 2 + 10 }]}
+            >
+              {ratioOptions.map((opt) => {
+                const active = Math.abs(activeAspect - opt.value) < 0.005;
+                return (
+                  <TouchableOpacity
+                    key={opt.label}
+                    onPress={() => handleAspectChange(opt.value)}
+                    hitSlop={{ top: 10, bottom: 10, left: 14, right: 14 }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: active }}
+                    accessibilityLabel={opt.label}
+                  >
+                    <Text style={[styles.ratioLabel, active && styles.ratioLabelActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </>
       )}
 
@@ -607,5 +689,25 @@ const styles = StyleSheet.create({
     color: '#060B10',
     fontSize: 16,
     fontWeight: '700' as const,
+  },
+
+  // Aspect-ratio picker
+  ratioPicker: {
+    position: 'absolute' as const,
+    left: 0,
+    right: 0,
+    flexDirection: 'row' as const,
+    justifyContent: 'center' as const,
+    gap: 24,
+  },
+  ratioLabel: {
+    color: 'rgba(240,244,248,0.45)',
+    fontSize: 12,
+    fontWeight: '400' as const,
+    letterSpacing: 0.6,
+  },
+  ratioLabelActive: {
+    color: '#F0F4F8',
+    fontWeight: '600' as const,
   },
 });

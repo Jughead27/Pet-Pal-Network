@@ -1,0 +1,58 @@
+CROP FRAME — smart-default aspect ratio with cycle-able options (replaces single 
+fixed frame shape)
+
+CONTEXT: CropEditor.tsx currently has one fixed crop frame aspect ratio. Because 
+minimum zoom is correctly locked to "image fills the frame with no gaps," a wide/
+landscape photo hits that minimum almost immediately and can't be zoomed out 
+further — the tall fixed frame doesn't suit its proportions. This is separate from 
+Fit mode (contain-fit + blur padding) — Crop mode's minimum zoom is working as 
+designed, the frame SHAPE is the problem.
+
+GOAL: Offer a small set of standard aspect ratios instead of one fixed shape, with 
+a smart default chosen automatically from the photo's own orientation — so most 
+people never have to think about it, but nobody gets stuck with a frame that 
+doesn't fit their photo.
+
+Requirements:
+- Aspect ratio options: 1:1 (square), 4:5 (portrait — current default shape), and 
+  the photo's OWN original ratio (uncropped proportions). Keep this to exactly 
+  these three — no more, this needs to stay simpler than Instagram's mode system, 
+  not add to it.
+- SMART DEFAULT on open: if the photo is landscape-oriented, default to original-
+  ratio (or 1:1, whichever gives a better starting experience — use judgment, but 
+  landscape photos should NOT default into the tall 4:5 frame). If portrait or 
+  roughly square, default to 4:5 (current behavior, unchanged).
+- Let the user cycle through the 3 ratios with a simple, unobtrusive control 
+  (e.g. a small tappable ratio label/icon near the crop frame — follow the existing 
+  hairline/typographic design language, no filled buttons or capsules per the 
+  locked primary-CTA register).
+- Changing ratio should re-fit the image sensibly (reset zoom/pan to a sane default 
+  for the new frame shape, not leave it in a broken state).
+- This applies to BOTH compose Adjust and avatar/profile-picture edit — though 
+  avatar edit likely stays locked to 1:1 only (square avatar) — confirm this 
+  assumption is still correct before building, and keep avatar edit ratio-locked if 
+  so.
+- Preserve everything already working: pinch-to-zoom, free pan, WYSIWYG accuracy 
+  (crop rect model / avatar_crop_x/y/w/h), and the react-native-gesture-handler + 
+  reanimated gesture engine — this is a frame/ratio change layered on top of the 
+  already-working gesture rewrite, not a gesture change.
+
+DO NOT MODIFY:
+- The gesture engine itself (Gesture.Pan/Gesture.Pinch, shared values, 
+  GestureDetector setup) — already working, do not touch.
+- The Home feed or any other screen.
+- The crop rect data model / API contract.
+
+ACCEPTANCE TEST (must end in the golden path):
+1. On an actual mobile device via pshpsh.net: open compose, pick a WIDE/landscape 
+   photo, open Adjust — confirm it does NOT default into a cramped tall frame; 
+   confirm you CAN zoom out to a sensible starting point.
+2. Pick a portrait or square photo — confirm it defaults to 4:5 as before.
+3. Cycle through all 3 ratio options on a couple of test photos — confirm each 
+   re-fits sensibly, pinch/pan still work correctly in every ratio.
+4. Avatar edit: confirm behavior is correct (locked to 1:1, or ratio-selectable if 
+   that's what's decided) and WYSIWYG still holds.
+5. Golden path: sign in → Home → boop persists → Nursery pager → post flow → sign 
+   out.
+6. Confirm Home feed unchanged.
+7. Verify on web, iOS, and Android.

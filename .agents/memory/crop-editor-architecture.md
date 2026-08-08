@@ -85,9 +85,26 @@ Sends `{ avatarKey, focusX: null, focusY: null, cropX: rect.x, cropY: rect.y, cr
 
 ---
 
+## Aspect-ratio picker (compose only)
+
+`showAspectPicker` prop (bool, default false). When true, CropEditor manages `activeAspect` state internally and ignores `targetAspect` for crop-window sizing.
+
+Three fixed options: `1:1`, `4:5`, `Original` (naturalWidth/naturalHeight).  
+Smart default: landscape photo (ratio > 1) → Original; portrait/square → 4:5.
+
+Control: row of text labels (`TouchableOpacity`) floating 10px below the crop-frame border. Active label at full opacity + semibold; inactive at 45% opacity. No background, no capsule — matches hairline/typographic design language.
+
+Ratio change (`handleAspectChange`): primes all shared values immediately (cropWV/cropHV/minSV/maxSV + scale/offset) before `setActiveAspect`, so worklets have correct geometry without waiting for re-render. Resets to minScale, centered.
+
+**Why:** `targetAspect` stays required (avatar uses it as a lock); `showAspectPicker=true` overrides it for compose. The `useEffect` sync is a no-op after `handleAspectChange` since shared values are already primed.
+
+## Avatar: NOT 1:1 square
+
+Avatar CropEditor uses `targetAspect={columnWidth / HERO_HEIGHT}` — the full-width profile hero banner aspect (wide rectangle). Spec assumed "1:1 square" which does not apply to this app. Avatar stays locked at hero-banner aspect. No picker.
+
 ## Compose integration (add.tsx)
 
-`FrameRefiner` replaced by `CropEditor` with `targetAspect={feedAspect}`.
+`FrameRefiner` replaced by `CropEditor` with `targetAspect={feedAspect}` and `showAspectPicker`.
 `handleRefineConfirm(rect, mode)` signature unchanged — CropEditor's `onConfirm` matches it exactly.
 
 ---
