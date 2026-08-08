@@ -319,8 +319,9 @@ router.get("/invites/mine", async (req, res) => {
       code:           invitesTable.code,
       status:         invitesTable.status,
       createdAt:      invitesTable.createdAt,
-      usedBy:         invitesTable.usedBy,
-      usedByUsername: usedByAlias.username,
+      usedBy:            invitesTable.usedBy,
+      usedByUsername:    usedByAlias.username,
+      usedByDisplayName: usedByAlias.displayName,
     })
     .from(invitesTable)
     .leftJoin(usedByAlias, eq(usedByAlias.id, invitesTable.usedBy))
@@ -369,9 +370,10 @@ router.get("/invites/mine", async (req, res) => {
 
   // One entry per used invite (= one per friend who joined via this user's link).
   const friendsWhoJoined = usedInvites.map((i) => ({
-    userId:   i.usedBy!,
-    username: i.usedByUsername,
-    pets:     friendsMap[i.usedBy!] ?? [],
+    userId:      i.usedBy!,
+    username:    i.usedByUsername,
+    displayName: i.usedByDisplayName ?? null,
+    pets:        friendsMap[i.usedBy!] ?? [],
   }));
 
   res.json({

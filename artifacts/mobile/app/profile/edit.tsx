@@ -231,7 +231,7 @@ export default function EditProfileScreen() {
             ]}
             autoCapitalize="words"
             returnKeyType="next"
-            placeholder="e.g. Melbourne"
+            placeholder="add your city — e.g. Melbourne"
             placeholderTextColor={colors.mutedForeground}
             editable={!isSaving}
           />
@@ -255,7 +255,7 @@ export default function EditProfileScreen() {
             multiline
             numberOfLines={4}
             returnKeyType="default"
-            placeholder="A short line about you…"
+            placeholder="add a bio — a line or two about you and your crew…"
             placeholderTextColor={colors.mutedForeground}
             editable={!isSaving}
             maxLength={210} // soft-cap at 210; server rejects >200 trimmed

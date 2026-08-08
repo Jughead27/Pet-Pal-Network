@@ -1,0 +1,40 @@
+CONTEXT: Two related changes to the Profile screen:
+1. My Pets and My Pack currently have no collapse behavior — as either list grows, everything below it (including the invite mechanism) gets pushed further down and harder to find.
+2. There is no persistent, always-visible way to invite someone from Profile — invite currently only lives wherever "Call In a Friend" is triggered from today.
+3. Separately: now that displayName is required at signup, optional profile fields (bio, avatar, social links, etc.) don't need active nudging — but the profile-edit screen should have a polished, inviting empty state for anyone who does visit it, so it reads as "here's something you could add" rather than looking unfinished.
+
+GOAL:
+
+Part 1 — My Pets collapse:
+- My Pets should show ALL of a user's own pets by default.
+- Add a collapse option so the user can shrink this section if they have many pets (standard expand/collapse pattern, e.g. a chevron or "show less").
+
+Part 2 — My Pack collapse:
+- My Pack (pets the user follows) should default to showing only the 3 most recent, with the rest collapsed behind a "show all" / expand action.
+
+Part 3 — Persistent "Invite a friend" row:
+- Add a quiet, always-visible "Invite a friend" row near the top of the Profile screen, same visual tier as the existing admin link (not a bold/dominant CTA, not a badge, not a notification-style element — just easy to find when someone is looking for it).
+- Tapping it should trigger the existing "Call In a Friend" invite flow (including the pet co-ownership picker step) — reuse that flow as-is, this is just a new, more discoverable entry point into it.
+- This is IN ADDITION to wherever the invite trigger currently lives — do not remove any existing way to start an invite, just add this persistent one.
+
+Part 4 — Profile-edit empty-state polish:
+- Review the profile-edit screen's empty/unset states for optional fields (bio, avatar, social links, anything else optional). Replace any blank/broken-looking gaps with inviting placeholder copy (e.g. "add a bio," "add your socials") rather than empty space.
+- If the default avatar (when none is set) currently renders as a plain empty circle or similar, give it a slightly more polished/intentional default treatment consistent with the app's existing visual language — this is a light touch-up, not a redesign.
+- This is a one-time craft pass, not a new nudge/notification mechanism — no prompts, no badges, no "complete your profile" messaging. Just making the empty states themselves look intentional rather than incomplete.
+
+DO NOT MODIFY:
+- The invite creation flow itself (pet picker, invite generation, single-use enforcement) — reuse as-is via this new entry point.
+- Any other section of the Profile screen not related to My Pets, My Pack, or the new invite row.
+- The order of sections on Profile beyond adding the new invite row near the top.
+- The required displayName-at-signup logic, or any other already-shipped signup/profile logic — this prompt only touches the profile-edit screen's visual empty states.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is UI/layout work scoped to the Profile screen (collapse behavior, one new row, empty-state polish) — no new backend logic, no new nudge mechanisms.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Open Profile as a user with several pets — confirm My Pets shows all of them by default, with a working collapse option.
+2. Confirm My Pack defaults to showing only the 3 most recent, with a working "show all" expand action.
+3. Confirm a new "Invite a friend" row is visible near the top of Profile, styled quietly (same tier as the admin link).
+4. Tap it — confirm it opens the same invite flow (including the pet co-ownership picker) as the existing "Call In a Friend" entry point.
+5. Confirm the existing invite entry point (wherever it lives today) still works unchanged.
+6. Open profile edit as a user with no bio/avatar/socials set — confirm empty states look intentional and inviting, not blank or broken.
+7. Golden path: open Profile → confirm My Pets/My Pack collapse behavior → tap the new Invite a friend row → complete an invite → open profile edit, confirm empty states look polished → sign out. Verified live on pshpsh.net.

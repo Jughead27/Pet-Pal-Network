@@ -149,7 +149,7 @@ export default function ProfileScreen() {
         createdAt: string; usedByUsername: string | null;
       }[];
       friendsWhoJoined: {
-        userId: string; username: string | null;
+        userId: string; username: string | null; displayName?: string | null;
         pets: { id: string; name: string; thumbnailUrl: string | null }[];
       }[];
     }>('/api/invites/mine'),
@@ -161,6 +161,12 @@ export default function ProfileScreen() {
 
   // Pet co-ownership picker — shown before invite creation when user owns ≥1 pet
   const [petPickerVisible,  setPetPickerVisible]  = useState(false);
+
+  // ── Section collapse state ────────────────────────────────────────────────
+  // My Pets: all shown by default, collapsible. My Pack: 3 most recent shown
+  // by default, expandable.
+  const [myPetsCollapsed, setMyPetsCollapsed] = useState(false);
+  const [packExpanded,    setPackExpanded]    = useState(false);
   const [selectedCoPetIds,  setSelectedCoPetIds]  = useState<Set<string>>(new Set());
 
   // isAdmin comes from inviteData (same fetch as effectiveQuota) — no /me race.
@@ -414,6 +420,21 @@ export default function ProfileScreen() {
           </Text>
         </TouchableOpacity>
 
+        {/* Invite a friend — quiet, always-visible entry into the invite flow.
+            Same visual tier as the admin link; the flow itself is unchanged. */}
+        <TouchableOpacity
+          onPress={handleCallInFriend}
+          disabled={creatingInvite}
+          activeOpacity={0.7}
+          style={styles.editProfileRow}
+          accessibilityRole="button"
+          accessibilityLabel="Invite a friend"
+        >
+          <Text style={[styles.editProfileText, { color: colors.mutedForeground, opacity: creatingInvite ? 0.4 : 1 }]}>
+            Invite a friend
+          </Text>
+        </TouchableOpacity>
+
         {/* Admin link — only visible to admins; badge shows pending quota requests */}
         {isAdmin && (
           <TouchableOpacity
@@ -438,7 +459,22 @@ export default function ProfileScreen() {
 
         {/* ══════════════ MY PETS ══════════════ */}
         <View style={[styles.sectionDivider, { borderTopColor: colors.border }]} />
-        <Text style={[styles.heading, { color: colors.foreground }]}>My Pets</Text>
+        <View style={styles.headingRow}>
+          <Text style={[styles.heading, { color: colors.foreground }]}>My Pets</Text>
+          {pets.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setMyPetsCollapsed((v) => !v)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={myPetsCollapsed ? 'Show my pets' : 'Collapse my pets'}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.sectionToggleText, { color: colors.mutedForeground }]}>
+                {myPetsCollapsed ? `show all (${pets.length}) ↓` : 'show less ↑'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {pets.length === 0 ? (
           <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -454,7 +490,7 @@ export default function ProfileScreen() {
               onPress={() => router.push('/pet/create')}
             />
           </View>
-        ) : (
+        ) : myPetsCollapsed ? null : (
           <>
             <View style={styles.listGap}>
               {pets.map((pet) => (
@@ -553,7 +589,7 @@ export default function ProfileScreen() {
             {packedPets.length > 0 && (
               <>
                 <Text style={[styles.subheading, { color: colors.mutedForeground }]}>Pets I Follow</Text>
-                {packedPets.map((item) => (
+                {(packExpanded ? packedPets : packedPets.slice(0, 3)).map((item) => (
                   <FollowRow
                     key={`pack-${item.id}`}
                     primaryText={item.name}
@@ -566,6 +602,20 @@ export default function ProfileScreen() {
                     colors={colors}
                   />
                 ))}
+                {packedPets.length > 3 && (
+                  <TouchableOpacity
+                    onPress={() => setPackExpanded((v) => !v)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={packExpanded ? 'Show fewer followed pets' : `Show all ${packedPets.length} followed pets`}
+                    activeOpacity={0.7}
+                    style={styles.packToggle}
+                  >
+                    <Text style={[styles.sectionToggleText, { color: colors.mutedForeground }]}>
+                      {packExpanded ? 'show less ↑' : `show all (${packedPets.length}) ↓`}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </>
             )}
 
@@ -762,7 +812,7 @@ export default function ProfileScreen() {
                     <FriendAvatarCluster pets={friend.pets} colors={colors} />
                     <View style={styles.petInfo}>
                       <Text style={[styles.petName, { color: colors.foreground }]}>
-                        {friend.username ?? 'your friend'}
+                        {friend.displayName?.trim() || 'a pshpsh member'}
                       </Text>
                       {friend.pets.length === 1 && (
                         <Text style={[styles.petSubtitle, { color: colors.mutedForeground }]}>
@@ -1232,6 +1282,19 @@ const styles = StyleSheet.create({
     fontSize:      26,
     letterSpacing: -0.3,
     marginBottom:  20,
+  },
+  headingRow: {
+    flexDirection:  'row',
+    alignItems:     'baseline',
+    justifyContent: 'space-between',
+  },
+  sectionToggleText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+  },
+  packToggle: {
+    alignSelf:  'flex-start',
+    paddingVertical: 4,
   },
   subheading: {
     fontFamily:    'Inter_600SemiBold',

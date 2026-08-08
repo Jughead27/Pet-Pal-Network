@@ -15,7 +15,7 @@
 
 import { Router, type IRouter } from "express";
 import { db, interestFollowsTable, packFollowsTable, petsTable, postsTable, speciesTable, breedsTable } from "@workspace/db";
-import { eq, and, sql, asc } from "drizzle-orm";
+import { eq, and, sql, asc, desc } from "drizzle-orm";
 import { activePets } from "../lib/petQueries.js";
 import { mediaTokenUrl } from "../lib/r2.js";
 
@@ -144,7 +144,9 @@ router.get("/me/follows", async (req, res) => {
       .from(packFollowsTable)
       .innerJoin(petsTable, eq(petsTable.id, packFollowsTable.petId))
       .where(and(eq(packFollowsTable.userId, userId), activePets))
-      .orderBy(asc(petsTable.name)),
+      // Most recently followed first — the profile "My Pack" section shows the
+      // 3 most recent by default with the rest behind a "show all" toggle.
+      .orderBy(desc(packFollowsTable.createdAt)),
 
     // Followed species: interest_follows → species WHERE speciesId IS NOT NULL
     db
