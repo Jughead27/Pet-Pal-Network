@@ -1,0 +1,22 @@
+CONTEXT: The "Invite a friend" row on Profile currently sits at the same whisper-tier visual weight as "Edit profile" and "admin" — too discreet given it's the primary lever for growing the user base. The app already has a locked CTA hierarchy (primary=hairline outline button, secondary=bold text link, tertiary=muted whisper) that isn't correctly applied on this screen today.
+
+GOAL: Re-tier the three action links on Profile (the block containing "Edit profile," "Invite a friend," "admin") to match the app's existing locked CTA hierarchy:
+1. "Invite a friend" becomes the PRIMARY action: style it as the existing hairline-outline button (1px border, transparent fill, bold label — reuse the existing shared button component used elsewhere for this pattern). Move it to its own row directly below the bio/socials block, above the divider that precedes "My Pets" — the first clearly-actionable element a visitor sees on their own profile.
+2. "Edit profile" becomes SECONDARY: bold text link styling (up from its current whisper tier).
+3. "admin" stays TERTIARY: unchanged, muted whisper styling — correctly low-priority since it's an edge-case action.
+4. Tapping "Invite a friend" in its new position triggers the same existing Call In a Friend flow (including the pet co-ownership picker) — no change to the flow itself, only to this entry point's visual treatment and position.
+
+DO NOT MODIFY:
+- The invite creation flow itself (pet picker, invite generation, single-use enforcement) — reuse as-is.
+- Any other section of Profile (My Pets, My Pack, bio/social fields, etc.) beyond re-tiering and repositioning these three links.
+- Any other screen's use of the hairline/secondary/tertiary button patterns.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a visual hierarchy and positioning fix to three existing links on the Profile screen.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Open Profile — confirm "Invite a friend" now renders as a visible hairline-outline button, positioned directly below the bio/socials block, above the divider before "My Pets."
+2. Confirm "Edit profile" now renders as a bold text link (secondary tier).
+3. Confirm "admin" is unchanged (still muted whisper tier).
+4. Tap "Invite a friend" — confirm it opens the same invite flow (pet picker included) as before.
+5. Confirm the layout holds up cleanly regardless of name/bio length — no awkward wrapping or overlap.
+6. Golden path: open Profile → confirm re-tiered action links → tap Invite a friend → complete an invite → sign out. Verified live on pshpsh.net.

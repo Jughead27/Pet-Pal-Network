@@ -404,34 +404,31 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Edit profile — typographic, always visible on own profile */}
+        {/* Invite a friend — PRIMARY action: hairline-outline button, first
+            actionable element below the bio/socials block. Same flow as the
+            "Your Invites" entry point (pet picker included). */}
+        <Button
+          variant="primary"
+          label="Invite a friend"
+          fullWidth
+          onPress={handleCallInFriend}
+          disabled={creatingInvite}
+          style={StyleSheet.flatten([
+            styles.inviteCta,
+            showOwnerHeader && styles.editProfileRowSpaced,
+          ])}
+        />
+
+        {/* Edit profile — SECONDARY: bold text link */}
         <TouchableOpacity
           onPress={() => router.push('/profile/edit')}
           activeOpacity={0.7}
-          style={[
-            styles.editProfileRow,
-            showOwnerHeader && styles.editProfileRowSpaced,
-          ]}
+          style={styles.editProfileRow}
           accessibilityRole="link"
           accessibilityLabel="Edit profile"
         >
-          <Text style={[styles.editProfileText, { color: colors.mutedForeground }]}>
+          <Text style={[styles.editProfileTextSecondary, { color: colors.foreground }]}>
             Edit profile
-          </Text>
-        </TouchableOpacity>
-
-        {/* Invite a friend — quiet, always-visible entry into the invite flow.
-            Same visual tier as the admin link; the flow itself is unchanged. */}
-        <TouchableOpacity
-          onPress={handleCallInFriend}
-          disabled={creatingInvite}
-          activeOpacity={0.7}
-          style={styles.editProfileRow}
-          accessibilityRole="button"
-          accessibilityLabel="Invite a friend"
-        >
-          <Text style={[styles.editProfileText, { color: colors.mutedForeground, opacity: creatingInvite ? 0.4 : 1 }]}>
-            Invite a friend
           </Text>
         </TouchableOpacity>
 
@@ -1275,6 +1272,16 @@ const styles = StyleSheet.create({
   editProfileText: {
     fontFamily: 'Inter_400Regular',
     fontSize:   13,
+  },
+  // Secondary tier: bold text link (up from whisper).
+  editProfileTextSecondary: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize:   14,
+  },
+  // Primary CTA spacing — sits between the bio/socials block and the links.
+  inviteCta: {
+    marginTop:    16,
+    marginBottom: 6,
   },
 
   heading: {
