@@ -82,6 +82,8 @@ export interface FeedPost {
   commentCount: number;
   viewerHasBooped: boolean;
   viewerHasTreated: boolean;
+  /** True when the viewer is the author of this post — treat action is blocked for authors. */
+  viewerIsAuthor: boolean;
   /** Set when the post is archived; null when active. */
   archivedAt: string | null;
   /** All pets tagged in this post (including the primary). Use this array for display. */

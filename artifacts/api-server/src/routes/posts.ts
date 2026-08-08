@@ -380,7 +380,7 @@ router.post("/posts/:id/treats", async (req, res) => {
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
 
   const [postRow] = await db
-    .select({ petId: postsTable.petId })
+    .select({ postedByUserId: postsTable.postedByUserId })
     .from(postsTable)
     .where(eq(postsTable.id, id))
     .limit(1);
@@ -390,8 +390,9 @@ router.post("/posts/:id/treats", async (req, res) => {
     return;
   }
 
-  // Self-treat guard: any owner of the pet cannot treat it
-  if (await isPetOwner(userId, postRow.petId)) {
+  // Self-treat guard: the post's author cannot treat their own post.
+  // Co-owners who did NOT author the post may still treat it.
+  if (postRow.postedByUserId === userId) {
     res.status(403).json({ error: "self_treat" });
     return;
   }

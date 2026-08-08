@@ -51,10 +51,10 @@ const SITE = 'pshpsh.net';
  * from rendering the URL as a separate rich-link bubble.
  */
 function buildShareText(petNames: string[]): string {
-  if (petNames.length === 0) return `Check out my pet on pshpsh 🐾 ${SITE}`;
-  if (petNames.length === 1) return `Check out my ${petNames[0]} on pshpsh 🐾 ${SITE}`;
-  if (petNames.length === 2) return `Check out my ${petNames[0]} and ${petNames[1]} on pshpsh 🐾 ${SITE}`;
-  return `Check out my pets on pshpsh 🐾 ${SITE}`;
+  if (petNames.length === 0) return `Check out my pet 🐾 ${SITE}`;
+  if (petNames.length === 1) return `Check out ${petNames[0]} 🐾 ${SITE}`;
+  if (petNames.length === 2) return `Check out ${petNames[0]} and ${petNames[1]} 🐾 ${SITE}`;
+  return `Check out my pets 🐾 ${SITE}`;
 }
 
 // ─── Public entry point ───────────────────────────────────────────────────────

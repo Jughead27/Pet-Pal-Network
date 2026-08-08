@@ -501,6 +501,7 @@ export default function FeedPage({
           commentCount={commentCount}
           viewerHasBooped={viewerHasBooped}
           viewerHasTreated={viewerHasTreated}
+          viewerIsAuthor={post.viewerIsAuthor ?? false}
           onBoopOptimistic={handleBoopOptimistic}
           onTreatSuccess={handleTreatSuccess}
           onCommentPress={() =>

@@ -523,6 +523,12 @@ interface ActionRailProps {
    * everything else→Cookie.  Undefined falls back to Cookie.
    */
   petSpecies?: string;
+  /**
+   * True when the viewer is the author of this post.  Treats are blocked for
+   * authors — the button is dimmed and pressing it shows a plain rejection toast
+   * without making a network call.  Boops are unaffected.
+   */
+  viewerIsAuthor?: boolean;
 }
 
 export default function ActionRail({
@@ -544,6 +550,7 @@ export default function ActionRail({
   onTreatTeaching,
   reducedMotion = false,
   petSpecies,
+  viewerIsAuthor = false,
 }: ActionRailProps) {
   const colors = useColors();
 
@@ -627,6 +634,12 @@ export default function ActionRail({
   const handleTreatPress = () => {
     if (isTreatPending.current) return;
 
+    // Author gate — block upfront without a network call.
+    if (viewerIsAuthor) {
+      onToast?.("you can't treat your own post.");
+      return;
+    }
+
     if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
       navigator.vibrate([10, 40, 10]);
     }
@@ -670,7 +683,7 @@ export default function ActionRail({
           onTransientChange?.(false);
           shakeAnimation();
           if (status === 403) {
-            onToast?.('No self-treats — save it for a pet you follow. 🐾');
+            onToast?.("you can't treat your own post.");
           } else {
             // 429 (daily treat limit) or any other unexpected rejection.
             onToast?.("You're all out of treats for today 🐾");
@@ -709,8 +722,8 @@ export default function ActionRail({
           {transientMsg}
         </Animated.Text>
 
-        {/* Bone-shake wrapper */}
-        <Animated.View style={{ transform: [{ translateX: treatShakeX }] }}>
+        {/* Bone-shake wrapper — dimmed when viewer is the post author */}
+        <Animated.View style={[{ transform: [{ translateX: treatShakeX }] }, viewerIsAuthor && { opacity: 0.35 }]}>
           <ActionItem
             renderIcon={(color) => <TreatIcon color={color} size={28} species={petSpecies} />}
             count={treatCount}

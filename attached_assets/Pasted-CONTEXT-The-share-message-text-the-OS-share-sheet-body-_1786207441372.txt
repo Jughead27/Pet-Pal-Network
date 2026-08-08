@@ -1,0 +1,17 @@
+CONTEXT: The share message text (the OS share-sheet body, built by buildShareText) currently has a redundant brand mention — it says something like "Check out Newt and Ripley on pshpsh" and then separately includes a paw icon followed by "pshpsh.net", so the brand name appears twice in one message.
+
+GOAL: Remove the standalone "pshpsh" brand mention from the main sentence. Keep a single brand mention: the paw emoji/icon directly attached to the domain, e.g. "Check out Newt and Ripley on 🐾 pshpsh.net" instead of "Check out Newt and Ripley on pshpsh 🐾 pshpsh.net" (or whatever the current exact duplicated phrasing is — locate it in buildShareText and fix the redundancy, keeping the paw+domain as the sole brand reference).
+
+DO NOT MODIFY:
+- The share card image itself (bar, luminance theming, logo removal, layout) — untouched, already shipped and verified.
+- The multi-pet name formatter logic (1/2/3+ pet names) — reuse as-is, only the trailing brand phrase changes.
+- The single-message share behavior (image+caption+link arriving as one bubble) — unrelated to this text change.
+- Any non-share-related screen or flow.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a text-only change inside buildShareText (or wherever the share message string is assembled) — no layout, image, or logic changes beyond removing the duplicate brand mention.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Share a single-pet post — confirm the message reads with exactly ONE brand mention, in the form "Check out [Pet Name] on 🐾 pshpsh.net" (or equivalent single clean mention), with no standalone "pshpsh" elsewhere in the sentence.
+2. Share a multi-pet tagged post — confirm the pet-name formatter still renders correctly (e.g. "Newt & Ripley") ahead of the same single brand mention.
+3. Confirm the image+caption+link still arrive as a single message bubble (unchanged from current behavior).
+4. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → share a post → confirm message text → sign out. Verified live on pshpsh.net.

@@ -1,0 +1,22 @@
+CONTEXT: Treats are currently self-applicable in some form (existing "self-treat copy" implies self-treating was previously allowed/acknowledged). We need to gate treats by POST AUTHOR, not by pet ownership — a user should not be able to treat their own post, but co-owners of a shared pet (e.g. two people who both own Ripley) must still be able to treat each other's posts about that pet. Boops are unaffected — they remain unlimited and unrestricted for everyone, including self-boop.
+
+GOAL:
+1. On the server: block treat creation when the requesting user is the AUTHOR of the post (posted_by_user_id === requesting user), regardless of pet ownership. A co-owner treating a post they did not personally author must succeed even if they co-own the tagged pet(s).
+2. On the client: disable/hide the treat action (or show it in a clearly-disabled state) when the viewer is the post's author, using the same author check.
+3. Update the copy shown when a self-treat is blocked: replace the old pet-framed "self-treat copy" with plain, post-framed copy — e.g. "you can't treat your own post." Keep it simple and utility-toned, not playful/pet-cute (matches the register already used for invite-button copy).
+
+DO NOT MODIFY:
+- Boop logic — must remain completely unrestricted, no author check added there.
+- Pet ownership / co-ownership logic itself (pet_owners table, isPetOwner checks) — this change does not touch who owns a pet, only who authored a specific post.
+- Treat caps (5/user/day) or any other treat mechanics — this is purely an additional author-based gate, not a change to quotas.
+- Any UI outside the boop/treat rail (comments, reports, blocks, etc.).
+
+PRESERVATION CLAUSE: Do not touch unrelated files. If self-treat blocking currently exists via a different mechanism (e.g. a pet-ownership check), replace it with the author check rather than layering both — there should be exactly one gate, based on post authorship.
+
+ACCEPTANCE TEST (must end in golden path):
+1. As the author of a post, attempt to treat it — confirm it is blocked, with the new plain copy shown ("you can't treat your own post" or equivalent).
+2. As a co-owner of the tagged pet who did NOT author the post, treat it — confirm it succeeds normally.
+3. As a co-owner who DID author the post, attempt to treat it — confirm it is blocked (author check wins regardless of co-ownership).
+4. Confirm boops are completely unaffected — self-boop and all other boop behavior unchanged.
+5. Confirm treat caps (5/user/day) still function correctly for allowed treats.
+6. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → attempt self-treat (blocked) → treat a co-owner's post (succeeds) → sign out. Verified live on pshpsh.net.

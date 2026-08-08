@@ -77,6 +77,8 @@ router.get("/feed", async (req, res) => {
       commentCount: sql<number>`count(distinct case when ${commentsTable.deletedAt} is null then ${commentsTable.id} end)::int`,
       viewerHasBooped:  sql<boolean>`coalesce(bool_or(${boopsTable.userId} = ${userId}), false)`,
       viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
+      // Author flag — viewer cannot treat their own post (authorship, not ownership).
+      viewerIsAuthor:   sql<boolean>`(${postsTable.postedByUserId} = ${userId})`,
       // Correlated EXISTS — whether the viewer follows this pet's Pack
       viewerInPack: sql<boolean>`exists(
         select 1 from pack_follows pf
@@ -168,6 +170,7 @@ router.get("/feed", async (req, res) => {
     commentCount:     r.commentCount,
     viewerHasBooped:  r.viewerHasBooped,
     viewerHasTreated: r.viewerHasTreated,
+    viewerIsAuthor:   r.viewerIsAuthor,
     taggedPets: (() => {
       const raw = r.taggedPetRaw as Array<{ id: string; name: string; ownerId: string; viewerOwnsPet: boolean; avatarKey: string | null }> | null;
       return (Array.isArray(raw) ? raw : []).map((tp) => ({
