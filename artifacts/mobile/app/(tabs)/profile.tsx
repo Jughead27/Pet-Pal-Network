@@ -264,7 +264,7 @@ export default function ProfileScreen() {
         '/api/invites', { method: 'POST', body: JSON.stringify({ petIds: coPetIds }) },
       );
       const link    = `https://pshpsh.net/invite/${result.invite.code}`;
-      const message = `you've been called. ${link}`;
+      const message = `you're invited to pshpsh — follow pets, not people. 🐾 ${link}`;
       if (Platform.OS === 'web') {
         try {
           await (navigator as unknown as { share(o: object): Promise<void> }).share({ text: message, url: link });

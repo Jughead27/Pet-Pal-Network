@@ -361,15 +361,14 @@ export default function TabLayout() {
     <Modal visible={pendingCoPets !== null} transparent animationType="fade">
       <View style={gt.coPetsOverlay}>
         <View style={gt.coPetsSheet}>
-          <Text style={gt.coPetsTitle}>
-            {pendingCoPets?.inviterUsername
-              ? `@${pendingCoPets.inviterUsername} added you as a co-owner`
-              : 'you were added as a co-owner'}
-          </Text>
+          <Text style={gt.coPetsTitle}>they added you as a co-owner</Text>
           <Text style={gt.coPetsBody}>
             {pendingCoPets?.coPets.map((p) => p.name).join(', ')}
           </Text>
-          <Text style={gt.coPetsSub}>want to accept co-ownership?</Text>
+          <Text style={gt.coPetsSub}>
+            accept, and you'll both be able to post{' '}
+            {(pendingCoPets?.coPets.length ?? 0) > 1 ? 'their' : 'this pet\u2019s'} photos and updates.
+          </Text>
           <Pressable
             style={({ pressed }) => [
               gt.agreeBtn,

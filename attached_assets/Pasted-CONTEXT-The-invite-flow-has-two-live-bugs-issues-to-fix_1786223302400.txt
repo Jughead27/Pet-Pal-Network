@@ -1,0 +1,34 @@
+CONTEXT: The invite flow has two live bugs/issues to fix in one pass:
+1. The outbound invite SMS/share message currently just says "you've been called." with no context — this line was meant for on-page tone, not as the actual outbound message text.
+2. The invite landing page (app/invite/[code].tsx) also still displays "you've been called." as its headline, stacked beneath THREE additional taglines ("follow pets, not people." / "curl up, you're home." / "someone who loves animals thinks you'd fit right in.") before any real context appears — this is message overload. It also references the inviter via raw @username (e.g. "@james.guilfoyle2"), which reads as an ugly system-generated identifier, not a person. The co-ownership line ("wants to share Ripley with you — you'll confirm after sign-up") also states that something will happen without explaining what it means.
+
+GOAL:
+
+Part 1 — Outbound invite message text:
+- Update the invite share message (wherever it's generated — likely alongside or near buildShareText, but for the INVITE flow specifically, not the post-share flow) to read something like: "you're invited to pshpsh — follow pets, not people. 🐾 [link]" — no "you've been called," no inviter name/username needed (the recipient already has context from receiving the message directly from a specific person).
+
+Part 2 — Invite landing page (app/invite/[code].tsx):
+- Remove "you've been called." as the headline entirely.
+- Trim the stacked taglines down to ONE clean headline + one supporting tagline. Suggested: headline "you're invited to pshpsh", supporting tagline "follow pets, not people." Drop "curl up, you're home." and "someone who loves animals thinks you'd fit right in." from this page (they can remain elsewhere in the app if used, e.g. onboarding — just not stacked here).
+- NEVER display the inviter's raw @username anywhere on this page. Do not attempt any name lookup, displayName fallback, or personalization by name — the recipient already knows who invited them from context. Use neutral pronoun phrasing instead.
+- If the invite carries co-owned pet(s), replace the current line with concrete, pronoun-based copy explaining the actual benefit, e.g.: "they'd like to share [Pet Name] with you — you'll both be able to post her photos and updates." (Adjust pet-name formatting for multiple pets using the existing multi-pet name formatter.)
+- Keep the existing single-use messaging ("this invite is just for you — it can only be used once.") as-is, small/muted, below the main content.
+- Keep "join pshpsh" as the primary CTA (hairline button per existing design law) and "already a member? sign in" as secondary.
+
+Part 3 — Post-signup co-pet confirmation modal (app/(tabs)/_layout.tsx, the modal that appears after a new user redeems an invite carrying co-pet grants):
+- Apply the same fix here: remove any raw @username reference, use the same neutral pronoun-based phrasing as the landing page for consistency (e.g. "they added you as a co-owner of [Pet Name] — accept?").
+
+DO NOT MODIFY:
+- The underlying co-ownership grant logic, invite single-use enforcement, or the pet-picker-at-invite-creation flow — all of that stays exactly as built. This prompt is copy/display-only on these three surfaces.
+- Any other screen where @username currently displays (profile, pack/pet views, comments, admin) — explicitly out of scope for this prompt, a separate future pass.
+- The post-share (sharing a post, not an invite) message text/flow — already fixed separately, do not touch.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a copy and minor-display change across three specific surfaces (outbound invite message, invite landing page, post-signup co-pet modal) — no schema, no new fields, no data lookups beyond what already exists (invite record + co-pet grant data already available).
+
+ACCEPTANCE TEST (must end in golden path):
+1. Generate an invite and check the actual outbound message text — confirm it no longer says "you've been called" and reads clearly with the new copy.
+2. Open the invite landing page as a fresh recipient — confirm only ONE headline + one tagline appear (no stacked taglines, no "you've been called"), and no @username appears anywhere on the page.
+3. For an invite carrying a co-owned pet, confirm the landing page shows the new concrete, pronoun-based co-ownership explainer with the correct pet name(s).
+4. Complete signup from that invite — confirm the post-signup co-pet confirmation modal also uses pronoun-based phrasing with no @username, and accept/decline both still work correctly.
+5. Confirm invite single-use behavior and the co-ownership grant itself are completely unaffected — this prompt only changed display text.
+6. Golden path: sign in as inviter → create an invite with a co-owned pet selected → check outbound message text → open landing page in a fresh session → confirm copy → complete signup → confirm post-signup modal copy → accept co-ownership → sign out. Verified live on pshpsh.net.

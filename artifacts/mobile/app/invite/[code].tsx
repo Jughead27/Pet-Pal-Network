@@ -1,7 +1,7 @@
 /**
  * Invite landing page — /invite/[code]
  *
- * Portal visual system: logo, "you've been called." headline, wordmark + slogan,
+ * Portal visual system: logo, "you're invited to pshpsh" headline, wordmark,
  * bold "join pshpsh" action.
  *
  * On mount: optionally validates the code against the API.
@@ -39,13 +39,18 @@ type Status = 'loading' | 'valid' | 'invalid' | 'joining';
 
 interface CoPet { id: string; name: string; species: string | null }
 
+/** "Ripley" · "Ripley and Finn" · "Ripley, Finn and Mochi" */
+function formatPetNames(names: string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
 export default function InviteLandingScreen() {
   const insets           = useSafeAreaInsets();
   const router           = useRouter();
   const { code }         = useLocalSearchParams<{ code: string }>();
-  const [status, setStatus]               = useState<Status>('loading');
-  const [inviterUsername, setInviterUsername] = useState<string | null>(null);
-  const [coPets, setCoPets]               = useState<CoPet[]>([]);
+  const [status, setStatus] = useState<Status>('loading');
+  const [coPets, setCoPets] = useState<CoPet[]>([]);
 
   // ── Validate code on mount ────────────────────────────────────────────────
   useEffect(() => {
@@ -56,11 +61,9 @@ export default function InviteLandingScreen() {
         const res  = await fetch(`${baseUrl}/api/invites/validate/${encodeURIComponent(code)}`);
         const data = await res.json() as {
           valid: boolean;
-          inviterUsername?: string | null;
           coPets?: CoPet[];
         };
         if (data.valid) {
-          setInviterUsername(data.inviterUsername ?? null);
           setCoPets(data.coPets ?? []);
           setStatus('valid');
         } else {
@@ -128,28 +131,23 @@ export default function InviteLandingScreen() {
         <View style={styles.header}>
           <Image source={LOGO} style={styles.logo} resizeMode="contain" />
           <Text style={styles.wordmark}>pshpsh</Text>
-          <View style={styles.sloganWrap}>
-            <Text style={styles.slogan1}>follow pets, not people.</Text>
-            <Text style={styles.slogan2}>curl up, you're home.</Text>
-          </View>
         </View>
 
-        {/* Headline */}
-        <Text style={styles.headline}>you've been called.</Text>
-        <Text style={styles.sub}>
-          someone who loves animals thinks you'd fit right in.
-        </Text>
-        <Text style={styles.singleUseNote}>this invite is just for you — it can only be used once.</Text>
+        {/* Headline — one headline + one supporting tagline, nothing stacked */}
+        <Text style={styles.headline}>you're invited to pshpsh</Text>
+        <Text style={styles.sub}>follow pets, not people.</Text>
 
-        {/* Co-pet preview — only shown when the inviter pre-selected pets */}
+        {/* Co-pet preview — only shown when the inviter pre-selected pets.
+            Pronoun-based on purpose: never show the raw @username here. */}
         {coPets.length > 0 && (
           <Text style={styles.coPetPreview}>
-            {inviterUsername ? `@${inviterUsername}` : 'your inviter'}{' '}
-            wants to share{' '}
-            {coPets.map((p) => p.name).join(', ')}{' '}
-            with you — you'll confirm after sign-up.
+            they'd like to share {formatPetNames(coPets.map((p) => p.name))} with you — you'll
+            both be able to post {coPets.length > 1 ? 'their' : `${coPets[0].name}'s`} photos
+            and updates.
           </Text>
         )}
+
+        <Text style={styles.singleUseNote}>this invite is just for you — it can only be used once.</Text>
 
         {/* Primary action */}
         <Pressable
@@ -213,26 +211,6 @@ const styles = StyleSheet.create({
     letterSpacing: -1,
     marginTop:     8,
     textAlign:     'center',
-  },
-  sloganWrap: {
-    alignItems: 'center',
-    marginTop:  16,
-    gap:        6,
-  },
-  slogan1: {
-    fontFamily: 'Inter_500Medium',
-    fontSize:   15,
-    color:      FG,
-    opacity:    0.72,
-    textAlign:  'center',
-    lineHeight: 22,
-  },
-  slogan2: {
-    fontFamily: 'Inter_400Regular',
-    fontSize:   13,
-    color:      MUTED,
-    textAlign:  'center',
-    lineHeight: 20,
   },
 
   // Content
