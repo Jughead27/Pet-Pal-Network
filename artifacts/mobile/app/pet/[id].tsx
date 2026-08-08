@@ -122,6 +122,12 @@ export default function PetProfileScreen() {
   } | null>(null);
   const [inviteActing, setInviteActing] = useState(false);
 
+  // ── Incoming join requests (owner view — search-before-create flow) ───────
+  const [joinRequests, setJoinRequests] = useState<Array<{
+    id: string; requesterUsername: string;
+  }>>([]);
+  const [joinActingId, setJoinActingId] = useState<string | null>(null);
+
   // ── Co-owner invite state (owner view — add co-owner form on profile) ────
   const [coOwnerOpen,     setCoOwnerOpen]     = useState(false);
   const [coOwnerUsername, setCoOwnerUsername] = useState('');
@@ -477,6 +483,35 @@ export default function PetProfileScreen() {
       })
       .catch(() => {});
   }, [petId]);
+
+  // ── Incoming join requests (owner view) ──────────────────────────────────
+  // People who found this pet via search-before-create and asked to co-own it.
+  useEffect(() => {
+    if (!petId || !pet?.viewerOwnsPet) { setJoinRequests([]); return; }
+    customFetch<{ requests: Array<{ id: string; requesterUsername: string }> }>(
+      `/api/pets/${petId}/co-ownership-join-requests`,
+    )
+      .then((data) => setJoinRequests(data.requests))
+      .catch(() => {});
+  }, [petId, pet?.viewerOwnsPet]);
+
+  // ── Approve / decline a join request (owner action) ──────────────────────
+  const handleJoinRequest = useCallback(async (requestId: string, action: 'approve' | 'reject') => {
+    if (joinActingId) return;
+    setJoinActingId(requestId);
+    try {
+      await customFetch(`/api/co-ownership-requests/${requestId}/${action}`, { method: 'POST' });
+      setJoinRequests((prev) => prev.filter((r) => r.id !== requestId));
+      if (action === 'approve') {
+        // New co-owner appears in the Owners list
+        queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
+      }
+    } catch {
+      // leave the row in place so the owner can retry
+    } finally {
+      setJoinActingId(null);
+    }
+  }, [joinActingId, petId, queryClient]);
 
   // ── Self-removal handler ─────────────────────────────────────────────────
   const handleLeave = useCallback(async () => {
@@ -971,6 +1006,50 @@ export default function PetProfileScreen() {
                             cancel
                           </Text>
                         </TouchableOpacity>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              )}
+
+              {/* Incoming join requests — shown to owners (any owner may act) */}
+              {pet.viewerOwnsPet && joinRequests.length > 0 && (
+                <View style={styles.ownerPendingSection}>
+                  {joinRequests.map((jr) => (
+                    <View key={jr.id} style={styles.ownerPendingRow}>
+                      <Text style={[styles.ownerPendingUsername, { color: colors.foreground }]}>
+                        @{jr.requesterUsername}
+                      </Text>
+                      <Text style={[styles.ownerPendingBadge, { color: colors.mutedForeground }]}>
+                        wants to co-own
+                      </Text>
+                      {joinActingId === jr.id ? (
+                        <ActivityIndicator size="small" color={colors.mutedForeground} />
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            onPress={() => handleJoinRequest(jr.id, 'reject')}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Decline co-ownership request from @${jr.requesterUsername}`}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.ownerPendingCancel, { color: colors.mutedForeground }]}>
+                              decline
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => handleJoinRequest(jr.id, 'approve')}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Accept co-ownership request from @${jr.requesterUsername}`}
+                            activeOpacity={0.7}
+                          >
+                            <Text style={[styles.ownerPendingCancel, { color: colors.primary }]}>
+                              accept
+                            </Text>
+                          </TouchableOpacity>
+                        </>
                       )}
                     </View>
                   ))}

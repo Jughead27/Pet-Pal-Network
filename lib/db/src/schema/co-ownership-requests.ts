@@ -35,6 +35,10 @@ export const coOwnershipRequestsTable = pgTable(
     inviterUserId:  text("inviter_user_id").references(() => usersTable.id).notNull(),
     inviteeUserId:  text("invitee_user_id").references(() => usersTable.id).notNull(),
     status:         coOwnershipRequestStatusEnum("status").notNull().default("pending"),
+    // Who created the request:
+    //   'owner'   → an owner invited the invitee (invitee must accept)
+    //   'invitee' → the invitee asked to join   (an owner must approve)
+    initiatedBy:    text("initiated_by").notNull().default("owner"),
     createdAt:      timestamp("created_at").defaultNow().notNull(),
     resolvedAt:     timestamp("resolved_at"), // set on accept or decline
   },

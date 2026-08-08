@@ -1,0 +1,23 @@
+CONTEXT: The search-before-create flow (on "Add another pet") lets a user send a co-ownership request when they find a matching pet already owned by someone else. That request gets created via the existing co_ownership_requests table/mechanism, but there is currently no UI for the EXISTING owner to see and act on incoming requests — the request just sits there with no way to accept or decline it.
+
+GOAL: Build an owner-side UI to view and act on incoming co-ownership requests for pets they own.
+1. Surface pending incoming requests somewhere the owner will naturally see them — the most sensible spot is on the relevant pet's own profile page (pet/[id].tsx), near the existing "Owners" section, since that's where ownership-related actions already live. Show requester's info (however the app currently identifies users elsewhere — reuse the same pattern, e.g. avoid raw @username per the earlier design decision) and the pet in question.
+2. Each pending request should have Accept / Decline actions.
+3. On Accept: add the requester to pet_owners for that pet (reuse the existing co-ownership grant mechanism), mark the request as accepted, and the requester becomes a full co-owner immediately.
+4. On Decline: mark the request as declined, no ownership change. The requester should not be able to send a duplicate request for the same pet immediately after a decline (reasonable cooldown or just allow a fresh request later — use whatever the existing co_ownership_requests table's lifecycle already supports).
+5. If a pet has multiple owners, any current owner should be able to see and act on incoming requests (not just the original/first owner) — consistent with how co-ownership works everywhere else in the app (flat, no primary-owner distinction).
+
+DO NOT MODIFY:
+- The search-before-create request-sending flow itself — already working, untouched.
+- The co-ownership-at-invite-time flow, invite landing page, or post-signup co-pet modal — all separate, already shipped.
+- The existing "Owners" section's display of CURRENT owners — this prompt adds a new section for PENDING incoming requests, doesn't change how current owners are shown.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Reuse the existing co_ownership_requests table and pet_owners grant mechanism — do not create a parallel data model.
+
+ACCEPTANCE TEST (must end in golden path):
+1. As User A, use search-before-create to send a co-ownership request for a pet owned by User B.
+2. As User B, open that pet's profile page — confirm the pending request from User A is visible with Accept/Decline actions.
+3. Accept the request — confirm User A is now a co-owner (appears in the pet's Owners list, can post for that pet).
+4. Repeat with a second request, this time Decline it — confirm no ownership change, and the request is cleared from the pending list.
+5. If the pet has multiple existing owners, confirm any of them can see and act on incoming requests, not just one.
+6. Golden path: send a co-ownership request → view it as the pet owner → accept it → confirm new co-owner can post for the pet → sign out. Verified live on pshpsh.net.
