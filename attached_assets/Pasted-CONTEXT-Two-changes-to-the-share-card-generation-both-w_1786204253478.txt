@@ -1,0 +1,25 @@
+CONTEXT: Two changes to the share card generation (both web canvas path and native Image path):
+
+1. BUG: the share card currently renders using the photo at its original/uncropped dimensions rather than the actual crop rect + aspect ratio the poster selected in Adjust. This is the same class of WYSIWYG mismatch previously root-caused and fixed in FocalImage.tsx for feed rendering — the share card needs the same fix applied to its own render path so the shared image visually matches what's shown in the feed.
+
+2. REDESIGN the share card layout from today's "full-width bottom bar" format to a "headshot" format:
+   - Photo: full-bleed, using the corrected crop (per fix #1 above).
+   - Center overlay: pet name (bold, larger type) with caption beneath (lighter weight, smaller type), both horizontally centered, positioned roughly center-to-lower-third of the frame. Add a subtle scrim/gradient behind just this text block (not full-width) for legibility against varying photo content.
+   - Left side, corner-anchored: a compact vertical brand lockup — logo icon, "pshpsh" wordmark, slogan ("follow pets, not people.") stacked beneath, sized as a quiet signature mark, not a dominant band. Replaces today's large-slogan/small-logo footer bar.
+   - This applies to both the web canvas path (base64 data-URI icon) and the native <Image> path — keep both in sync.
+
+DO NOT MODIFY:
+- buildShareText / the share message body text logic (single-bubble share, image+caption+link) — unrelated to the visual card itself.
+- Feed rendering (FocalImage.tsx), post detail, or any non-share-card screen.
+- The underlying crop rect / ratio data model — read from it, don't change its shape.
+- Multi-pet tagged posts' existing pet-name formatter (1/2/3+ logic) — reuse it for the center pet-name text, don't rewrite it.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. If web and native share-card generation live in different files/components, apply equivalent changes to both and keep them visually consistent — don't fix one path and leave the other stale.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Share a post whose feed crop is NOT full-original (e.g. a Tall or 1:1 crop) — confirm the shared image matches that exact crop, not the original uncropped photo.
+2. Confirm pet name + caption appear centered on the photo, legible against a busy background.
+3. Confirm the logo/wordmark/slogan lockup appears as a small corner mark on the left, not a dominant band.
+4. Test on both a single-pet post and a multi-pet tagged post — confirm the pet-name formatter output reads correctly in the new center position.
+5. Test both web and native share paths — confirm visual consistency between them.
+6. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → share a post → sign out. Verified live on pshpsh.net.

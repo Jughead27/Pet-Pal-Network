@@ -357,6 +357,16 @@ export default function FeedPage({
     [post.mediaKey, post.mediaUrl],
   );
 
+  // ── Derived display values for share card overlay ─────────────────────────
+  // Declared before handleSharePress so they can appear in its dep array.
+  const caption     = post.caption ?? '';
+  const allPetNames = (post.taggedPets ?? []).length > 0
+    ? (post.taggedPets ?? []).map((tp) => tp.name)
+    : [post.pet.name];
+  const displayName = allPetNames.length === 1 ? allPetNames[0]
+    : allPetNames.length === 2 ? `${allPetNames[0]} & ${allPetNames[1]}`
+    : `${allPetNames[0]} + ${allPetNames.length - 1} more`;
+
   // ── Share press handler ───────────────────────────────────────────────────
   // Defined after heroImage so the dep array references the memoised value.
   const handleSharePress = useCallback(async () => {
@@ -378,10 +388,16 @@ export default function FeedPage({
           new Promise<void>(resolve => setTimeout(resolve, 2000)),
         ]);
       }
-      const allPetNames = (post.taggedPets ?? []).length > 0
-        ? (post.taggedPets ?? []).map(tp => tp.name)
-        : [post.pet.name];
-      await executeShareCard({ mediaUri, cardRef, showToast, petNames: allPetNames });
+      await executeShareCard({
+        mediaUri, cardRef, showToast,
+        petNames:    allPetNames,
+        displayName,
+        caption,
+        cropX: post.cropX ?? null,
+        cropY: post.cropY ?? null,
+        cropW: post.cropW ?? null,
+        cropH: post.cropH ?? null,
+      });
     } catch (err) {
       // User dismissed the share sheet — not an error worth surfacing.
       // Any other failure (fetch, canvas, sharing API) gets a toast so the
@@ -394,12 +410,11 @@ export default function FeedPage({
     } finally {
       setIsSharing(false);
     }
-  }, [heroImage, showToast]);
+  }, [heroImage, showToast, allPetNames, displayName, caption, post.cropX, post.cropY, post.cropW, post.cropH]);
 
   const petName   = post.pet.name;
   const petBreed  = post.pet.breed ?? '';
   const petId     = post.pet.id;
-  const caption   = post.caption ?? '';
 
   return (
     <View
@@ -584,6 +599,12 @@ export default function FeedPage({
         <ShareCard
           ref={cardRef}
           source={heroImage}
+          cropX={post.cropX ?? null}
+          cropY={post.cropY ?? null}
+          cropW={post.cropW ?? null}
+          cropH={post.cropH ?? null}
+          displayName={displayName}
+          caption={caption}
           onImageLoaded={handleCardImageLoaded}
         />
       )}
