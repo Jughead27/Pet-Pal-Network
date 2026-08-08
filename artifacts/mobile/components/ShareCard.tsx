@@ -9,19 +9,18 @@
  * invisible to the user.  It must be given explicit pixel dimensions so that
  * the viewshot capture has a real size to work with.
  *
- * "Headshot" layout — full-bleed portrait, no footer band:
+ * Layout — photo on top, branded bar below:
  *   ┌──────────────────────────────┐
  *   │                              │
- *   │    full-bleed cropped photo  │ CARD_H (9:16, no footer)
+ *   │    full-bleed cropped photo  │ PHOTO_H
  *   │                              │
- *   │   ┌──────────────────────┐   │
- *   │   │  Pet Name (bold)     │   │ ← center-to-lower-third overlay + scrim
- *   │   │  caption text        │   │
- *   │   └──────────────────────┘   │
- *   │ 🐱                           │ ← brand lockup bottom-left
- *   │ pshpsh                       │   (icon → wordmark → slogan, quiet mark)
- *   │ follow pets, not people.     │
+ *   ├──────────────────────────────┤
+ *   │ Pet Name    │    pshpsh.net  │ BAR_H
+ *   │ caption     │  follow pets… │
  *   └──────────────────────────────┘
+ *
+ * Bar color is dynamic: bright photo → white bar + dark text;
+ * dark photo → dark bar (#060B10) + light text.  Controlled via `barTheme`.
  *
  * Crop rect (cropX/Y/W/H, 0–1 fractions of natural image) is applied via
  * absolute positioning — identical to FocalImage's rect-driven cover branch.
@@ -29,20 +28,44 @@
  * useEffect after the crop-adjusted style is committed to the view tree.
  */
 
-import React, { forwardRef, useCallback, useEffect, useMemo, useState } from 'react';
+import React, { forwardRef, useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 
-// Fixed card dimensions — full-bleed portrait, no footer band.
-// Captured at 3× by react-native-view-shot → ~1170 × 2079 px.
+// ── Card dimensions ───────────────────────────────────────────────────────────
+// Photo area shrinks slightly to make room for the branded bar below.
+// Total CARD_H stays at 693 so NATIVE_CAPTURE_H (2079) remains unchanged.
 export const CARD_W  = 390;
-export const PHOTO_H = 693;   // ≈ 390 × 16/9
-export const CARD_H  = PHOTO_H;   // full card is full photo
+export const PHOTO_H = 566;   // photo section
+export const BAR_H   = 127;   // branded bar section
+export const CARD_H  = PHOTO_H + BAR_H;   // 693 — unchanged from previous
 
-// App icon — used as the brand glyph in the signature lockup.
-// Loaded via require() so Metro bundles it correctly on native.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const LOGO = require('../assets/icon.png') as ImageSourcePropType;
+// ── Theming ───────────────────────────────────────────────────────────────────
+interface BarColors {
+  bg:      string;
+  name:    string;
+  caption: string;
+  brand:   string;
+  slogan:  string;
+}
+
+const DARK_THEME: BarColors = {
+  bg:      '#060B10',
+  name:    '#F0F4F8',
+  caption: 'rgba(240,244,248,0.65)',
+  brand:   '#CBD5E1',
+  slogan:  'rgba(203,213,225,0.55)',
+};
+
+const LIGHT_THEME: BarColors = {
+  bg:      '#FFFFFF',
+  name:    '#0A0F14',
+  caption: 'rgba(10,15,20,0.60)',
+  brand:   '#1A202C',
+  slogan:  'rgba(26,32,44,0.50)',
+};
+
+// ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
   /** Resolved image source (from resolveMediaKey — already absolute on native). */
@@ -53,19 +76,28 @@ interface Props {
   cropY?:        number | null;
   cropW?:        number | null;
   cropH?:        number | null;
-  /** Pre-formatted pet name(s) for the center overlay ("Mochi", "Mochi & Luna", …). */
+  /** Pre-formatted pet name(s) for the bar ("Mochi", "Mochi & Luna", …). */
   displayName?:  string;
-  /** Post caption for the center overlay. */
+  /** Post caption for the bar. */
   caption?:      string;
+  /**
+   * Bar colour theme derived from the photo's average luminance.
+   * 'light' → white bar, dark text  (bright photos)
+   * 'dark'  → dark bar, light text  (dark photos)  ← default
+   */
+  barTheme?:     'light' | 'dark';
   /** Called when the photo (and crop style) are ready so the caller can trigger capture. */
   onImageLoaded?: () => void;
 }
+
+// ── Component ─────────────────────────────────────────────────────────────────
 
 const ShareCard = forwardRef<View, Props>(({
   source,
   cropX, cropY, cropW, cropH,
   displayName = '',
   caption = '',
+  barTheme = 'dark',
   onImageLoaded,
 }, ref) => {
   const [nat, setNat] = useState<{ w: number; h: number } | null>(null);
@@ -75,8 +107,6 @@ const ShareCard = forwardRef<View, Props>(({
     cropW > 0 && cropH > 0;
 
   // ── Natural-size fetch (crop path only) ───────────────────────────────────
-  // Image.getSize runs before the Image renders — avoids onLoad typing issues
-  // and gives us dimensions before the first paint (no flash of wrong framing).
   useEffect(() => {
     if (!hasCrop) return;
     const uri = typeof source === 'object' && source !== null && 'uri' in (source as object)
@@ -87,8 +117,7 @@ const ShareCard = forwardRef<View, Props>(({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, hasCrop]);
 
-  // Notify caller AFTER the crop-adjusted style is committed to the view tree.
-  // useEffect fires after paint, so captureRef will see the correct framing.
+  // Notify caller AFTER crop-adjusted style is committed (useEffect fires post-paint).
   useEffect(() => {
     if (hasCrop && nat) onImageLoaded?.();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -96,7 +125,7 @@ const ShareCard = forwardRef<View, Props>(({
 
   // ── Image style — rect-driven cover (same math as FocalImage) ─────────────
   const imageStyle = useMemo(() => {
-    if (!hasCrop || !nat) return null; // use resizeMode="cover" on the Image directly
+    if (!hasCrop || !nat) return null;
 
     const { w: nw, h: nh } = nat;
     const cw = CARD_W, ch = PHOTO_H;
@@ -118,38 +147,55 @@ const ShareCard = forwardRef<View, Props>(({
 
   const useCropStyle = hasCrop && !!imageStyle;
 
+  // ── Theme ─────────────────────────────────────────────────────────────────
+  const theme = barTheme === 'light' ? LIGHT_THEME : DARK_THEME;
+
   return (
     <View ref={ref} style={styles.card} collapsable={false}>
 
-      {/* ── Photo ── */}
+      {/* ── Photo — full-bleed, no overlays ── */}
       <View style={styles.photoClip}>
         <Image
           source={source}
-          // When crop style is ready, use it; otherwise fall back to cover.
           style={useCropStyle ? imageStyle! : styles.photoCover}
           resizeMode="cover"
-          // For the no-crop path, notify parent directly from onLoad.
           onLoad={hasCrop ? undefined : onImageLoaded}
         />
       </View>
 
-      {/* ── Center text overlay (pet name + caption) ── */}
-      {displayName ? (
-        <View style={styles.textOverlay}>
-          <View style={styles.textScrim}>
-            <Text style={styles.petName} numberOfLines={2}>{displayName}</Text>
-            {caption ? (
-              <Text style={styles.caption} numberOfLines={3}>{caption}</Text>
-            ) : null}
-          </View>
-        </View>
-      ) : null}
+      {/* ── Branded bar below photo ── */}
+      <View style={[styles.bar, { backgroundColor: theme.bg }]}>
 
-      {/* ── Brand lockup — bottom-left corner ── */}
-      <View style={styles.brand}>
-        <Image source={LOGO} style={styles.brandLogo} />
-        <Text style={styles.brandWordmark}>pshpsh</Text>
-        <Text style={styles.brandSlogan}>follow pets, not people.</Text>
+        {/* LEFT — dominant: pet name + caption */}
+        <View style={styles.barLeft}>
+          {displayName ? (
+            <Text
+              style={[styles.petName, { color: theme.name }]}
+              numberOfLines={2}
+            >
+              {displayName}
+            </Text>
+          ) : null}
+          {caption ? (
+            <Text
+              style={[styles.caption, { color: theme.caption }]}
+              numberOfLines={2}
+            >
+              {caption}
+            </Text>
+          ) : null}
+        </View>
+
+        {/* RIGHT — secondary: brand + slogan */}
+        <View style={styles.barRight}>
+          <Text style={[styles.brandName, { color: theme.brand }]}>
+            pshpsh.net
+          </Text>
+          <Text style={[styles.brandSlogan, { color: theme.slogan }]}>
+            follow pets,{'\n'}not people.
+          </Text>
+        </View>
+
       </View>
     </View>
   );
@@ -158,6 +204,8 @@ const ShareCard = forwardRef<View, Props>(({
 ShareCard.displayName = 'ShareCard';
 
 export default ShareCard;
+
+// ── Styles ────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   // Off-screen but fully rendered — required for captureRef to work.
@@ -170,7 +218,9 @@ const styles = StyleSheet.create({
     overflow:        'hidden',
     backgroundColor: '#060B10',
   },
-  // Clip container prevents the absolutely-positioned crop image from bleeding.
+
+  // Clip container — prevents absolutely-positioned crop image from bleeding
+  // out of the photo section into the bar.
   photoClip: {
     position: 'absolute',
     left:     0,
@@ -179,69 +229,65 @@ const styles = StyleSheet.create({
     height:   PHOTO_H,
     overflow: 'hidden',
   },
+
   // Fallback cover style when no crop rect is present.
   photoCover: {
     width:  CARD_W,
     height: PHOTO_H,
   },
-  // ── Center text overlay ────────────────────────────────────────────────────
-  // Anchored to 50 % from the top so the text block falls in the
-  // center-to-lower-third of the frame (center of a ~130 px block ≈ 60 %).
-  textOverlay: {
+
+  // ── Bar ────────────────────────────────────────────────────────────────────
+  bar: {
     position:          'absolute',
     left:              0,
-    right:             0,
-    top:               Math.round(PHOTO_H * 0.50),
+    top:               PHOTO_H,
+    width:             CARD_W,
+    height:            BAR_H,
+    flexDirection:     'row',
     alignItems:        'center',
-    paddingHorizontal: 24,
-  },
-  textScrim: {
-    backgroundColor:   'rgba(0,0,0,0.38)',
-    borderRadius:      12,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingVertical:   14,
-    alignItems:        'center',
-    maxWidth:          CARD_W - 48,
   },
+
+  // Left column — flex: 1 so it takes available space; right column is fixed.
+  barLeft: {
+    flex:            1,
+    alignItems:      'flex-start',
+    justifyContent:  'center',
+    paddingRight:    10,
+  },
+
+  barRight: {
+    alignItems:     'flex-end',
+    justifyContent: 'center',
+    flexShrink:     0,
+  },
+
+  // ── Left column typography ─────────────────────────────────────────────────
   petName: {
-    color:      '#FFFFFF',
-    fontSize:   26,
+    fontSize:   17,
     fontFamily: 'Inter_700Bold',
-    textAlign:  'center',
-    lineHeight: 32,
+    lineHeight: 21,
   },
   caption: {
-    color:      'rgba(255,255,255,0.82)',
-    fontSize:   14,
+    fontSize:   11,
     fontFamily: 'Inter_400Regular',
-    textAlign:  'center',
-    lineHeight: 20,
-    marginTop:  8,
+    lineHeight: 15,
+    marginTop:  4,
   },
-  // ── Brand lockup — bottom-left corner ─────────────────────────────────────
-  brand: {
-    position:   'absolute',
-    left:       16,
-    bottom:     20,
-    alignItems: 'flex-start',
-  },
-  brandLogo: {
-    width:        28,
-    height:       28,
-    borderRadius: 6,
-    marginBottom: 5,
-  },
-  brandWordmark: {
-    color:         'rgba(255,255,255,0.70)',
+
+  // ── Right column typography ────────────────────────────────────────────────
+  brandName: {
     fontSize:      10,
     fontFamily:    'Inter_600SemiBold',
-    letterSpacing: 0.8,
+    letterSpacing: 0.4,
+    textAlign:     'right',
   },
   brandSlogan: {
-    color:         'rgba(255,255,255,0.45)',
-    fontSize:      8,
-    fontFamily:    'Inter_400Regular',
-    letterSpacing: 0.2,
-    marginTop:     3,
+    fontSize:   8,
+    fontFamily: 'Inter_400Regular',
+    lineHeight: 11,
+    marginTop:  4,
+    textAlign:  'right',
   },
 });

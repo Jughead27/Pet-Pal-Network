@@ -20,7 +20,7 @@
  * All animations use React Native's built-in Animated API — no Reanimated.
  */
 
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -45,6 +45,7 @@ import ActionRail from '@/components/ActionRail';
 import ShareCard from '@/components/ShareCard';
 import AddToPackLink from '@/components/AddToPackLink';
 import { executeShareCard } from '@/utils/shareCardAction';
+import { computeNativeLuminance } from '@/utils/luminance';
 import PopText from '@/components/PopText';
 import { setFeedCellDimensions } from '@/utils/feedCellDimensions';
 
@@ -367,6 +368,24 @@ export default function FeedPage({
     : allPetNames.length === 2 ? `${allPetNames[0]} & ${allPetNames[1]}`
     : `${allPetNames[0]} + ${allPetNames.length - 1} more`;
 
+  // ── Bar theme for share card (native only) ───────────────────────────────
+  // Computed asynchronously from the post's photo luminance so the ShareCard
+  // renders with the correct dark/light bar before the user triggers capture.
+  // Defaults to 'dark' (safe for most photos) while the async check runs.
+  const [barTheme, setBarTheme] = useState<'light' | 'dark'>('dark');
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const uri = typeof heroImage === 'object' && heroImage !== null && 'uri' in (heroImage as object)
+      ? (heroImage as { uri: string }).uri
+      : null;
+    if (!uri) return;
+    let cancelled = false;
+    computeNativeLuminance(uri)
+      .then(lum => { if (!cancelled) setBarTheme(lum > 140 ? 'light' : 'dark'); })
+      .catch(() => { /* keep default dark */ });
+    return () => { cancelled = true; };
+  }, [heroImage]);
+
   // ── Share press handler ───────────────────────────────────────────────────
   // Defined after heroImage so the dep array references the memoised value.
   const handleSharePress = useCallback(async () => {
@@ -605,6 +624,7 @@ export default function FeedPage({
           cropH={post.cropH ?? null}
           displayName={displayName}
           caption={caption}
+          barTheme={barTheme}
           onImageLoaded={handleCardImageLoaded}
         />
       )}

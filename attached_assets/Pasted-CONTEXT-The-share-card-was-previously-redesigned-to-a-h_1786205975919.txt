@@ -1,0 +1,31 @@
+CONTEXT: The share card was previously redesigned to a "headshot" format with text overlaid directly on the photo (centered pet name/caption with a scrim). That's being reverted based on feedback — no text should ever appear on top of the photo. Instead, the card needs a distinct margin/bar section below the photo, similar to the original layout but with better internal hierarchy. There's also a bug where the logo image failed to render on the card.
+
+GOAL:
+1. Remove ALL text overlay from the photo itself. The photo area must be completely clean — full-bleed, untouched, no scrim, no text layered on it. (The crop-rect-aware rendering fix from the previous round — matching the actual selected feed crop — stays exactly as-is; only the text-on-photo overlay is being removed.)
+2. Add a solid-color bar BELOW the photo (photo is shown first/on top, bar beneath it).
+3. Make the bar color DYNAMIC based on the photo: sample the photo's average luminance (e.g. average the bottom-edge strip, or the whole image) and pick one of two themes based on a brightness threshold:
+   - Bright photo → white bar background, dark text
+   - Dark photo → dark bar background (#060B10, matching app ground), light text
+   Both bar and text color must always be paired consistently (never mismatched).
+4. Remove the logo/icon image asset from the card entirely — do not attempt to fix its rendering, just remove it. Replace brand identity with text only.
+5. Bar layout (LOCKED):
+   - LEFT side, dominant: pet name (bold, larger) with caption beneath (lighter weight, smaller), left-aligned. Reuse the existing multi-pet name formatter (buildShareText / 1-2-3+ logic) for the pet name if multiple pets are tagged.
+   - RIGHT side, secondary: "pshpsh.net" with "follow pets, not people." beneath it, right-aligned, smaller type than the pet name/caption.
+6. Apply this to BOTH the web canvas path (shareCardAction.ts) and native path (ShareCard.tsx) — keep them visually consistent and in sync.
+
+DO NOT MODIFY:
+- The crop-rect-aware photo rendering (9-arg drawImage on web, Image.getSize()+rect-driven cover positioning on native) — this part of the previous round's work is correct and stays untouched.
+- FeedPage.tsx's displayName/allPetNames computation or the executeShareCard call signature, unless a parameter needs to be added/removed to support the new layout — if so, keep the change minimal.
+- buildShareText / the share message body text logic (the actual OS share-sheet message) — unrelated to the visual card.
+- Any non-share-card screen (feed, post detail, profile, etc.).
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Apply equivalent changes to both web and native share-card paths — don't fix one and leave the other stale or visually inconsistent.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Share a post with a bright/light-colored photo — confirm the bar renders white with dark text, and the photo itself has zero text/overlay on it.
+2. Share a post with a dark/moody photo — confirm the bar renders dark (#060B10) with light text, photo still has zero overlay.
+3. Confirm the logo image is gone from the card entirely — no broken/missing image glyph, no logo asset attempted at all.
+4. Confirm pet name + caption appear left-aligned and dominant in the bar; confirm "pshpsh.net" + slogan appear right-aligned and smaller.
+5. Test a multi-pet tagged post — confirm the pet-name formatter output (e.g. "Newt & Ripley") renders correctly in the bar.
+6. Test both web and native share paths — confirm visual consistency between them (same bar logic, same layout, same luminance-based theming).
+7. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → share a post → sign out. Verified live on pshpsh.net.
