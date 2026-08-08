@@ -206,7 +206,8 @@ router.get("/pets/:id/co-ownership-join-requests", async (req, res) => {
     .select({
       id:                coOwnershipRequestsTable.id,
       requesterId:       coOwnershipRequestsTable.inviteeUserId,
-      requesterUsername: usersTable.username,
+      requesterUsername:    usersTable.username,
+      requesterDisplayName: usersTable.displayName,
       createdAt:         coOwnershipRequestsTable.createdAt,
     })
     .from(coOwnershipRequestsTable)

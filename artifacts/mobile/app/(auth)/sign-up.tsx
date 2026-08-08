@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getBaseUrl } from '@workspace/api-client-react';
 import Button from '@/components/Button';
 import { pendingInviteStorage } from '@/utils/pendingInviteStorage';
+import { pendingDisplayNameStorage } from '@/utils/pendingDisplayNameStorage';
 
 // Required for OAuth redirect to complete inside Expo Go.
 WebBrowser.maybeCompleteAuthSession();
@@ -59,6 +60,7 @@ export default function SignUpScreen() {
   // ── Main form state ───────────────────────────────────────────────────────
   const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [code, setCode]         = useState('');
 
   const [pendingVerification, setPendingVerification] = useState(false);
@@ -106,9 +108,17 @@ export default function SignUpScreen() {
       setError('please agree to the terms of service and privacy policy first.');
       return;
     }
+    const name = displayName.trim();
+    if (!name) {
+      setError('please tell us what to call you.');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
+      // Persist so it survives the verification step; the tabs layout applies
+      // it to the account (PATCH /api/me) right after the session activates.
+      await pendingDisplayNameStorage.set({ name, email: email.trim() });
       await signUp!.create({
         emailAddress: email.trim(),
         password,
@@ -120,7 +130,7 @@ export default function SignUpScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isLoaded, signUp, email, password, tosAgreed]);
+  }, [isLoaded, signUp, email, password, displayName, tosAgreed]);
 
   // ── Step 2: Verify email OTP ──────────────────────────────────────────────
   const handleVerify = useCallback(async () => {
@@ -446,6 +456,22 @@ export default function SignUpScreen() {
             />
           </View>
 
+          {/* ── Display name field ── */}
+          <View style={s.fieldGroup}>
+            <Text style={s.fieldLabel}>what should we call you?</Text>
+            <TextInput
+              style={s.underlineInput}
+              value={displayName}
+              onChangeText={setDisplayName}
+              autoCorrect={false}
+              maxLength={40}
+              textContentType="name"
+              placeholderTextColor={MUTED}
+              placeholder="your name"
+              selectionColor={FG}
+            />
+          </View>
+
           {/* ── Password field ── */}
           <View style={s.fieldGroup}>
             <Text style={s.fieldLabel}>password</Text>
@@ -490,7 +516,7 @@ export default function SignUpScreen() {
             variant="primary"
             fullWidth
             onPress={handleSignUp}
-            disabled={loading || !email || password.length < 8 || !tosAgreed}
+            disabled={loading || !email || !displayName.trim() || password.length < 8 || !tosAgreed}
             style={s.createBtn}
           >
             {loading

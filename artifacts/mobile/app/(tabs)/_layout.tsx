@@ -1,14 +1,20 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useColorScheme, View } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
-import { useAuth } from '@clerk/clerk-expo';
+import { useAuth, useUser } from '@clerk/clerk-expo';
 import { House, Dog, BabyCarriage, User, Plus } from 'phosphor-react-native';
 import { BlurView } from 'expo-blur';
 import { Redirect, Tabs, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useGetMe, customFetch } from '@workspace/api-client-react';
+import { useGetMe, getGetMeQueryKey, customFetch } from '@workspace/api-client-react';
 import { pendingInviteStorage } from '@/utils/pendingInviteStorage';
+import { pendingDisplayNameStorage } from '@/utils/pendingDisplayNameStorage';
+
+// Accounts created on/after this date must have a display name (collected at
+// signup). Older accounts are exempt — no retroactive prompt.
+const DISPLAY_NAME_REQUIRED_SINCE = Date.parse('2026-08-08T00:00:00Z');
 
 // ─── portal palette (TOS gate uses same visual system) ───────────────────────
 const TOS_BG    = '#060B10';
@@ -50,6 +56,17 @@ export default function TabLayout() {
     inviterUsername: string | null;
   } | null>(null);
   const [coPetsAccepting, setCoPetsAccepting] = useState(false);
+  const qc = useQueryClient();
+
+  // Display-name gate — for new signups whose account has no displayName yet.
+  // pendingNameChecked: the email-signup path saves the typed name to storage;
+  // we apply it silently before deciding whether to show the gate form (OAuth
+  // signups have no stored name and get the form).
+  const [pendingNameChecked, setPendingNameChecked] = useState(false);
+  const [nameSaved, setNameSaved]   = useState(false);
+  const [nameInput, setNameInput]   = useState('');
+  const [nameSaving, setNameSaving] = useState(false);
+  const [nameError, setNameError]   = useState<string | null>(null);
 
   // Guard: only fire GET /me once Clerk has confirmed a live session.
   // Without `enabled`, the query fires during the initial render while
@@ -58,6 +75,53 @@ export default function TabLayout() {
   // isLoaded && isSignedIn ensures the token getter is in place first.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: meData, error: meError } = useGetMe({ query: { enabled: isLoaded && isSignedIn === true } as any });
+
+  // Apply a display name persisted by the email/password signup form.
+  // Guards (prevent a stale value from an abandoned signup corrupting another
+  // account): only applied when the signed-in account (a) holds the exact
+  // email the signup was started with, (b) has no displayName yet, and
+  // (c) was created after the feature cutoff. Otherwise the stale value is
+  // discarded.
+  const { user: clerkUser } = useUser();
+  useEffect(() => {
+    if (!isSignedIn) {
+      // Reset gate state on sign-out so an account switch re-evaluates fresh.
+      setPendingNameChecked(false);
+      setNameSaved(false);
+      setNameInput('');
+      setNameError(null);
+      return;
+    }
+    if (!meData || !clerkUser) return;
+    (async () => {
+      try {
+        const saved = await pendingDisplayNameStorage.get();
+        if (saved?.name.trim()) {
+          const isNewNameless =
+            !(meData.displayName ?? '').trim() &&
+            Date.parse(meData.createdAt) >= DISPLAY_NAME_REQUIRED_SINCE;
+          const emailMatches = clerkUser.emailAddresses?.some(
+            (e) => e.emailAddress.toLowerCase() === saved.email.trim().toLowerCase(),
+          ) ?? false;
+          if (isNewNameless && emailMatches) {
+            await customFetch('/api/me', {
+              method: 'PATCH',
+              body:   JSON.stringify({ displayName: saved.name.trim() }),
+            });
+            setNameSaved(true);
+            qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
+          }
+          // Consumed or stale — clear either way.
+          await pendingDisplayNameStorage.clear();
+        }
+      } catch {
+        // PATCH failed — leave storage; the gate form is the fallback.
+      } finally {
+        setPendingNameChecked(true);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn, meData?.id, clerkUser?.id]);
 
   // Redeem any pending invite code that survived the OAuth round-trip.
   // This handles both: (a) password signup where code was set but session activated async,
@@ -112,6 +176,94 @@ export default function TabLayout() {
           if you believe this is a mistake, contact support.
         </Text>
       </View>
+    );
+  }
+
+  // ─── Display-name gate (new signups only) ───────────────────────────────
+  // OAuth signups have no form step where a name is typed, so we collect it
+  // here, immediately after the account is created. Email signups normally
+  // never see this — their typed name is applied silently above. Existing
+  // accounts (created before the cutoff) are exempt.
+  const needsDisplayName =
+    !!meData &&
+    !nameSaved &&
+    pendingNameChecked &&
+    !(meData.displayName ?? '').trim() &&
+    Date.parse(meData.createdAt) >= DISPLAY_NAME_REQUIRED_SINCE;
+
+  if (needsDisplayName) {
+    const pt = safeAreaInsets.top + (Platform.OS === 'web' ? 24 : 48);
+    const pb = safeAreaInsets.bottom + 40;
+
+    const handleSaveName = async () => {
+      const trimmed = nameInput.trim();
+      if (!trimmed || nameSaving) return;
+      setNameSaving(true);
+      setNameError(null);
+      try {
+        await customFetch('/api/me', {
+          method: 'PATCH',
+          body:   JSON.stringify({ displayName: trimmed }),
+        });
+        setNameSaved(true);
+        qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      } catch {
+        setNameError('could not save your name. please try again.');
+      } finally {
+        setNameSaving(false);
+      }
+    };
+
+    return (
+      <ScrollView
+        style={gt.root}
+        contentContainerStyle={[gt.scroll, { paddingTop: pt, paddingBottom: pb }]}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={gt.col}>
+          <Text style={gt.wordmark}>pshpsh</Text>
+          <Text style={gt.headline}>what should we call you?</Text>
+          <Text style={gt.body}>
+            one last thing — the name other members will see next to your pets.
+          </Text>
+
+          <TextInput
+            style={gt.nameInput}
+            value={nameInput}
+            onChangeText={(v) => { setNameInput(v); setNameError(null); }}
+            autoCorrect={false}
+            maxLength={40}
+            textContentType="name"
+            placeholderTextColor={TOS_MUTED}
+            placeholder="your name"
+            selectionColor={TOS_FG}
+            onSubmitEditing={handleSaveName}
+            returnKeyType="go"
+            autoFocus
+          />
+
+          {nameError ? <Text style={gt.nameError}>{nameError}</Text> : null}
+
+          <Pressable
+            style={({ pressed }) => [
+              gt.agreeBtn,
+              pressed && gt.dimmed,
+              (nameSaving || !nameInput.trim()) && gt.disabled,
+            ]}
+            onPress={handleSaveName}
+            disabled={nameSaving || !nameInput.trim()}
+          >
+            {nameSaving
+              ? <ActivityIndicator color={TOS_FG} size="small" />
+              : <Text style={gt.agreeTxt}>continue</Text>}
+          </Pressable>
+
+          <Pressable style={gt.signOutBtn} onPress={() => signOut()} hitSlop={8}>
+            <Text style={gt.signOutTxt}>sign out</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
     );
   }
 
@@ -489,6 +641,26 @@ const gt = StyleSheet.create({
 
   dimmed:   { opacity: 0.65 },
   disabled: { opacity: 0.35 },
+
+  // Display-name gate
+  nameInput: {
+    fontFamily:        'Inter_400Regular',
+    fontSize:          16,
+    color:             TOS_FG,
+    paddingVertical:   10,
+    paddingHorizontal: 0,
+    backgroundColor:   'transparent',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: TOS_BORDER,
+    marginBottom:      28,
+  },
+  nameError: {
+    fontFamily:   'Inter_400Regular',
+    fontSize:     13,
+    color:        '#FF4444',
+    marginBottom: 16,
+    lineHeight:   19,
+  },
 
   // Co-ownership confirm modal (post-invite-redemption)
   coPetsOverlay: {

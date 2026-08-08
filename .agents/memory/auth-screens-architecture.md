@@ -44,3 +44,9 @@ Non-complete statuses must be surfaced with the actual status string — no sile
 
 ## `AuthenticateWithRedirectCallback` NOT available
 `@clerk/clerk-expo` v2.x does NOT export `AuthenticateWithRedirectCallback`. SSO callback is handled by `WebBrowser.maybeCompleteAuthSession()` + `isSignedIn` redirect in `_layout.tsx`.
+
+## Required display name at signup (Aug 2026)
+- Email form has required "what should we call you?" field; name is persisted via `utils/pendingDisplayNameStorage` (JSON {name, email}; localStorage web / SecureStore native) and applied by a tabs-layout effect (PATCH /api/me) after session activation.
+- OAuth signups get a full-screen name gate in (tabs)/_layout.tsx (portal palette, sign-out escape) — never prefilled from Google profile data (deliberate spec choice).
+- New-signup detection is client-side: `me.createdAt >= DISPLAY_NAME_REQUIRED_SINCE` cutoff constant in _layout.tsx; existing accounts exempt forever. No server-side enforcement (deliberate — additive spec, invite-only beta).
+- Stale-value guard: pending name is only applied when the signed-in account holds the stored email, has no displayName, and is post-cutoff; otherwise discarded. Gate state resets on sign-out.

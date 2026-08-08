@@ -124,7 +124,7 @@ export default function PetProfileScreen() {
 
   // ── Incoming join requests (owner view — search-before-create flow) ───────
   const [joinRequests, setJoinRequests] = useState<Array<{
-    id: string; requesterUsername: string;
+    id: string; requesterUsername: string; requesterDisplayName?: string | null;
   }>>([]);
   const [joinActingId, setJoinActingId] = useState<string | null>(null);
 
@@ -488,7 +488,7 @@ export default function PetProfileScreen() {
   // People who found this pet via search-before-create and asked to co-own it.
   useEffect(() => {
     if (!petId || !pet?.viewerOwnsPet) { setJoinRequests([]); return; }
-    customFetch<{ requests: Array<{ id: string; requesterUsername: string }> }>(
+    customFetch<{ requests: Array<{ id: string; requesterUsername: string; requesterDisplayName?: string | null }> }>(
       `/api/pets/${petId}/co-ownership-join-requests`,
     )
       .then((data) => setJoinRequests(data.requests))
@@ -945,7 +945,7 @@ export default function PetProfileScreen() {
 
         {/* ── Owners section — always visible, prominent ── */}
         {(() => {
-          const owners = (pet as any).owners as Array<{ userId: string; username: string }> | undefined;
+          const owners = (pet as any).owners as Array<{ userId: string; username: string; displayName?: string | null }> | undefined;
           if (!owners || owners.length === 0) return null;
           return (
             <View style={[styles.ownersSection, { borderColor: colors.border }]}>
@@ -977,7 +977,7 @@ export default function PetProfileScreen() {
               {/* Owner list */}
               {owners.map((o) => (
                 <Text key={o.userId} style={[styles.ownerUsername, { color: colors.foreground }]}>
-                  @{o.username}
+                  {o.displayName?.trim() || 'a pshpsh member'}
                 </Text>
               ))}
 
@@ -1018,7 +1018,7 @@ export default function PetProfileScreen() {
                   {joinRequests.map((jr) => (
                     <View key={jr.id} style={styles.ownerPendingRow}>
                       <Text style={[styles.ownerPendingUsername, { color: colors.foreground }]}>
-                        @{jr.requesterUsername}
+                        {jr.requesterDisplayName?.trim() || 'a pshpsh member'}
                       </Text>
                       <Text style={[styles.ownerPendingBadge, { color: colors.mutedForeground }]}>
                         wants to co-own
@@ -1031,7 +1031,7 @@ export default function PetProfileScreen() {
                             onPress={() => handleJoinRequest(jr.id, 'reject')}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             accessibilityRole="button"
-                            accessibilityLabel={`Decline co-ownership request from @${jr.requesterUsername}`}
+                            accessibilityLabel={`Decline co-ownership request from ${jr.requesterDisplayName?.trim() || 'a pshpsh member'}`}
                             activeOpacity={0.7}
                           >
                             <Text style={[styles.ownerPendingCancel, { color: colors.mutedForeground }]}>
@@ -1042,7 +1042,7 @@ export default function PetProfileScreen() {
                             onPress={() => handleJoinRequest(jr.id, 'approve')}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             accessibilityRole="button"
-                            accessibilityLabel={`Accept co-ownership request from @${jr.requesterUsername}`}
+                            accessibilityLabel={`Accept co-ownership request from ${jr.requesterDisplayName?.trim() || 'a pshpsh member'}`}
                             activeOpacity={0.7}
                           >
                             <Text style={[styles.ownerPendingCancel, { color: colors.primary }]}>

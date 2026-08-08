@@ -433,8 +433,9 @@ router.get("/pets/:id", async (req, res) => {
   // Fetch all current owners for "About the owners" section
   const ownerRows = await db
     .select({
-      userId:   petOwnersTable.userId,
-      username: usersTable.username,
+      userId:      petOwnersTable.userId,
+      username:    usersTable.username,
+      displayName: usersTable.displayName,
     })
     .from(petOwnersTable)
     .innerJoin(usersTable, eq(usersTable.id, petOwnersTable.userId))
@@ -462,7 +463,7 @@ router.get("/pets/:id", async (req, res) => {
     avatarCropY:         pet.avatarCropY  ?? null,
     avatarCropW:         pet.avatarCropW  ?? null,
     avatarCropH:         pet.avatarCropH  ?? null,
-    owners:              ownerRows.map((o) => ({ userId: o.userId, username: o.username })),
+    owners:              ownerRows.map((o) => ({ userId: o.userId, username: o.username, displayName: o.displayName ?? null })),
     posts,
     archivedPosts,
   });

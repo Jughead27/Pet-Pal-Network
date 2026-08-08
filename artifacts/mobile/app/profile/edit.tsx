@@ -115,11 +115,7 @@ export default function EditProfileScreen() {
       xTwitter:  socials.xTwitter.trim()  || null,
       tiktok:    socials.tiktok.trim()    || null,
     };
-    // Only include username if non-empty (user may have left it blank meaning "keep current")
-    const trimmedUsername = username.trim();
-    if (trimmedUsername) {
-      body.username = trimmedUsername;
-    }
+    // username is read-only (internal unique key) — never sent.
 
     patchMe(
       { data: body as Parameters<typeof patchMe>[0]['data'] },
@@ -136,7 +132,7 @@ export default function EditProfileScreen() {
         },
       },
     );
-  }, [username, displayName, city, about, socials, patchMe, qc]);
+  }, [displayName, city, about, socials, patchMe, qc]);
 
   if (isLoading || !seeded) {
     return (
@@ -178,27 +174,23 @@ export default function EditProfileScreen() {
           <View style={styles.backBtn} /> {/* spacer to centre title */}
         </View>
 
-        {/* ── Username ── */}
+        {/* ── Username (read-only — internal unique key, not editable) ── */}
         <FieldBlock
           label="Username"
-          hint="3–20 chars · letters, numbers, periods, underscores · starts with a letter"
+          hint="Your internal handle — it can't be changed."
           error={errors.username}
           colors={colors}
         >
           <TextInput
             value={username}
-            onChangeText={(t) => { setUsername(t); setErrors((e) => ({ ...e, username: undefined })); }}
             style={[
               styles.input,
-              { color: colors.foreground, borderColor: errors.username ? (colors.destructive ?? '#EF4444') : colors.border, backgroundColor: colors.card },
+              { color: colors.mutedForeground, borderColor: colors.border, backgroundColor: colors.card },
             ]}
             autoCapitalize="none"
             autoCorrect={false}
-            autoComplete="username"
-            returnKeyType="next"
-            placeholder="your_username"
-            placeholderTextColor={colors.mutedForeground}
-            editable={!isSaving}
+            editable={false}
+            accessibilityState={{ disabled: true }}
           />
         </FieldBlock>
 

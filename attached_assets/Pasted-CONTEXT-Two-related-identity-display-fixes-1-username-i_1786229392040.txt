@@ -1,0 +1,28 @@
+CONTEXT: Two related identity-display fixes:
+1. username is currently editable on the profile-edit screen. Now that displayName is becoming the real user-facing identity (required at signup), username should be locked to read-only — it's meant to be an internal, invisible unique key.
+2. The pet-profile Owners list (and incoming co-ownership request rows) currently displays raw userIDs instead of a human-readable name — a system identifier should never be shown to users when displayName is available.
+
+GOAL:
+
+Part 1 — Lock username as non-editable:
+1. On the profile-edit screen, make username read-only/non-editable. displayName remains the only user-editable identity field.
+2. Username can remain visible if it currently is on that screen (e.g. as reference info), just not modifiable.
+
+Part 2 — Show displayName instead of raw userIDs on pet Owners list:
+1. On the pet-profile Owners list, and on incoming co-ownership request rows ("wants to co-own"), display each owner/requester's displayName instead of their raw userID.
+2. If displayName is empty/null for an existing user who hasn't set one yet, fall back to a generic non-technical placeholder (e.g. "a pshpsh member") — never show the raw userID or username as a fallback.
+
+DO NOT MODIFY:
+- The username generation logic, or how it's used internally (search, uniqueness, etc.) — unaffected.
+- displayName's editability on the profile-edit screen — stays fully editable, unaffected.
+- The underlying owners/co-ownership data model or API — display-layer fix only.
+- The owner-side accept/decline UI's functionality — only the label shown for each row changes.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Both parts are small, targeted display/permission fixes.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Open profile edit — confirm username is no longer editable, displayName remains editable.
+2. Open a pet profile with multiple owners — confirm each owner shows their displayName, not a raw userID.
+3. If a pending "wants to co-own" request exists, confirm the requester also shows via displayName, not a raw userID.
+4. Test with a user who has no displayName set — confirm a reasonable non-technical fallback appears, not the raw ID.
+5. Golden path: open profile edit → confirm username locked → open a pet profile with co-owners → confirm names display correctly → sign out. Verified live on pshpsh.net.
