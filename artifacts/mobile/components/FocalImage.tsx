@@ -23,7 +23,51 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import type { ImageSourcePropType, LayoutChangeEvent, ViewStyle } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
 import PawPlaceholder from './PawPlaceholder';
+
+// ─── Fill edge softening ──────────────────────────────────────────────────────
+// Where the blurred fill meets the frame boundary it previously ended in a
+// hard cutoff that read as a rendering defect. This layer sits ABOVE the fill
+// (solid color + blurred thumb) and BELOW the photo, so it is only visible on
+// exposed fill — a subtle darkening fade at each frame edge that makes the
+// fill read as a deliberate soft vignette. Purely visual; placement untouched.
+export const FILL_EDGE_ALPHA = 0.28; // light touch — polish, not fog
+export const FILL_EDGE_SPAN  = '12%'; // fade depth from each frame edge
+
+export function FillEdgeSoftener() {
+  const edge = `rgba(0,0,0,${FILL_EDGE_ALPHA})`;
+  const mid  = 'rgba(0,0,0,0)';
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <LinearGradient
+        colors={[edge, mid]}
+        style={[styles_softener.h, { top: 0 }]}
+        start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+      />
+      <LinearGradient
+        colors={[mid, edge]}
+        style={[styles_softener.h, { bottom: 0 }]}
+        start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+      />
+      <LinearGradient
+        colors={[edge, mid]}
+        style={[styles_softener.v, { left: 0 }]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+      />
+      <LinearGradient
+        colors={[mid, edge]}
+        style={[styles_softener.v, { right: 0 }]}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+      />
+    </View>
+  );
+}
+
+const styles_softener = StyleSheet.create({
+  h: { position: 'absolute', left: 0, right: 0, height: FILL_EDGE_SPAN },
+  v: { position: 'absolute', top: 0, bottom: 0, width: FILL_EDGE_SPAN },
+});
 
 // ─── Per-URI dimension cache ──────────────────────────────────────────────────
 // Avoids redundant Image.getSize calls when the same URI appears in multiple
@@ -323,6 +367,8 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
           blurRadius={2}
         />
       ) : null}
+      {/* Soft edge treatment — under the photo, so only exposed fill fades. */}
+      {cropFillColor && cropFillThumb && imageStyle ? <FillEdgeSoftener /> : null}
       {imageStyle ? (
         <Image
           source={effectiveSource}

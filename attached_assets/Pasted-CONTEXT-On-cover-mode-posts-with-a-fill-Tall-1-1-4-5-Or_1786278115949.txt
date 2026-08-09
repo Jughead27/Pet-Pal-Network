@@ -1,0 +1,23 @@
+CONTEXT: On cover-mode posts with a fill (Tall/1:1/4:5/Original with zoom-out), the blurred fill currently has a hard, abrupt edge where it meets the frame boundary — this reads as a rendering defect rather than an intentional soft-focus effect, especially where the fill sits exposed (not covered by chrome).
+
+GOAL: Soften the visual transition between the blurred fill and the frame edge, so it reads as an intentional soft/vignette effect rather than a hard cutoff. Do NOT change where the fill is placed — the placement is confirmed correct, following the actual crop rect data exactly. This is purely a visual treatment of the fill's edges.
+1. Apply a soft fade/gradient at the edges of the blurred fill area (particularly where it meets the outer frame boundary) rather than a hard stop.
+2. Keep this subtle and tasteful — the goal is "looks deliberately soft," not "looks foggy or washed out." Err toward a light touch; this should read as polish, not a heavy effect.
+3. Apply consistently across all render surfaces that show the fill (feed, post detail, share card web + native paths).
+4. The Adjust/crop editor's live solid-color fill remains unchanged — this treatment applies only to the blurred-thumbnail fill on static surfaces, not the live editing screen.
+
+DO NOT MODIFY:
+- The fill's placement/positioning logic (crop rect math, y-offset, etc.) — confirmed correct, untouched.
+- The chrome/caption positioning — unrelated, untouched.
+- The Adjust screen's live rendering — unchanged.
+- Fit-mode posts — never have a fill, unaffected.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a visual treatment (edge softening) applied to the existing fill rendering, not a positioning or data change.
+
+ACCEPTANCE TEST (must end in golden path):
+1. View a post with a fill exposed at the top (not covered by chrome) — confirm the edge now fades softly rather than cutting off hard.
+2. Confirm the fill's actual position/proportion is unchanged from before (same data-driven placement, just visually softened at the edges).
+3. Confirm this looks consistent and tasteful — not overly blurred/foggy, not still hard-edged.
+4. Confirm it renders consistently on feed, post detail, and both share-card paths.
+5. Confirm the Adjust screen's live solid-color fill is completely unaffected.
+6. Golden path: view a fill post with an exposed top band → confirm soft edge treatment → check post detail and share card for consistency → sign out. Verified live on pshpsh.net.

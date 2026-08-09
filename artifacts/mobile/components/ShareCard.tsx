@@ -31,6 +31,7 @@
 import React, { forwardRef, useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
+import { FillEdgeSoftener } from './FocalImage';
 
 // ── Card dimensions ───────────────────────────────────────────────────────────
 // Photo area shrinks slightly to make room for the branded bar below.
@@ -172,6 +173,8 @@ const ShareCard = forwardRef<View, Props>(({
             blurRadius={2}
           />
         ) : null}
+        {/* Soft edge treatment — under the photo, so only exposed fill fades. */}
+        {useCropStyle && cropFillColor && cropFillThumb ? <FillEdgeSoftener /> : null}
         <Image
           source={source}
           style={useCropStyle ? imageStyle! : styles.photoCover}

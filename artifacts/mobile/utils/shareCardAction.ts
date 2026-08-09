@@ -232,6 +232,29 @@ async function webShareCard(
           // Thumbnail failed to decode — solid color already painted.
         }
       }
+      // Soft edge treatment — mirrors FillEdgeSoftener in FocalImage.tsx:
+      // subtle black fade at each frame edge, drawn over the fill but before
+      // the photo, so only exposed fill fades. Same constants (0.28 / 12%).
+      // Gated on cropFillThumb to match native exactly — a solid-color-only
+      // fill (thumb missing/failed at compose time) stays untreated.
+      if (cropFillThumb) {
+        const ALPHA = 0.28;
+        const spanY = PHOTO_H * 0.12;
+        const spanX = CARD_W * 0.12;
+        const edges: Array<[number, number, number, number]> = [
+          [0, 0, 0, spanY],                    // top
+          [0, PHOTO_H, 0, PHOTO_H - spanY],    // bottom
+          [0, 0, spanX, 0],                    // left
+          [CARD_W, 0, CARD_W - spanX, 0],      // right
+        ];
+        for (const [x0, y0, x1, y1] of edges) {
+          const g = ctx.createLinearGradient(x0, y0, x1, y1);
+          g.addColorStop(0, `rgba(0,0,0,${ALPHA})`);
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(0, 0, CARD_W, PHOTO_H);
+        }
+      }
       // Full image destination: shift so image (0,0) lands at dx - sx*scale.
       ctx.drawImage(img, dx - sx * scale, dy - sy * scale, nw * scale, nh * scale);
       ctx.restore();
