@@ -1,0 +1,21 @@
+CONTEXT: "Pets I Follow" (GET /me/follows, follows.ts:123-149) currently shows every pack_follows row for the viewer, including follows that were auto-created when they became a pet owner (pet creation auto-packs the creator per pets.ts:525-552) or via a legacy seed backfill. This causes owned/co-owned pets to appear in both "My Pets" and "Pets I Follow" simultaneously, which reads as redundant/confusing.
+
+GOAL:
+1. Add a query-time exclusion to GET /me/follows: exclude any pet where the viewer currently has a pet_owners row (i.e. a NOT EXISTS condition checking pet_owners for this user+pet). Do NOT touch the write paths — pet creation should still auto-create the pack_follows row as it does today (this is intentional, and preserves the graceful fallback where a pet reappears in "Pets I Follow" if the user later stops co-owning it, rather than losing the follow relationship entirely).
+2. Add an empty state for "Pets I Follow" when the filtered list is empty (whether the user has zero follows at all, or only follows their own pets — same message either way, no need to distinguish the cause): "You're not following any other pets yet — check out Sniff to find some!"
+
+DO NOT MODIFY:
+- Pet creation's auto-pack behavior (pets.ts) — untouched, keep writing both pet_owners and pack_follows as it does today.
+- Co-ownership acceptance logic — already correctly does not create a follow, untouched.
+- The pack_follows table schema, or any existing follow/unfollow (join/leave) logic in pack.ts.
+- "My Pets" — unaffected, continues to show owned/co-owned pets as it does today.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a query-level filter addition plus one new empty-state message in follows.ts / the Profile screen — no schema change, no migration, no write-path changes.
+
+ACCEPTANCE TEST (must end in golden path):
+1. As a user who owns/co-owns pets AND follows at least one pet they don't own, load Profile — confirm "Pets I Follow" now shows only the pets they don't own, and "My Pets" is unaffected.
+2. As a user whose only follows are auto-created from their own pet ownership, confirm "Pets I Follow" now shows the empty-state message above, not a duplicate of My Pets.
+3. As a user with genuinely zero follows, confirm the same empty-state message appears.
+4. Have a user stop co-owning a pet they previously co-owned and had an existing follow row for (if testable) — confirm the pet correctly reappears in "Pets I Follow" once ownership ends.
+5. Confirm pet creation still correctly auto-packs the creator (new pack_follows row still written) — just no longer shown in "Pets I Follow" while they own it.
+6. Golden path: view Profile as a user who only follows their own pets → confirm empty-state message → sign out. Verified live on pshpsh.net.

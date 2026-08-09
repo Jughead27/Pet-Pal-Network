@@ -14,8 +14,8 @@
  */
 
 import { Router, type IRouter } from "express";
-import { db, interestFollowsTable, packFollowsTable, petsTable, postsTable, speciesTable, breedsTable } from "@workspace/db";
-import { eq, and, sql, asc, desc } from "drizzle-orm";
+import { db, interestFollowsTable, packFollowsTable, petOwnersTable, petsTable, postsTable, speciesTable, breedsTable } from "@workspace/db";
+import { eq, and, sql, asc, desc, notExists } from "drizzle-orm";
 import { activePets } from "../lib/petQueries.js";
 import { mediaTokenUrl } from "../lib/r2.js";
 
@@ -143,7 +143,23 @@ router.get("/me/follows", async (req, res) => {
       })
       .from(packFollowsTable)
       .innerJoin(petsTable, eq(petsTable.id, packFollowsTable.petId))
-      .where(and(eq(packFollowsTable.userId, userId), activePets))
+      .where(and(
+        eq(packFollowsTable.userId, userId),
+        activePets,
+        // Exclude pets the viewer owns/co-owns — they already appear under
+        // "My Pets".  The follow row is intentionally kept (pet creation
+        // auto-packs the creator), so if ownership later ends the pet
+        // gracefully reappears in "Pets I Follow".
+        notExists(
+          db
+            .select({ one: sql`1` })
+            .from(petOwnersTable)
+            .where(and(
+              eq(petOwnersTable.userId, packFollowsTable.userId),
+              eq(petOwnersTable.petId, packFollowsTable.petId),
+            )),
+        ),
+      ))
       // Most recently followed first — the profile "My Pack" section shows the
       // 3 most recent by default with the rest behind a "show all" toggle.
       .orderBy(desc(packFollowsTable.createdAt)),

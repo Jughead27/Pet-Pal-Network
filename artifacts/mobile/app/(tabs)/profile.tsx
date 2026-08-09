@@ -37,7 +37,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 
-import { PawPrint, Heart, Users, SignOut, CaretRight } from 'phosphor-react-native';
+import { PawPrint, Heart, SignOut, CaretRight } from 'phosphor-react-native';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import { useAuth } from '@clerk/clerk-expo';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
@@ -359,7 +359,6 @@ export default function ProfileScreen() {
   const packedPets      = followsData?.packedPets      ?? [];
   const followedSpecies = followsData?.followedSpecies  ?? [];
   const followedBreeds  = followsData?.followedBreeds   ?? [];
-  const hasFollows      = packedPets.length > 0 || followedSpecies.length > 0 || followedBreeds.length > 0;
 
   // Invite derived values
   const effectiveQuota   = inviteData?.effectiveQuota ?? 0;
@@ -589,19 +588,18 @@ export default function ProfileScreen() {
           <View style={styles.followsLoading}>
             <ActivityIndicator color={colors.primary} size="small" />
           </View>
-        ) : !hasFollows ? (
-          <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Users size={28} color={colors.mutedForeground} weight="regular" style={{ marginBottom: 10 }} />
-            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Nothing followed yet</Text>
-            <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
-              Follow pets, species, and breeds from their profiles.
-            </Text>
-          </View>
         ) : (
           <View style={styles.listGap}>
 
             {/* ── PETS I FOLLOW ── */}
-            {packedPets.length > 0 && (
+            {packedPets.length === 0 ? (
+              <>
+                <Text style={[styles.subheading, { color: colors.mutedForeground }]}>Pets I Follow</Text>
+                <Text style={[styles.emptySubtitle, { color: colors.mutedForeground }]}>
+                  You're not following any other pets yet — check out Sniff to find some!
+                </Text>
+              </>
+            ) : (
               <>
                 <Text style={[styles.subheading, { color: colors.mutedForeground }]}>Pets I Follow</Text>
                 {(packExpanded ? packedPets : packedPets.slice(0, 3)).map((item) => (
