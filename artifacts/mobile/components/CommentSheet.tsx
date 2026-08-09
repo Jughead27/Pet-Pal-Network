@@ -171,7 +171,9 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
             queryKey: getGetPostCommentsQueryKey(postId),
           });
           onCommentPosted?.();
-          onClose();
+          // Intentionally NO onClose() here — after posting, the user stays
+          // on the comment thread. Leaving is only via an explicit back
+          // action (Cancel / hardware back / sheet dismiss).
         },
       },
     );

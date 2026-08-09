@@ -72,10 +72,116 @@ export default function HomeScreen() {
   const openCommentSheet = useCallback((config: CommentSheetConfig) => {
     setCommentConfig(config);
   }, []);
-  const closeCommentSheet = useCallback(() => setCommentConfig(null), []);
 
   // ── FlatList refs ─────────────────────────────────────────────────────────
   const flatListRef = useRef<FlatList<FeedPost>>(null);
+
+  // ── Web-only restore-on-close for the comment sheet ───────────────────────
+  // While the sheet is open on mobile web, the on-screen keyboard shrinks
+  // useWindowDimensions().height, which resizes every pager cell while the
+  // pixel scrollTop stays put — mandatory CSS scroll-snap then re-commits the
+  // feed to a DIFFERENT index. When the sheet closes we must land back on the
+  // exact post whose comments were being viewed. Same bounded verify-and-
+  // correct loop proven on the Sniff/Nursery pagers: never matches while the
+  // target ID is absent, suppresses scroll-snap during the landing window,
+  // and uses a run token so a stale loop from a rapid close/reopen exits
+  // cleanly. Native is untouched (the feed cannot drift under the modal).
+  const webRestoreDone     = useRef(true);
+  const webRestoreToken    = useRef(0);
+  const restoreTargetIdRef = useRef<string | null>(null);
+  const postsForRestoreRef = useRef<FeedPost[]>([]);
+  const pageHeightForRestoreRef = useRef(0);
+  postsForRestoreRef.current      = posts;
+  pageHeightForRestoreRef.current = effectivePageHeight;
+
+  const runWebFeedRestore = useCallback(() => {
+    if (Platform.OS !== 'web' || webRestoreDone.current) return;
+    const runToken = webRestoreToken.current;
+    const MAX_TOTAL_FRAMES  = 120; // ~2s hard cap
+    const MAX_SETTLE_FRAMES = 30;
+    const STABLE_FRAMES     = 12;  // ~200ms of confirmed-correct position
+    let totalFrames  = 0;
+    let settleFrames = 0;
+    let stableFrames = 0;
+    let snapNode: HTMLElement | null = null;
+    const restoreSnap = () => {
+      if (snapNode) {
+        snapNode.style.scrollSnapType = ''; // back to RNW's mandatory snap
+        snapNode = null;
+      }
+    };
+    const finish = () => {
+      webRestoreDone.current = true;
+      restoreSnap();
+    };
+    const tick = () => {
+      if (webRestoreToken.current !== runToken) {
+        restoreSnap(); // stale run — restore own snap node, don't touch flags
+        return;
+      }
+      if (webRestoreDone.current) {
+        restoreSnap();
+        return;
+      }
+      const list = flatListRef.current as unknown as {
+        getScrollableNode?: () => HTMLElement | null;
+      } | null;
+      const node  = list?.getScrollableNode?.() ?? null;
+      const pageH = pageHeightForRestoreRef.current;
+      if (node && pageH > 0) {
+        if (!snapNode) {
+          snapNode = node;
+          node.style.scrollSnapType = 'none';
+        }
+        // Never match while the target post is absent — findIndex(-1) keeps
+        // the loop watching instead of falsely matching index 0.
+        const idx = postsForRestoreRef.current.findIndex(
+          (p) => p.id === restoreTargetIdRef.current,
+        );
+        if (idx >= 0) {
+          const expected = idx * pageH;
+          if (Math.abs(node.scrollTop - expected) <= 1) {
+            stableFrames += 1;
+            if (stableFrames >= STABLE_FRAMES) {
+              finish();
+              return;
+            }
+          } else {
+            stableFrames = 0;
+            node.scrollTop = expected;
+            settleFrames += 1;
+            if (settleFrames >= MAX_SETTLE_FRAMES) {
+              finish();
+              return;
+            }
+          }
+        }
+      }
+      totalFrames += 1;
+      if (totalFrames < MAX_TOTAL_FRAMES) {
+        requestAnimationFrame(tick);
+      } else {
+        finish();
+      }
+    };
+    requestAnimationFrame(tick);
+  }, []);
+
+  // Explicit back out of a comment thread must land on the EXACT post whose
+  // comments were being viewed.
+  const commentSheetPostIdRef = useRef<string | null>(null);
+  commentSheetPostIdRef.current = commentConfig?.postId ?? null;
+
+  const closeCommentSheet = useCallback(() => {
+    const targetId = commentSheetPostIdRef.current;
+    setCommentConfig(null);
+    if (Platform.OS === 'web' && targetId) {
+      restoreTargetIdRef.current = targetId;
+      webRestoreToken.current += 1; // invalidate any stale loop
+      webRestoreDone.current = false;
+      runWebFeedRestore();
+    }
+  }, [runWebFeedRestore]);
 
   // ── Tab-press scroll-to-top ───────────────────────────────────────────────
   // Tapping the Home tab (even when already focused) always scrolls the feed

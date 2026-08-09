@@ -156,7 +156,14 @@ export default function SniffScreen() {
   const [commentConfig, setCommentConfig] = useState<CommentSheetConfig | null>(null);
 
   const openCommentSheet  = useCallback((cfg: CommentSheetConfig) => setCommentConfig(cfg), []);
-  const closeCommentSheet = useCallback(() => setCommentConfig(null), []);
+  // The post whose comment thread is currently open — read at close time so
+  // the pager can be restored to that EXACT post (the underlying pager can
+  // drift on web while the sheet is open: the on-screen keyboard shrinks
+  // window height, resizing every cell while scrollTop stays, so mandatory
+  // scroll-snap re-commits to a different index).
+  const commentSheetPostIdRef = useRef<string | null>(null);
+  commentSheetPostIdRef.current = commentConfig?.postId ?? null;
+  // closeCommentSheet is defined below runWebPagerCorrection (it depends on it).
 
   // ── Open / close pager ────────────────────────────────────────────────────
   const openPost = useCallback((postId: string) => {
@@ -289,6 +296,23 @@ export default function SniffScreen() {
     };
     requestAnimationFrame(tick);
   }, []);
+
+  // ── Close comment sheet — restore pager to the commented post ─────────────
+  // Explicit back out of a comment thread must land on the EXACT post whose
+  // comments were being viewed. On web, re-arm the proven correction loop
+  // targeting that post; on native the pager cannot drift under the modal,
+  // so closing the sheet is all that happens.
+  const closeCommentSheet = useCallback(() => {
+    const targetId = commentSheetPostIdRef.current;
+    setCommentConfig(null);
+    if (Platform.OS === 'web' && targetId) {
+      setPagerStartId(targetId);
+      pagerStartIdRef.current = targetId; // sync — loop reads it this frame
+      webPagerRunToken.current += 1;      // invalidate any stale loop
+      webPagerCorrectionDone.current = false;
+      runWebPagerCorrection();
+    }
+  }, [runWebPagerCorrection]);
 
   // ── Pager item renderer (hoisted + memoised) ──────────────────────────────
   const renderPagerItem = useCallback(

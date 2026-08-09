@@ -1,0 +1,16 @@
+CONTEXT: When a user posts a comment, the app currently navigates away from the comment thread back to a photo — but NOT the photo the user was actually commenting on. This needs two things: (1) a behavior change — after posting a comment, the user must remain on the comment thread, not be navigated anywhere; leaving is only via an explicit back action. (2) a root-cause investigation into why the current navigation lands on the WRONG photo at all, since this pattern (index/ID mismatch, stale state after a data refetch) has repeatedly been the cause of similar bugs elsewhere in the app today (Sniff, Nursery pagers) — understanding the actual cause matters even if the behavior fix makes this specific trigger path go away, since the same underlying issue could resurface via another exit path (e.g. swiping the comment sheet closed).
+
+GOAL:
+1. INVESTIGATE: trace exactly what happens after a comment POST succeeds today — what triggers the navigation away from the comment thread, and why does it land on a different photo than the one being commented on? Report the actual mechanism (e.g. does posting a comment trigger a feed refetch that reorders posts, and is there a stale index/ID being used to determine "which photo to show"?).
+2. FIX: after a comment is successfully posted, the user must remain on the comment thread for that post — no navigation away at all. The comment list should update to show the new comment in place, and the input should clear/reset, but the screen itself does not change.
+3. Separately, confirm/fix: whatever mechanism currently determines "which photo to return to" when the user DOES explicitly back out of a comment thread must correctly and reliably return to the exact photo whose comments were being viewed — not a stale or incorrectly-indexed one.
+
+DO NOT MODIFY: Comment posting itself (the actual create-comment logic, validation, rate limits) — only the navigation/screen-transition behavior around it.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Scoped to the comment-post success flow and the comment-thread-to-photo return path.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Open comments on a specific post, post a comment — confirm the screen stays on that exact comment thread, comment appears, input resets.
+2. Post several comments in a row — confirm no navigation ever occurs.
+3. Explicitly back out of the comment thread — confirm it returns to the EXACT photo whose comments were just being viewed, every time, tested on several different posts.
+4. Golden path: open a post's comments → post a comment → confirm still on the same thread → back out → confirm correct photo → sign out. Verified live on pshpsh.net.
