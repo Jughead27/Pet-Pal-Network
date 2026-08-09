@@ -63,8 +63,15 @@ function CommentRow({
   /** Called when the viewer taps the visible "delete" whisper on their own comment. */
   onDelete: () => void;
 }) {
-  const initials = comment.authorUsername
-    .split(/[._-]/)
+  // Display name with fallback — never the raw username/userID.
+  // authorDisplayName is served by the API but not yet in the generated type
+  // (same consumption pattern as the pet owners array).
+  const authorName =
+    (comment as PostComment & { authorDisplayName?: string | null }).authorDisplayName?.trim()
+    || 'a pshpsh member';
+
+  const initials = authorName
+    .split(/[\s._-]+/)
     .map((s) => s[0]?.toUpperCase() ?? '')
     .slice(0, 2)
     .join('');
@@ -93,7 +100,7 @@ function CommentRow({
       </View>
       <View style={styles.commentContent}>
         <Text style={[styles.commentAuthor, { color: colors.foreground }]}>
-          {comment.authorUsername}
+          {authorName}
           <Text style={[styles.commentTime, { color: colors.mutedForeground }]}>
             {'  '}{relativeTime}
           </Text>

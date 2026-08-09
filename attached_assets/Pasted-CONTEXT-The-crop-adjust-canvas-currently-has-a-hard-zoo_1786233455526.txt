@@ -1,0 +1,24 @@
+CONTEXT: The crop/adjust canvas currently has a hard zoom floor — the photo can never be zoomed out past "just covers the frame." This is too restrictive: a real user (Holly) wants to zoom out further to show more of the photo within the frame, similar to Instagram's behavior. This must render consistently across ALL FOUR surfaces where the photo appears: the crop/adjust editor itself, the feed, post detail, and both share-card paths (web canvas + native).
+
+GOAL:
+1. Remove the hard zoom floor in the crop/adjust canvas. Allow zooming out freely below the previous minimum (down to some reasonable practical minimum — e.g. a small fraction of the frame — so the photo can never shrink to an unusable sliver, but there is no longer a "must fully cover the frame" floor).
+2. When the photo does not fully cover the frame at the selected zoom/position, fill the empty space behind it with a SOLID COLOR sampled from the photo itself (average/dominant color — reuse the same sampling technique already used for the share-card bar's dynamic background color). This is a flat color fill, NOT a blur — blur is explicitly out of scope for this prompt.
+3. This fill behavior must be computed and stored/reproducible so it renders IDENTICALLY at every surface where the photo appears afterward: the crop/adjust screen itself, the feed, post detail, and both share-card generation paths (web canvas 9-arg drawImage path, native Image.getSize()+positioning path). Reuse the existing crop-rect data model — do not introduce a second, parallel way of describing the crop.
+4. Default zoom behavior (when a photo is first loaded into the canvas) is unchanged — this only affects the available zoom-out RANGE and what happens when the frame isn't fully covered, not the initial smart-default zoom level.
+
+DO NOT MODIFY:
+- Zoom-in behavior or the existing max-zoom cap — unaffected.
+- The ratio picker (Tall/1:1/4:5/Original) or smart-default ratio selection — unaffected.
+- Blur, rotation, or any other enhancement — explicitly out of scope for this prompt, logged as separate fast-follows.
+- The crop-rect data model's shape — reuse it, extend if genuinely necessary (e.g. to store the fill color), don't replace it.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a zoom-range change plus a same-technique color-fill addition, applied consistently across the 4 rendering surfaces — no new dependencies, no blur/rotation logic.
+
+ACCEPTANCE TEST (must end in golden path):
+1. In the crop/adjust screen, pick any ratio, then pinch out well past the old zoom floor — confirm the photo can shrink smaller than the frame, filling the extra space with a sampled color instead of being blocked or leaving a transparent/broken gap.
+2. Post using this zoomed-out framing — confirm the feed shows the exact same framing and fill color (WYSIWYG match with what was shown in Adjust).
+3. Open that post's detail view — confirm the same match.
+4. Share that post — confirm both the web and native share-card paths render the same framing and fill color correctly.
+5. Confirm zooming IN still works exactly as before (max zoom, no regression).
+6. Confirm a photo posted at the OLD default (fully covering the frame, no fill needed) still renders exactly as it did before this change — no regression for existing photos.
+7. Golden path: open Adjust → zoom out past the old floor → confirm color fill appears → post → confirm feed/detail/share all match → sign out. Verified live on pshpsh.net.

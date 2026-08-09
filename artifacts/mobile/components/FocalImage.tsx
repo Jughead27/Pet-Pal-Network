@@ -55,6 +55,12 @@ interface FocalImageProps {
   /** 'cover' (default) or 'contain'. */
   mode?: string | null;
   /**
+   * Solid hex color rendered behind the photo (sampled from the photo at
+   * compose time). Visible wherever the crop rect extends past the image —
+   * i.e. the poster zoomed out below cover. null = photo covers its rect.
+   */
+  cropFillColor?: string | null;
+  /**
    * Contain mode only. When set, positions the photo so its bottom edge is
    * this many px above the container's bottom edge — placing it just above
    * a name/caption overlay. Omit to vertically centre the photo.
@@ -64,7 +70,7 @@ interface FocalImageProps {
 
 // ─── FocalImage ───────────────────────────────────────────────────────────────
 
-export default function FocalImage({ source, style, focusX, focusY, cropX, cropY, cropW, cropH, mode, containAlignBottom }: FocalImageProps) {
+export default function FocalImage({ source, style, focusX, focusY, cropX, cropY, cropW, cropH, mode, cropFillColor, containAlignBottom }: FocalImageProps) {
   const [container, setContainer] = useState({ w: 0, h: 0 });
   const [natural,   setNatural]   = useState({ w: 0, h: 0 });
   const [retries,   setRetries]   = useState(0);
@@ -276,6 +282,14 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
 
   return (
     <View style={[style, styles.clip]} onLayout={handleLayout}>
+      {/* Sampled fill color — shows through wherever the crop rect extends
+          past the image (poster zoomed out below cover). */}
+      {cropFillColor && imageStyle ? (
+        <View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: cropFillColor }]}
+        />
+      ) : null}
       {imageStyle ? (
         <Image
           source={effectiveSource}

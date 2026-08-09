@@ -123,6 +123,66 @@ function parsePngIdat(bytes: Uint8Array): Uint8Array | null {
  * Resize → 1×1 PNG → parse IDAT → extract RGB → standard luminance formula.
  * Returns 128 (neutral) on any failure so the caller always gets a value.
  */
+/**
+ * Samples the average color of the image at `uri` and returns it as a hex
+ * string (e.g. '#8A9B6C'), or null on any failure.
+ *
+ * Same sampling technique as the share-card bar theming:
+ * - Native: expo-image-manipulator resize → 1×1 PNG → parse IDAT → RGB.
+ *   (A 1×1 bilinear resize IS the average color of the image.)
+ * - Web: draw into a 1×1 canvas and read the pixel back.
+ *
+ * The result is computed ONCE at compose time and persisted with the post, so
+ * every surface (editor, feed, detail, share cards) renders the identical fill.
+ */
+export async function computeAverageColor(uri: string): Promise<string | null> {
+  const toHex = (r: number, g: number, b: number) =>
+    '#' + [r, g, b].map((v) => Math.round(Math.max(0, Math.min(255, v))).toString(16).padStart(2, '0')).join('').toUpperCase();
+
+  // Web: 1×1 canvas average.
+  if (typeof document !== 'undefined') {
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const el = new (window as any).Image() as HTMLImageElement;
+        el.crossOrigin = 'anonymous';
+        el.onload = () => resolve(el);
+        el.onerror = reject;
+        el.src = uri;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, 1, 1);
+      const d = ctx.getImageData(0, 0, 1, 1).data;
+      return toHex(d[0], d[1], d[2]);
+    } catch {
+      return null;
+    }
+  }
+
+  // Native: 1×1 PNG parse (same pipeline as computeNativeLuminance).
+  try {
+    const result = await ImageManipulator.manipulateAsync(
+      uri,
+      [{ resize: { width: 1, height: 1 } }],
+      { format: ImageManipulator.SaveFormat.PNG, base64: true },
+    );
+    if (!result.base64) return null;
+
+    const binary = atob(result.base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+    const raw = parsePngIdat(bytes);
+    if (!raw || raw.length < 4) return null;
+    return toHex(raw[1] ?? 0, raw[2] ?? 0, raw[3] ?? 0);
+  } catch {
+    return null;
+  }
+}
+
 export async function computeNativeLuminance(uri: string): Promise<number> {
   try {
     const result = await ImageManipulator.manipulateAsync(

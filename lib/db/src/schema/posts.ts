@@ -34,6 +34,9 @@ export const postsTable = pgTable(
     cropY: real("crop_y"),             // top edge
     cropW: real("crop_w"),             // width
     cropH: real("crop_h"),             // height
+    // Hex color sampled from the photo; fills frame space the photo doesn't
+    // cover when the poster zoomed out past the image bounds. null = full cover.
+    cropFillColor: text("crop_fill_color"),
   },
   (table) => [
     index("posts_pet_id_idx").on(table.petId),

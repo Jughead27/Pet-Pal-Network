@@ -76,6 +76,8 @@ interface Props {
   cropY?:        number | null;
   cropW?:        number | null;
   cropH?:        number | null;
+  /** Sampled fill color shown behind the photo when the crop rect extends past the image. */
+  cropFillColor?: string | null;
   /** Pre-formatted pet name(s) for the bar ("Mochi", "Mochi & Luna", …). */
   displayName?:  string;
   /** Post caption for the bar. */
@@ -95,6 +97,7 @@ interface Props {
 const ShareCard = forwardRef<View, Props>(({
   source,
   cropX, cropY, cropW, cropH,
+  cropFillColor = null,
   displayName = '',
   caption = '',
   barTheme = 'dark',
@@ -154,7 +157,8 @@ const ShareCard = forwardRef<View, Props>(({
     <View ref={ref} style={styles.card} collapsable={false}>
 
       {/* ── Photo — full-bleed, no overlays ── */}
-      <View style={styles.photoClip}>
+      {/* Sampled fill color shows wherever the crop rect extends past the image. */}
+      <View style={[styles.photoClip, useCropStyle && cropFillColor ? { backgroundColor: cropFillColor } : null]}>
         <Image
           source={source}
           style={useCropStyle ? imageStyle! : styles.photoCover}

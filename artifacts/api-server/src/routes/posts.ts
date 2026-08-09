@@ -41,7 +41,20 @@ router.post("/posts", async (req, res) => {
     return;
   }
 
-  const { petIds, mediaKey, caption, isNursery, cropFocusX, cropFocusY, cropMode, cropX, cropY, cropW, cropH } = parsed.data;
+  const { petIds, mediaKey, caption, isNursery, cropFocusX, cropFocusY, cropMode, cropX, cropY, cropW, cropH, cropFillColor } = parsed.data;
+
+  // Crop rect must be a coherent all-or-none tuple with positive dimensions —
+  // renderers require all four fields, so a partial rect is a client bug.
+  const cropFields = [cropX, cropY, cropW, cropH];
+  const setCount = cropFields.filter((v) => v != null).length;
+  if (setCount !== 0 && setCount !== 4) {
+    res.status(400).json({ error: "cropX/cropY/cropW/cropH must be provided together" });
+    return;
+  }
+  if (setCount === 4 && !((cropW as number) > 0 && (cropH as number) > 0)) {
+    res.status(400).json({ error: "cropW and cropH must be positive" });
+    return;
+  }
   const primaryPetId = petIds[0];
 
   // Verify all tagged pets exist and are active
@@ -107,6 +120,7 @@ router.post("/posts", async (req, res) => {
       cropY:          cropY     ?? null,
       cropW:          cropW     ?? null,
       cropH:          cropH     ?? null,
+      cropFillColor:  cropFillColor ?? null,
       postedByUserId: userId,
     })
     .returning();
@@ -285,11 +299,12 @@ router.get("/posts/:id/comments", async (req, res) => {
 
   const rows = await db
     .select({
-      id:             commentsTable.id,
-      text:           commentsTable.text,
-      authorUsername: usersTable.username,
-      authorId:       commentsTable.userId,
-      createdAt:      commentsTable.createdAt,
+      id:                commentsTable.id,
+      text:              commentsTable.text,
+      authorUsername:    usersTable.username,
+      authorDisplayName: usersTable.displayName,
+      authorId:          commentsTable.userId,
+      createdAt:         commentsTable.createdAt,
     })
     .from(commentsTable)
     .innerJoin(usersTable, eq(usersTable.id, commentsTable.userId))
@@ -635,16 +650,17 @@ router.post("/posts/:id/comments", async (req, res) => {
     });
 
   const [user] = await db
-    .select({ username: usersTable.username })
+    .select({ username: usersTable.username, displayName: usersTable.displayName })
     .from(usersTable)
     .where(eq(usersTable.id, userId));
 
   res.status(201).json({
-    id:             inserted.id,
-    text:           inserted.text,
-    authorUsername: user.username,
-    authorId:       userId,        // required for client-side ownership check
-    createdAt:      inserted.createdAt,
+    id:                inserted.id,
+    text:              inserted.text,
+    authorUsername:    user.username,
+    authorDisplayName: user.displayName ?? null,
+    authorId:          userId,        // required for client-side ownership check
+    createdAt:         inserted.createdAt,
   });
 });
 

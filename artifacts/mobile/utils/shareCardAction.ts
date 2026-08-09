@@ -80,6 +80,8 @@ export interface ShareCardParams {
   cropY?: number | null;
   cropW?: number | null;
   cropH?: number | null;
+  /** Sampled fill color shown behind the photo when the crop rect extends past the image. */
+  cropFillColor?: string | null;
 }
 
 export async function executeShareCard({
@@ -89,10 +91,10 @@ export async function executeShareCard({
   petNames,
   displayName,
   caption,
-  cropX, cropY, cropW, cropH,
+  cropX, cropY, cropW, cropH, cropFillColor,
 }: ShareCardParams): Promise<void> {
   if (Platform.OS === 'web') {
-    await webShareCard(mediaUri, showToast, petNames, displayName, caption, cropX, cropY, cropW, cropH);
+    await webShareCard(mediaUri, showToast, petNames, displayName, caption, cropX, cropY, cropW, cropH, cropFillColor);
   } else {
     await nativeShareCard(cardRef, showToast, petNames);
   }
@@ -161,6 +163,7 @@ async function webShareCard(
   cropY?: number | null,
   cropW?: number | null,
   cropH?: number | null,
+  cropFillColor?: string | null,
 ): Promise<void> {
   // Make absolute so fetch works from any page path.
   const absoluteUri = mediaUri.startsWith('/')
@@ -193,7 +196,28 @@ async function webShareCard(
     const hasCrop = cropX != null && cropY != null && cropW != null && cropH != null
       && cropW > 0 && cropH > 0;
 
-    if (hasCrop) {
+    if (hasCrop && cropFillColor) {
+      // Zoomed-out crop: the rect may extend past the image bounds, so the
+      // 9-arg out-of-bounds source path is avoided (browser clipping quirks).
+      // Instead: fill the photo area with the sampled color, clip to it, and
+      // draw the FULL image at its rect-mapped destination.
+      const sx = (cropX as number) * nw;
+      const sy = (cropY as number) * nh;
+      const sw = (cropW as number) * nw;
+      const sh = (cropH as number) * nh;
+      const scale = Math.max(CARD_W / sw, PHOTO_H / sh);
+      const dx    = (CARD_W - sw * scale) / 2;   // dest x of the rect's left edge
+      const dy    = (PHOTO_H - sh * scale) / 2;  // dest y of the rect's top edge
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(0, 0, CARD_W, PHOTO_H);
+      ctx.clip();
+      ctx.fillStyle = cropFillColor;
+      ctx.fillRect(0, 0, CARD_W, PHOTO_H);
+      // Full image destination: shift so image (0,0) lands at dx - sx*scale.
+      ctx.drawImage(img, dx - sx * scale, dy - sy * scale, nw * scale, nh * scale);
+      ctx.restore();
+    } else if (hasCrop) {
       // 9-arg drawImage: source rect = crop rect, dest fills CARD_W × PHOTO_H.
       const sx = (cropX as number) * nw;
       const sy = (cropY as number) * nh;

@@ -34,27 +34,32 @@ export interface CreatePostBody {
   /** 'cover' (default) or 'contain'. null = default cover. */
   cropMode?: string | null;
   /**
-     * Crop rect left edge as fraction of original width.
-     * @minimum 0
-     * @maximum 1
+     * Crop rect left edge as fraction of original width. May be negative when zoomed out past image bounds (fill color shows in uncovered space).
+     * @minimum -8
+     * @maximum 8
      */
   cropX?: number | null;
   /**
-     * Crop rect top edge as fraction of original height.
-     * @minimum 0
-     * @maximum 1
+     * Crop rect top edge as fraction of original height. May be negative when zoomed out.
+     * @minimum -8
+     * @maximum 8
      */
   cropY?: number | null;
   /**
-     * Crop rect width as fraction of original width.
+     * Crop rect width as fraction of original width. May exceed 1 when zoomed out.
      * @minimum 0
-     * @maximum 1
+     * @maximum 9
      */
   cropW?: number | null;
   /**
-     * Crop rect height as fraction of original height.
+     * Crop rect height as fraction of original height. May exceed 1 when zoomed out.
      * @minimum 0
-     * @maximum 1
+     * @maximum 9
      */
   cropH?: number | null;
+  /**
+     * Hex color (e.g. '#AABBCC') sampled from the photo; rendered behind the photo wherever the crop rect extends past the image.
+     * @pattern ^#[0-9A-Fa-f]{6}$
+     */
+  cropFillColor?: string | null;
 }

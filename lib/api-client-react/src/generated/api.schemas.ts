@@ -74,6 +74,10 @@ export interface FeedPost {
   cropW?: number | null;
   /** Crop rect height as fraction of original height. */
   cropH?: number | null;
+  /** Hex color (e.g. '#AABBCC') sampled from the photo; fills frame space the photo doesn't cover when zoomed out. null = photo covers the frame. */
+  cropFillColor?: string | null;
+  /** True when the viewer is the author of this post — treat action is blocked for authors. */
+  viewerIsAuthor?: boolean;
   isNursery: boolean;
   createdAt: string;
   pet: PetSummary;
@@ -82,8 +86,6 @@ export interface FeedPost {
   commentCount: number;
   viewerHasBooped: boolean;
   viewerHasTreated: boolean;
-  /** True when the viewer is the author of this post — treat action is blocked for authors. */
-  viewerIsAuthor: boolean;
   /** Set when the post is archived; null when active. */
   archivedAt: string | null;
   /** All pets tagged in this post (including the primary). Use this array for display. */
@@ -455,29 +457,34 @@ export interface CreatePostBody {
   /** 'cover' (default) or 'contain'. null = default cover. */
   cropMode?: string | null;
   /**
-     * Crop rect left edge as fraction of original width.
-     * @minimum 0
-     * @maximum 1
+     * Crop rect left edge as fraction of original width. May be negative when zoomed out past image bounds (fill color shows in uncovered space).
+     * @minimum -8
+     * @maximum 8
      */
   cropX?: number | null;
   /**
-     * Crop rect top edge as fraction of original height.
-     * @minimum 0
-     * @maximum 1
+     * Crop rect top edge as fraction of original height. May be negative when zoomed out.
+     * @minimum -8
+     * @maximum 8
      */
   cropY?: number | null;
   /**
-     * Crop rect width as fraction of original width.
+     * Crop rect width as fraction of original width. May exceed 1 when zoomed out.
      * @minimum 0
-     * @maximum 1
+     * @maximum 9
      */
   cropW?: number | null;
   /**
-     * Crop rect height as fraction of original height.
+     * Crop rect height as fraction of original height. May exceed 1 when zoomed out.
      * @minimum 0
-     * @maximum 1
+     * @maximum 9
      */
   cropH?: number | null;
+  /**
+     * Hex color (e.g. '#AABBCC') sampled from the photo; rendered behind the photo wherever the crop rect extends past the image.
+     * @pattern ^#[0-9A-Fa-f]{6}$
+     */
+  cropFillColor?: string | null;
 }
 
 /**

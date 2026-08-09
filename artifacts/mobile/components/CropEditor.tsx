@@ -76,6 +76,18 @@ export interface CropEditorProps {
   title?: string;
   /** Leading button icon. 'back' (←) or 'cancel' (×). Default 'cancel'. */
   cancelIcon?: 'back' | 'cancel';
+  /**
+   * When true, the zoom floor drops below "just covers the frame" (down to
+   * 1/3 of cover scale), letting the photo shrink inside the frame. Uncovered
+   * frame space shows `fillColor`. Compose passes true; avatar keeps the floor.
+   */
+  allowZoomOut?: boolean;
+  /**
+   * Solid color rendered behind the photo inside the crop window — visible
+   * only when the photo doesn't fully cover the frame (allowZoomOut). Sampled
+   * from the photo (average color) by the caller.
+   */
+  fillColor?: string | null;
   onConfirm: (rect: CropRect, mode: 'cover' | 'contain') => void;
   onCancel: () => void;
 }
@@ -91,7 +103,13 @@ const clamp = (v: number, lo: number, hi: number): number => {
 };
 
 /**
- * Clamp offset so the image always covers the crop window — no empty gaps.
+ * Clamp offset so the image stays aligned with the crop window.
+ * When the scaled image is LARGER than the window (zoomed in), this prevents
+ * gaps at the edges (classic cover clamp). When it is SMALLER (zoomed out past
+ * cover — allowZoomOut), the symmetric bound keeps the whole image INSIDE the
+ * window instead, so it can slide around but never leave the frame.
+ * At/above cover scale both dimensions are ≥ the window, so `abs` is identical
+ * to the old `max(0, …)` clamp — no behavior change for the avatar path.
  * Accepts scalars rather than an object so worklet allocation stays minimal.
  */
 const clampOffset = (
@@ -104,8 +122,8 @@ const clampOffset = (
   nh: number,
 ): { x: number; y: number } => {
   'worklet';
-  const maxX = Math.max(0, (scale * nw - cropW) / 2);
-  const maxY = Math.max(0, (scale * nh - cropH) / 2);
+  const maxX = Math.abs(scale * nw - cropW) / 2;
+  const maxY = Math.abs(scale * nh - cropH) / 2;
   return { x: clamp(ox, -maxX, maxX), y: clamp(oy, -maxY, maxY) };
 };
 
@@ -124,11 +142,15 @@ function stateToRect(
   const displayH = scale * nh;
   const imgLeft  = displayW / 2 - cropW / 2 - offset.x;
   const imgTop   = displayH / 2 - cropH / 2 - offset.y;
+  // NOT clamped to [0,1]: when zoomed out past cover, the window extends past
+  // the image, so x/y can be negative and w/h can exceed 1. Renderers fill the
+  // uncovered space with the post's cropFillColor. (When zoom-out is disabled,
+  // the offset/scale clamps keep these within [0,1] anyway.)
   return {
-    x: clamp(imgLeft / displayW, 0, 1),
-    y: clamp(imgTop  / displayH, 0, 1),
-    w: clamp(cropW   / displayW, 0, 1),
-    h: clamp(cropH   / displayH, 0, 1),
+    x: imgLeft / displayW,
+    y: imgTop  / displayH,
+    w: cropW   / displayW,
+    h: cropH   / displayH,
   };
 }
 
@@ -162,6 +184,8 @@ export default function CropEditor({
   showAspectPicker = false,
   title = 'Adjust photo',
   cancelIcon = 'cancel',
+  allowZoomOut = false,
+  fillColor = null,
   onConfirm,
   onCancel,
 }: CropEditorProps) {
@@ -208,8 +232,13 @@ export default function CropEditor({
   const cropCY = TOP_BAR_H + availH / 2;
 
   // ── Scale limits ───────────────────────────────────────────────────────────
-  const minScale = Math.max(cropW / naturalWidth, cropH / naturalHeight);
-  const maxScale = minScale * 8;
+  // coverScale: image just covers the crop window (the old hard floor, still
+  // the DEFAULT zoom). With allowZoomOut, the floor drops to 1/3 of cover so
+  // the photo can shrink inside the frame (fill color shows behind it) but can
+  // never become an unusable sliver. Max zoom is unchanged (8× cover).
+  const coverScale = Math.max(cropW / naturalWidth, cropH / naturalHeight);
+  const minScale   = allowZoomOut ? coverScale / 3 : coverScale;
+  const maxScale   = coverScale * 8;
 
   // ── Initial state (computed once on mount) ─────────────────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -217,7 +246,8 @@ export default function CropEditor({
     if (initialRect && initialRect.w > 0 && initialRect.h > 0) {
       return rectToState(initialRect, cropW, cropH, naturalWidth, naturalHeight, minScale, maxScale);
     }
-    return { scale: minScale, offset: { x: 0, y: 0 } };
+    // Default zoom is UNCHANGED: start at cover scale (fills the frame).
+    return { scale: coverScale, offset: { x: 0, y: 0 } };
   }, []); // intentionally empty — captures mount-time geometry only
 
   // ── Shared values: gesture truth (UI thread) ───────────────────────────────
@@ -271,8 +301,9 @@ export default function CropEditor({
     const byW = { cropW: availW, cropH: availW / newAspect };
     const newCropW = byW.cropH <= availH ? byW.cropW : availH * newAspect;
     const newCropH = byW.cropH <= availH ? byW.cropH : availH;
-    const newMin   = Math.max(newCropW / naturalWidth, newCropH / naturalHeight);
-    const newMax   = newMin * 8;
+    const newCover = Math.max(newCropW / naturalWidth, newCropH / naturalHeight);
+    const newMin   = allowZoomOut ? newCover / 3 : newCover;
+    const newMax   = newCover * 8;
 
     // Prime shared values immediately so worklets see correct geometry
     // before the re-render from setActiveAspect completes.
@@ -281,11 +312,11 @@ export default function CropEditor({
     minSV.value   = newMin;
     maxSV.value   = newMax;
 
-    // Reset zoom and pan: fill the new frame centred.
-    scale.value        = newMin;
+    // Reset zoom and pan: fill the new frame centred (cover, not the floor).
+    scale.value        = newCover;
     offsetX.value      = 0;
     offsetY.value      = 0;
-    savedScale.value   = newMin;
+    savedScale.value   = newCover;
     savedOffsetX.value = 0;
     savedOffsetY.value = 0;
 
@@ -441,6 +472,21 @@ export default function CropEditor({
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* ── Cover canvas: panning/zooming image + crop window ─────────────── */}
+      {/* Sampled fill color behind the photo — visible in the crop window
+          wherever the zoomed-out photo doesn't cover it (WYSIWYG with feed). */}
+      {allowZoomOut && fillColor && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: 'absolute',
+            left:   cropCX - cropW / 2,
+            top:    cropCY - cropH / 2,
+            width:  cropW,
+            height: cropH,
+            backgroundColor: fillColor,
+          }}
+        />
+      )}
       {/* The photo — animated by Reanimated on the UI thread */}
       <Animated.Image
         source={{ uri }}

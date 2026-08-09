@@ -40,6 +40,8 @@ export const GetFeedResponse = zod.object({
   "cropY": zod.number().nullish().describe('Crop rect top edge as fraction of original height.'),
   "cropW": zod.number().nullish().describe('Crop rect width as fraction of original width.'),
   "cropH": zod.number().nullish().describe('Crop rect height as fraction of original height.'),
+  "cropFillColor": zod.string().nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; fills frame space the photo doesn\'t cover when zoomed out. null = photo covers the frame.'),
+  "viewerIsAuthor": zod.boolean().optional().describe('True when the viewer is the author of this post — treat action is blocked for authors.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -332,6 +334,8 @@ export const GetPetResponse = zod.object({
   "cropY": zod.number().nullish().describe('Crop rect top edge as fraction of original height.'),
   "cropW": zod.number().nullish().describe('Crop rect width as fraction of original width.'),
   "cropH": zod.number().nullish().describe('Crop rect height as fraction of original height.'),
+  "cropFillColor": zod.string().nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; fills frame space the photo doesn\'t cover when zoomed out. null = photo covers the frame.'),
+  "viewerIsAuthor": zod.boolean().optional().describe('True when the viewer is the author of this post — treat action is blocked for authors.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -370,6 +374,8 @@ export const GetPetResponse = zod.object({
   "cropY": zod.number().nullish().describe('Crop rect top edge as fraction of original height.'),
   "cropW": zod.number().nullish().describe('Crop rect width as fraction of original width.'),
   "cropH": zod.number().nullish().describe('Crop rect height as fraction of original height.'),
+  "cropFillColor": zod.string().nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; fills frame space the photo doesn\'t cover when zoomed out. null = photo covers the frame.'),
+  "viewerIsAuthor": zod.boolean().optional().describe('True when the viewer is the author of this post — treat action is blocked for authors.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -562,18 +568,19 @@ export const createPostBodyCropFocusXMax = 1;
 export const createPostBodyCropFocusYMin = 0;
 export const createPostBodyCropFocusYMax = 1;
 
-export const createPostBodyCropXMin = 0;
-export const createPostBodyCropXMax = 1;
+export const createPostBodyCropXMin = -8;
+export const createPostBodyCropXMax = 8;
 
-export const createPostBodyCropYMin = 0;
-export const createPostBodyCropYMax = 1;
+export const createPostBodyCropYMin = -8;
+export const createPostBodyCropYMax = 8;
 
 export const createPostBodyCropWMin = 0;
-export const createPostBodyCropWMax = 1;
+export const createPostBodyCropWMax = 9;
 
 export const createPostBodyCropHMin = 0;
-export const createPostBodyCropHMax = 1;
+export const createPostBodyCropHMax = 9;
 
+export const createPostBodyCropFillColorRegExp = new RegExp('^#[0-9A-Fa-f]{6}$');
 
 
 export const CreatePostBody = zod.object({
@@ -584,10 +591,11 @@ export const CreatePostBody = zod.object({
   "cropFocusX": zod.number().min(createPostBodyCropFocusXMin).max(createPostBodyCropFocusXMax).nullish().describe('Horizontal focal point (0–1). null or omitted = center.'),
   "cropFocusY": zod.number().min(createPostBodyCropFocusYMin).max(createPostBodyCropFocusYMax).nullish().describe('Vertical focal point (0–1). null or omitted = center.'),
   "cropMode": zod.string().nullish().describe('\'cover\' (default) or \'contain\'. null = default cover.'),
-  "cropX": zod.number().min(createPostBodyCropXMin).max(createPostBodyCropXMax).nullish().describe('Crop rect left edge as fraction of original width.'),
-  "cropY": zod.number().min(createPostBodyCropYMin).max(createPostBodyCropYMax).nullish().describe('Crop rect top edge as fraction of original height.'),
-  "cropW": zod.number().min(createPostBodyCropWMin).max(createPostBodyCropWMax).nullish().describe('Crop rect width as fraction of original width.'),
-  "cropH": zod.number().min(createPostBodyCropHMin).max(createPostBodyCropHMax).nullish().describe('Crop rect height as fraction of original height.')
+  "cropX": zod.number().min(createPostBodyCropXMin).max(createPostBodyCropXMax).nullish().describe('Crop rect left edge as fraction of original width. May be negative when zoomed out past image bounds (fill color shows in uncovered space).'),
+  "cropY": zod.number().min(createPostBodyCropYMin).max(createPostBodyCropYMax).nullish().describe('Crop rect top edge as fraction of original height. May be negative when zoomed out.'),
+  "cropW": zod.number().min(createPostBodyCropWMin).max(createPostBodyCropWMax).nullish().describe('Crop rect width as fraction of original width. May exceed 1 when zoomed out.'),
+  "cropH": zod.number().min(createPostBodyCropHMin).max(createPostBodyCropHMax).nullish().describe('Crop rect height as fraction of original height. May exceed 1 when zoomed out.'),
+  "cropFillColor": zod.string().regex(createPostBodyCropFillColorRegExp).nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; rendered behind the photo wherever the crop rect extends past the image.')
 }).describe('Request body for creating a post')
 
 export const CreatePostResponse = zod.object({

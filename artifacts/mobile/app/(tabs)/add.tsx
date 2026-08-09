@@ -46,6 +46,7 @@ import {
 } from '@workspace/api-client-react';
 import type { Pet } from '@workspace/api-client-react';
 import { compressImage } from '@/utils/compressImage';
+import { computeAverageColor } from '@/utils/luminance';
 import CropEditor from '@/components/CropEditor';
 import FocalImage from '@/components/FocalImage';
 import PetAvatar from '@/components/PetAvatar';
@@ -114,6 +115,13 @@ export default function AddScreen() {
   // New crop rect + mode.
   const [cropRect,      setCropRect]      = useState<CropRect | null>(null);
   const [cropMode,      setCropMode]      = useState<'cover' | 'contain'>('contain');
+  // Average color sampled from the photo — fills frame space the photo doesn't
+  // cover when zoomed out past the old floor. Persisted with the post so every
+  // surface (editor, feed, detail, share cards) renders the identical fill.
+  const [cropFillColor, setCropFillColor] = useState<string | null>(null);
+  // Monotonic token: ignores stale async color-sample completions after the
+  // user swaps photos mid-sample.
+  const fillColorToken = useRef(0);
 
   // Refiner modal visibility.
   const [refinerOpen,   setRefinerOpen]   = useState(false);
@@ -136,6 +144,10 @@ export default function AddScreen() {
   // Compress → auto-frame → jump straight to form.
   const processPickedAsset = useCallback(async (asset: ImagePicker.ImagePickerAsset) => {
     setCompressedUri(null);
+    // Clear any previous photo's fill color immediately and bump the token so
+    // an in-flight sample for the OLD photo can't overwrite the new one.
+    setCropFillColor(null);
+    fillColorToken.current += 1;
     setStep('compressing');
     setIsChangingPhoto(false); // dismiss source-picker overlay the moment processing starts
     try {
@@ -156,6 +168,15 @@ export default function AddScreen() {
       setCropFocusY(rect.y + rect.h / 2);
       setCropMode('cover');
       setStep('form');
+
+      // Sample the photo's average color (same technique as the share-card
+      // bar theming) — used as the fill behind the photo if the user zooms
+      // out past cover in Adjust. Non-blocking here; submit re-checks and
+      // awaits sampling when the framing actually needs a fill.
+      const token = fillColorToken.current;
+      computeAverageColor(uri)
+        .then((c) => { if (fillColorToken.current === token) setCropFillColor(c); })
+        .catch(() => { if (fillColorToken.current === token) setCropFillColor(null); });
     } catch {
       setError('Failed to process image. Please try another photo.');
       setStep('idle');
@@ -257,6 +278,7 @@ export default function AddScreen() {
     setCropFocusY(0.5);
     setCropRect(null);
     setCropMode('cover');
+    setCropFillColor(null);
     setRefinerOpen(false);
     setError(null);
     setPetSearchQuery('');
@@ -311,6 +333,19 @@ export default function AddScreen() {
       const ownedPetIds  = [...selectedPetIds].filter(id => pets.some(p => p.id === id));
       const otherPetIds  = [...selectedPetIds].filter(id => !pets.some(p => p.id === id));
       const orderedPetIds = [...ownedPetIds, ...otherPetIds];
+
+      // When the framing extends past the image (zoomed out below cover),
+      // the sampled fill color is REQUIRED for WYSIWYG — if the async sample
+      // hasn't resolved yet (fast posters), await it now before creating.
+      const needsFill = !!cropRect && (
+        cropRect.x < 0 || cropRect.y < 0 ||
+        cropRect.x + cropRect.w > 1 || cropRect.y + cropRect.h > 1
+      );
+      let effectiveFillColor: string | null = cropFillColor;
+      if (needsFill && !effectiveFillColor && compressedUri) {
+        effectiveFillColor = await computeAverageColor(compressedUri).catch(() => null);
+      }
+
       await createPost({
         data: {
           petIds:     orderedPetIds,
@@ -326,6 +361,9 @@ export default function AddScreen() {
           cropY:      cropRect?.y ?? null,
           cropW:      cropRect?.w ?? null,
           cropH:      cropRect?.h ?? null,
+          // Sampled fill color — only meaningful when the rect extends past
+          // the image (zoomed out); harmless otherwise.
+          cropFillColor: effectiveFillColor,
         },
       });
 
@@ -340,6 +378,7 @@ export default function AddScreen() {
       setCropFocusY(0.5);
       setCropRect(null);
       setCropMode('cover');
+      setCropFillColor(null);
       setPetSearchQuery('');
       setStep('idle');
       if (pets.length === 1) setSelectedPetIds(new Set([pets[0].id]));
@@ -354,7 +393,7 @@ export default function AddScreen() {
     }
   }, [
     compressedUri, selectedPetIds, hasOwnPetSelected, isUploading, presignUpload, createPost,
-    caption, isNursery, cropFocusX, cropFocusY, cropRect, cropMode,
+    caption, isNursery, cropFocusX, cropFocusY, cropRect, cropMode, cropFillColor,
     queryClient, pets,
   ]);
 
@@ -492,6 +531,8 @@ export default function AddScreen() {
             showAspectPicker
             title="Adjust framing"
             cancelIcon="back"
+            allowZoomOut
+            fillColor={cropFillColor}
             onConfirm={handleRefineConfirm}
             onCancel={handleRefineCancel}
           />
@@ -558,6 +599,7 @@ export default function AddScreen() {
                 cropW={cropRect?.w ?? null}
                 cropH={cropRect?.h ?? null}
                 mode={cropMode}
+                cropFillColor={cropFillColor}
               />
             </View>
             {/* Controls row — below the preview, never clips */}

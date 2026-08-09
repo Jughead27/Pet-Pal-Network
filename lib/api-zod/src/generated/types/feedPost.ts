@@ -31,6 +31,10 @@ export interface FeedPost {
   cropW?: number | null;
   /** Crop rect height as fraction of original height. */
   cropH?: number | null;
+  /** Hex color (e.g. '#AABBCC') sampled from the photo; fills frame space the photo doesn't cover when zoomed out. null = photo covers the frame. */
+  cropFillColor?: string | null;
+  /** True when the viewer is the author of this post — treat action is blocked for authors. */
+  viewerIsAuthor?: boolean;
   isNursery: boolean;
   createdAt: Date;
   pet: PetSummary;

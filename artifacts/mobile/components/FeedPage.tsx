@@ -416,6 +416,7 @@ export default function FeedPage({
         cropY: post.cropY ?? null,
         cropW: post.cropW ?? null,
         cropH: post.cropH ?? null,
+        cropFillColor: post.cropFillColor ?? null,
       });
     } catch (err) {
       // User dismissed the share sheet — not an error worth surfacing.
@@ -429,7 +430,7 @@ export default function FeedPage({
     } finally {
       setIsSharing(false);
     }
-  }, [heroImage, showToast, allPetNames, displayName, caption, post.cropX, post.cropY, post.cropW, post.cropH]);
+  }, [heroImage, showToast, allPetNames, displayName, caption, post.cropX, post.cropY, post.cropW, post.cropH, post.cropFillColor]);
 
   const petName   = post.pet.name;
   const petBreed  = post.pet.breed ?? '';
@@ -457,6 +458,7 @@ export default function FeedPage({
         cropW={post.cropW ?? null}
         cropH={post.cropH ?? null}
         mode={post.cropMode ?? null}
+        cropFillColor={post.cropFillColor ?? null}
         containAlignBottom={bottomOffset + petInfoHeightRef.current + 16}
       />
 
@@ -623,6 +625,7 @@ export default function FeedPage({
           cropY={post.cropY ?? null}
           cropW={post.cropW ?? null}
           cropH={post.cropH ?? null}
+          cropFillColor={post.cropFillColor ?? null}
           displayName={displayName}
           caption={caption}
           barTheme={barTheme}

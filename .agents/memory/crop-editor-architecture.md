@@ -113,6 +113,8 @@ Avatar CropEditor uses `targetAspect={columnWidth / HERO_HEIGHT}` — the full-w
 
 ## Feed / Preview WYSIWYG rendering (FocalImage)
 
+**STALE — verified Aug 2026: the `isCropContain` branch described below does NOT exist in current FocalImage code.** Current FocalImage has only two paths: contain mode (blur letterbox) and rect-driven cover (`Math.max` scale), plus an optional `cropFillColor` solid background behind the rect-positioned image (see zoom-out-fill-architecture.md). Do not assume this branch exists; grep first.
+
 **Problem (pre-existing, surfaced by ratio picker):** FocalImage `mode='cover'` + cropRect used *rect-driven cover* (`scale = max(cw/cropPxW, ch/cropPxH)`), which scales the crop rect to FILL the feed container. Since the crop window aspect (1:1, Original, etc.) rarely matches the feed container's portrait aspect, this further crops the user's chosen framing → WYSIWYG break.
 
 **Fix:** `isCropContain = !isContain && hasCropRect && mode === 'cover'` — new branch in FocalImage.

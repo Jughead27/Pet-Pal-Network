@@ -10,7 +10,8 @@
  * View-only for all viewers — delete is in the pet-profile post modal.
  */
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Image } from 'react-native';
 import {
   ActivityIndicator,
   Platform,
@@ -22,6 +23,8 @@ import {
 } from 'react-native';
 import { useColumnWidth } from '@/hooks/useColumnWidth';
 import MediaImage from '@/components/MediaImage';
+import FocalImage from '@/components/FocalImage';
+import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQueryClient } from '@tanstack/react-query';
@@ -38,6 +41,7 @@ export default function PostDetailScreen() {
   // columnWidth is capped at COLUMN_MAX_WIDTH on web so the photo frame
   // matches the phone column, not the full browser window.
   const columnWidth   = useColumnWidth();
+  const { width: winW, height: winH } = useWindowDimensions();
   const insets        = useSafeAreaInsets();
   const { id }        = useLocalSearchParams<{ id: string }>();
   const queryClient   = useQueryClient();
@@ -101,6 +105,19 @@ export default function PostDetailScreen() {
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
+  // Natural photo size — needed to derive the crop rect's display aspect.
+  const [natSize, setNatSize] = useState<{ w: number; h: number } | null>(null);
+  const mediaUriForSize = post ? resolveMediaKey(post.mediaKey, post.mediaUrl) : null;
+  const natUri = mediaUriForSize && typeof mediaUriForSize === 'object' && 'uri' in mediaUriForSize
+    ? (mediaUriForSize as { uri: string }).uri
+    : null;
+  useEffect(() => {
+    if (!natUri) return;
+    let live = true;
+    Image.getSize(natUri, (w, h) => { if (live) setNatSize({ w, h }); }, () => {});
+    return () => { live = false; };
+  }, [natUri]);
+
   if (!post) {
     return (
       <View style={[styles.fill, styles.centered, { backgroundColor: colors.background }]}>
@@ -115,6 +132,24 @@ export default function PostDetailScreen() {
   }
 
   const photoSource = resolveMediaKey(post.mediaKey, post.mediaUrl);
+
+  // Complete crop rect (all four fields, positive dims) — FocalImage requires
+  // all four; a partial rect must fall back to the legacy contain rendering.
+  const hasFullCropRect =
+    typeof post.cropX === 'number' && typeof post.cropY === 'number' &&
+    typeof post.cropW === 'number' && typeof post.cropH === 'number' &&
+    post.cropW > 0 && post.cropH > 0;
+
+  // Frame height so the container aspect equals the crop rect's own aspect —
+  // the rect then renders exactly (WYSIWYG), with the fill color in any space
+  // the photo doesn't cover. Needs the photo's natural size.
+  const rectAspect = hasFullCropRect && natSize
+    ? ((post.cropW as number) * natSize.w) / Math.max((post.cropH as number) * natSize.h, 1e-6)
+    : null;
+  const cropFrameHeight = Math.min(
+    rectAspect ? columnWidth / rectAspect : columnWidth * 1.5,
+    winH * 0.75,
+  );
 
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
@@ -133,13 +168,32 @@ export default function PostDetailScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Full-frame contain-fit photo */}
+        {/* Photo — respects the poster's crop rect/mode + fill color so the
+            detail view is WYSIWYG with what the poster framed. The container
+            aspect matches the CROP RECT itself (via the photo's natural size),
+            so the rect renders exactly — no further cropping. Legacy posts
+            without a complete crop rect keep the old contain-fit MediaImage. */}
         <View style={[styles.photoWrapper, { paddingTop: topInset + 52, width: columnWidth }]}>
-          <MediaImage
-            source={photoSource}
-            style={[styles.photo, { width: columnWidth, height: columnWidth, maxHeight: columnWidth * 1.5 }]}
-            resizeMode="contain"
-          />
+          {hasFullCropRect ? (
+            <FocalImage
+              source={photoSource}
+              style={[styles.photo, { width: columnWidth, height: cropFrameHeight }]}
+              focusX={post.cropFocusX}
+              focusY={post.cropFocusY}
+              cropX={post.cropX ?? null}
+              cropY={post.cropY ?? null}
+              cropW={post.cropW ?? null}
+              cropH={post.cropH ?? null}
+              mode={post.cropMode ?? null}
+              cropFillColor={post.cropFillColor ?? null}
+            />
+          ) : (
+            <MediaImage
+              source={photoSource}
+              style={[styles.photo, { width: columnWidth, height: columnWidth, maxHeight: columnWidth * 1.5 }]}
+              resizeMode="contain"
+            />
+          )}
         </View>
 
         {/* Caption card */}
