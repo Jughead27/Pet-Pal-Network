@@ -1,0 +1,35 @@
+CONTEXT: Two unrelated changes in one pass.
+
+1. Blur upgrade for the crop fill. Currently, when a post's photo doesn't fully cover its frame, a flat sampled color fills the empty space (already shipped, works correctly). We want to upgrade this to look like a blurred extension of the photo — but only on STATIC render surfaces (feed, post detail, share cards), not the live Adjust/crop editor, which must stay on the cheap solid-color fill for gesture performance.
+
+2. Spacing fix: in the pet-info chrome row (where the paw icon and "following" text appear), the gap between the paw icon and the word "following" is too tight/crowded. Increase that spacing slightly.
+
+GOAL:
+
+Part 1 — Blur, via a tiny-thumbnail-stretch technique (not a true blur filter, to avoid platform-specific blur API differences between web and native):
+1. At post time (same moment crop_fill_color is currently sampled), also generate a very small thumbnail of the photo (e.g. ~24×24px) and store it — a data URI is fine given the tiny size, in a new column (e.g. crop_fill_thumb).
+2. On the static render surfaces (feed, post detail, share card web + native paths), when a fill is needed: render this tiny thumbnail stretched/scaled to cover the fill area (object-fit: cover or equivalent), UNDER the actual photo. The natural upscale interpolation should produce a soft blurred look. Keep crop_fill_color as an instant-available fallback/background so there's no flash of empty space while the thumbnail loads.
+3. The Adjust/crop editor screen is explicitly UNCHANGED — it keeps rendering the flat sampled color live during editing, not the thumbnail. This applies only to the Tall/1:1/4:5/Original cover-mode path — Fit posts never have a fill and are unaffected.
+4. If thumbnail generation or loading fails for any reason, fall back cleanly to the existing solid-color fill — never a blank/broken area.
+
+Part 2 — Spacing:
+1. Increase the gap between the paw icon and the "following" text in the pet-info chrome row. A modest increment (e.g. a few pixels) is sufficient — this is a minor legibility/comfort fix, not a redesign.
+2. Apply consistently everywhere this row appears (feed, post detail, anywhere else it's used).
+
+DO NOT MODIFY:
+- The Adjust/crop editor's live rendering — stays on solid color, untouched.
+- crop_fill_color itself, or how/when it's sampled — reuse as the fallback, don't replace it.
+- The core crop-rect data model or any of the WYSIWYG rendering logic already fixed today — this only adds a new optional layer on top.
+- Fit mode — never has a fill, unaffected by the blur change entirely.
+- Any other spacing/layout in the pet-info row beyond the paw-to-"following" gap.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Two small, independent, additive changes — no conflict between them.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Post a photo with zoom-out triggering a fill — confirm feed, post detail, and share card (both web and native) now show a soft blurred-looking fill instead of a flat color.
+2. Confirm the Adjust/crop editor screen still shows the flat solid color live, unchanged, with no performance regression during pinch/zoom.
+3. Confirm there's no flash of empty space — solid color shows instantly, thumbnail-blur layers in once ready.
+4. Test a post from BEFORE this change — confirm it still renders correctly with the solid-color fallback.
+5. Confirm a Fit post is completely unaffected (never had a fill to begin with).
+6. Confirm the paw icon and "following" text now have a visibly larger, more comfortable gap between them, consistently wherever this row appears.
+7. Golden path: post with zoom-out fill → confirm blurred fill on feed/detail/share card → open Adjust on a new photo → confirm still solid-color, responsive → post a Fit photo → confirm unaffected → check the paw/following spacing → sign out. Verified live on pshpsh.net.

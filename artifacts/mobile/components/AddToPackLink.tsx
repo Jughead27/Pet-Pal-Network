@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
   // Persistent follow-state label — shown only when following (opacity driven by animation).
   // Intentionally small, italic, and muted: a typographic whisper, not a badge.
   followingLabel: {
-    marginLeft: 3,
+    marginLeft: 7,
     fontSize: 10,
     fontStyle: 'italic' as const,
     color: 'rgba(240,244,248,1)',
