@@ -959,6 +959,9 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
+        {/* Hairline divider — isolates the destructive zone from Sign out */}
+        <View style={[styles.deleteDivider, { backgroundColor: colors.border }]} />
+
         {/* ── Delete account — quiet destructive whisper with inline confirm ── */}
         {confirmDelete ? (
           <View style={styles.signOutConfirmRow}>
@@ -1008,7 +1011,7 @@ export default function ProfileScreen() {
             accessibilityRole="button"
             accessibilityLabel="Delete my account"
           >
-            <Text style={[styles.deleteAccountText, { color: colors.mutedForeground }]}>
+            <Text style={styles.deleteAccountText}>
               Delete my account
             </Text>
           </TouchableOpacity>
@@ -1696,14 +1699,25 @@ const styles = StyleSheet.create({
     gap:           10,
   },
   // Delete account — whisper row below sign out
+  // Hairline divider + generous margin — puts Delete in its own visual zone,
+  // clearly separated from the Sign out list above.
+  deleteDivider: {
+    height:    StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    marginTop: 28,
+  },
   deleteAccountRow: {
     paddingVertical: 10,
+    marginTop:       20,
     marginBottom:    24,
   },
   deleteAccountText: {
     fontFamily: 'Inter_400Regular',
     fontSize:   13,
     opacity:    0.6,
+    // Dim, cool crimson — whisper-tier destructive. Deliberately far from the
+    // warm coral boop color (#FF7A5C): cooler hue, no orange lean.
+    color:      '#C2334D',
   },
   deleteConfirmTitle: {
     fontFamily: 'Inter_600SemiBold',

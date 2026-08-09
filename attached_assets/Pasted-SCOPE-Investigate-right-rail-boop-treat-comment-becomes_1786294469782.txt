@@ -1,0 +1,13 @@
+SCOPE: Investigate — right rail (boop/treat/comment) becomes unresponsive after the tap-to-toggle-chrome cycle on post detail/pager, recoverable only by a hard refresh.
+
+DO NOT MODIFY anything yet — this is an investigation-only pass. Report findings before proposing a fix.
+
+REPRO: on post detail (pager view), tap the image once → caption + right rail hide (expected, existing chrome-toggle behavior). Tap the image again → caption + right rail become visible again, but boop/treat/comment/share no longer respond to taps. Only a hard page refresh restores functionality.
+
+INVESTIGATE, in this order:
+1) Check whether the chrome-toggle mechanism renders/unmounts the right rail's Pressable/TouchableOpacity components on hide/show, vs. just toggling opacity/visibility. If it's remounting, check whether event handlers are being correctly reattached — a stale closure or a handler bound to a pre-toggle render could silently no-op.
+2) Check for a leftover overlay: does the chrome-hide state leave any full-screen Pressable, backdrop, or gesture-capture layer mounted (even at opacity 0 / pointerEvents not properly reset) that could be sitting on top of the right rail after chrome reappears, intercepting taps before they reach boop/treat/comment? This is the same failure family as the existing TOUCH RESPONDER GOTCHA (backdrop Pressable swallowing taps meant for an inner element) — check whether the chrome-toggle uses a similar backdrop/overlay pattern and whether pointerEvents or zIndex gets reset correctly on show.
+3) Check whether the tap-to-toggle-chrome gesture handler and the right rail's own tap handlers are competing for the same touch — e.g. a shared parent gesture responder capturing the tap meant for a boop button once chrome is back, because gesture priority/exclusion zones didn't get reconfigured after the toggle.
+4) Check console/network for any error thrown specifically on the second tap (chrome show) that might be silently swallowed.
+
+REPORT BACK: root cause identified (with file/line if found), plus a proposed fix — do not implement the fix in this pass unless the root cause and fix are unambiguous and low-risk. If genuinely uncertain after investigating, report what was ruled out and what remains unclear rather than guessing.
