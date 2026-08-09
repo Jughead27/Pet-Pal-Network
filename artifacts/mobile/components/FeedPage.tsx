@@ -439,12 +439,26 @@ export default function FeedPage({
     return heroFrame.top + heroFrame.height * frac;
   }, [heroFrame, hasFullCropRect, post.cropFillColor, post.cropY, post.cropH]);
 
+  // Chrome trigger: keyed off whether the frame is VERTICALLY FULL-BLEED,
+  // not whether a fill is present. A frame shorter than the page (1:1, 4:5 —
+  // fill or no fill) always pushes the chrome below its bottom edge; only a
+  // frame that fills the page height top-to-bottom keeps the overlay — and
+  // even then, a bottom fill inside it still moves the chrome below the seam.
+  const FULL_BLEED_EPS = 2;
+  const chromeSeamY = useMemo(() => {
+    if (!heroFrame || !hasFullCropRect) return null;
+    const framePhotoBottom = fillSeamY ?? (heroFrame.top + heroFrame.height);
+    const verticallyFullBleed = heroFrame.height >= height - FULL_BLEED_EPS;
+    if (verticallyFullBleed && fillSeamY == null) return null; // overlay, unchanged
+    return framePhotoBottom;
+  }, [heroFrame, hasFullCropRect, fillSeamY, height]);
+
   const CHROME_FILL_GAP = 14;
   // Clamp so the chrome never runs off the bottom of the page; in the
   // degenerate case (photo bottom very low) this converges back to roughly
   // the default position.
-  const petInfoPosition = fillSeamY != null
-    ? { top: Math.min(fillSeamY + CHROME_FILL_GAP, height - (insets.bottom + 8) - petInfoH) }
+  const petInfoPosition = chromeSeamY != null
+    ? { top: Math.min(chromeSeamY + CHROME_FILL_GAP, height - (insets.bottom + 8) - petInfoH) }
     : { bottom: bottomOffset };
 
   // ── Action rail placement ─────────────────────────────────────────────────

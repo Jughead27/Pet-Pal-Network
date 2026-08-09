@@ -1,0 +1,23 @@
+CONTEXT: The chrome (pet name/paw/caption block) positioning rule needs to be corrected. The current rule decides overlay-vs-below based on whether there's a color FILL inside the frame (bottom-fill posts get pushed below; side-only-fill and fully-covered posts stay overlaid on the photo). That's the wrong signal. The correct rule, per James: it should be based on whether the photo is VERTICALLY FULL-BLEED (fills the full available screen height) or not — independent of whether a fill happens to be present.
+- Vertically full-bleed (e.g. a Tall-ratio post filling the screen top to bottom): overlay is correct, unchanged.
+- NOT vertically full-bleed (e.g. 1:1, 4:5, or any frame shorter than the available space — whether or not it has a color fill inside it): the chrome must NEVER overlay or sit close to the photo. It always gets real clearance below the frame's actual bottom edge.
+
+GOAL: Change the chrome positioning logic so it keys off whether the rendered frame's height fills the available vertical space, not whether a fill color/blur is present inside the frame.
+1. Determine the frame's actual rendered height vs. the available container height for that post.
+2. If the frame height ≈ full available height (vertically full-bleed): keep current overlay-on-photo positioning, unchanged.
+3. If the frame height < full available height (e.g. 1:1, 4:5, or any shorter frame — regardless of whether crop_fill_color/blur is present inside that frame or not): position the chrome BELOW the frame's actual bottom edge with real clearance (reuse the same clearance value already established in the prior chrome-anchoring fix), never overlapping or touching the photo.
+4. This replaces/corrects the previous rule's scope — side-only-fill and fully-covered-but-shorter-than-screen frames (e.g. a 1:1 post with no zoom-out fill needed) must now ALSO get the below-frame clearance treatment, not just bottom-fill posts.
+
+DO NOT MODIFY:
+- The action rail's positioning logic (already fixed correctly in the prior prompt) — this prompt is about the pet-name/caption/paw chrome only. If the two need to stay visually aligned, apply the same corrected vertical-fill-based rule to both, but do not regress the rail fix that just shipped.
+- Full-bleed/Tall-ratio post positioning — must remain pixel-identical.
+- Any crop-rect data model or rendering math — reuse existing computed frame dimensions, don't introduce new math.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This corrects the trigger condition for chrome positioning — from "has a fill" to "is vertically full-bleed" — reusing existing frame-dimension calculations.
+
+ACCEPTANCE TEST (must end in golden path):
+1. View a Tall-ratio post that fills the screen top to bottom — confirm chrome still overlays on the photo, unchanged.
+2. View a 1:1 post that is FULLY COVERED (no zoom-out fill needed) — confirm the chrome now sits below the frame with real clearance, NOT overlapping/close to the photo (this is the corrected case).
+3. View a 1:1 or 4:5 post WITH a zoom-out fill inside the frame — confirm chrome still correctly sits below with clearance (already working, must not regress).
+4. Confirm the action rail's already-fixed positioning is unaffected by this change.
+5. Golden path: view a Tall post (overlay, unchanged) → view a fully-covered 1:1 post (chrome now has clearance) → sign out. Verified live on pshpsh.net.
