@@ -1,0 +1,20 @@
+SCOPE: Add a "send invite" action to each row on the Invite Requests admin screen.
+
+DO NOT MODIFY: the invite_requests capture flow itself, the existing "mark contacted"/"close" actions (keep both, still manually usable), the normal member-facing "invite a friend" flow and its quota logic, the invite landing page or SMS copy just shipped.
+
+PRESERVATION CLAUSE: existing request rows and their current status must display correctly; this is an additive action, not a replacement of the existing bookkeeping buttons.
+
+1) API
+- New admin-gated endpoint (e.g. POST /admin/invite-requests/:id/send-invite) that creates a real invite under the admin's own account/quota (same invite-creation logic and lineage attribution already used for the normal "invite a friend" flow — admin's unlimited quota, standard invited_by tracking).
+- On success, automatically transition the request's status to `contacted` (reuse the existing status field/logic — no new enum value needed) and record which invite was generated for this request, if there's a natural place to store that link (e.g. a nullable column referencing the created invite) — useful for admin's own reference, not required for the core feature if it adds meaningful schema risk.
+- Audit-logged, consistent with other admin mutations.
+
+2) UI
+- Add a "send invite" button on each pending request row, alongside the existing "mark contacted" and "close" actions.
+- Tapping it: creates the invite, then opens the native share sheet (same mechanism as "invite a friend") pre-filled with the current SMS copy (including the "it's brand new, and you're one of the first to see it." line). Admin picks how to actually deliver it (text, email via their own client, copy link) from the share sheet, same as the normal invite flow.
+- After a successful send, the row updates to reflect `contacted` status immediately (no separate manual step needed), and the button area reflects that an invite was already sent (e.g. a quiet "invite sent" label) so admin doesn't lose track of which requests already got one.
+- Surface real errors if invite creation fails (e.g. quota issue, though admin's should be unlimited) — no silent failures, consistent with the error-surfacing fix from the Invite Management round.
+
+3) ACCEPTANCE
+- tsc clean both packages.
+- Dev/live check: open Invite Requests → tap "send invite" on a pending row → share sheet opens with correct pre-filled text and a real, valid invite link → row status updates to contacted automatically → confirm the generated invite actually works when redeemed (creates a real account, correctly attributed to admin as inviter) → confirm "mark contacted" and "close" still work independently for rows not using this new action.

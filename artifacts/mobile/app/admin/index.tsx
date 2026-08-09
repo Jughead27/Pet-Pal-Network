@@ -60,6 +60,11 @@ const SECTIONS = [
     label:       'Invite Management',
     description: 'Per-user quota overrides and invited-by lineage.',
   },
+  {
+    route:       '/admin/users' as const,
+    label:       'Users',
+    description: 'Read-only member table — lineage, invite usage, post counts.',
+  },
 ];
 
 export default function AdminIndexScreen() {

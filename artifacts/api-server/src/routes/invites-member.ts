@@ -20,7 +20,7 @@ import { activePets } from "../lib/petQueries.js";
 const router: IRouter = Router();
 
 /** Generates a short, URL-safe, unguessable invite code (11 chars, 64-bit entropy). */
-function generateCode(): string {
+export function generateCode(): string {
   return randomBytes(8).toString("base64url");
 }
 

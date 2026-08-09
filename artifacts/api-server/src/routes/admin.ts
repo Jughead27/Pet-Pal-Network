@@ -53,6 +53,7 @@ import { purgeDeletedComments } from "../lib/purgeDeletedComments.js";
 import { deleteAccount } from "../lib/deleteAccount.js";
 import { resolveSpotlightPet, getSpotlightWindowDays } from "../lib/spotlight.js";
 import { processClerkDeletions } from "../lib/clerkDeletions.js";
+import { generateCode } from "./invites-member.js";
 
 const adminRouter = Router();
 
@@ -816,6 +817,112 @@ adminRouter.post("/admin/invite-requests/:id/close", async (req, res) => {
   }
 
   res.json({ ok: true, id, status: "closed" });
+});
+
+/**
+ * POST /admin/invite-requests/:id/send-invite
+ *
+ * Creates a real invite under the acting admin's account (standard lineage —
+ * invited_by will point at the admin; admins bypass quota in the normal flow
+ * and no quota check applies here either). On success the request is marked
+ * `contacted` and the created invite id is recorded on the request row.
+ * Closed requests are rejected. If an invite was already sent for this
+ * request, returns 409 so admins don't accidentally double-issue.
+ * Audit: invite_request.send_invite
+ */
+adminRouter.post("/admin/invite-requests/:id/send-invite", async (req, res) => {
+  const { id }     = req.params;
+  const { userId } = (req as Express.RequestWithAuth).auth!;
+
+  const result = await db.transaction(async (tx) => {
+    const [request] = await tx
+      .select()
+      .from(inviteRequestsTable)
+      .where(eq(inviteRequestsTable.id, id))
+      .for("update");
+
+    if (!request) return { kind: "not_found" as const };
+    if (request.status === "closed") return { kind: "closed" as const };
+    if (request.inviteId) return { kind: "already_sent" as const };
+
+    const [invite] = await tx
+      .insert(invitesTable)
+      .values({ inviterId: userId, code: generateCode() })
+      .returning();
+
+    await tx
+      .update(inviteRequestsTable)
+      .set({ status: "contacted", inviteId: invite.id })
+      .where(eq(inviteRequestsTable.id, id));
+
+    await writeAudit(tx, userId, "invite_request.send_invite", "invite_request", id, {
+      email:    request.email,
+      inviteId: invite.id,
+    });
+
+    return { kind: "ok" as const, invite };
+  });
+
+  if (result.kind === "not_found") {
+    res.status(404).json({ error: "Invite request not found" });
+    return;
+  }
+  if (result.kind === "closed") {
+    res.status(409).json({ error: "Request is closed" });
+    return;
+  }
+  if (result.kind === "already_sent") {
+    res.status(409).json({ error: "An invite was already sent for this request" });
+    return;
+  }
+
+  res.status(201).json({
+    ok: true,
+    id,
+    status: "contacted",
+    invite: { id: result.invite.id, code: result.invite.code },
+  });
+});
+
+/**
+ * GET /admin/users-overview
+ *
+ * Read-only per-user overview for the admin "Users" table: display name,
+ * inviter display name, invites used vs. effective quota, and live post
+ * count (archived + admin-hidden excluded — same convention as elsewhere).
+ * Tombstoned accounts excluded. Most-recently-joined first. No pagination —
+ * intentionally simple at current member counts.
+ */
+adminRouter.get("/admin/users-overview", async (_req, res) => {
+  const [cfg] = await db
+    .select({ value: configTable.value })
+    .from(configTable)
+    .where(eq(configTable.key, "invite_default_quota"))
+    .limit(1);
+  const defaultQuota = parseInt(cfg?.value ?? "5");
+
+  const { rows } = await db.execute(sql`
+    SELECT
+      u.id,
+      COALESCE(u.display_name, u.username)                    AS "displayName",
+      u.role,
+      u.created_at                                            AS "createdAt",
+      COALESCE(ib.display_name, ib.username)                  AS "invitedByName",
+      COALESCE(u.invite_quota, ${defaultQuota})::int          AS "effectiveQuota",
+      (SELECT COUNT(*)::int FROM invites i
+        WHERE i.inviter_id = u.id
+          AND i.status IN ('active','used'))                  AS "invitesUsed",
+      (SELECT COUNT(*)::int FROM posts p
+        WHERE p.posted_by_user_id = u.id
+          AND p.archived_at IS NULL
+          AND p.hidden_by_admin = FALSE)                      AS "postCount"
+    FROM users u
+    LEFT JOIN users ib ON ib.id = u.invited_by
+    WHERE u.deleted_at IS NULL
+    ORDER BY u.created_at DESC
+  `);
+
+  res.json({ users: rows });
 });
 
 // ─── Breed suggestions ────────────────────────────────────────────────────────

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   FlatList,
   Platform,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -26,6 +27,7 @@ interface InviteRequest {
   note:        string | null;
   requestedAt: string;
   status:      string;
+  inviteId:    string | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -50,12 +52,63 @@ export default function AdminInvitesScreen() {
 
   const requests = data?.inviteRequests ?? [];
 
+  // Closed requests live in a collapsed archive section at the bottom;
+  // pending/contacted render exactly as before at the top.
+  const activeRequests = requests.filter((r) => r.status !== 'closed');
+  const closedRequests = requests.filter((r) => r.status === 'closed');
+  const [closedExpanded, setClosedExpanded] = useState(false);
+
+  // Last failed action — surfaced instead of silently swallowed.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const errMsg = (e: unknown): string => {
+    const err = e as { data?: { error?: string }; message?: string };
+    return err?.data?.error ?? err?.message ?? 'something went wrong.';
+  };
+
   const mutate = useCallback(async (id: string, action: 'contact' | 'close') => {
     if (pendingIds.has(id)) return;
     addPending(id);
+    setActionError(null);
     try {
       await customFetch(`/api/admin/invite-requests/${id}/${action}`, { method: 'POST' });
       await refetch();
+    } catch (e) {
+      setActionError(`${action === 'contact' ? 'mark contacted' : 'close'} failed: ${errMsg(e)}`);
+    } finally {
+      removePending(id);
+    }
+  }, [pendingIds, refetch]);
+
+  /** Creates a real invite for this request under the admin's account, then
+   *  opens the share sheet with the standard invite message. */
+  const sendInvite = useCallback(async (id: string) => {
+    if (pendingIds.has(id)) return;
+    addPending(id);
+    setActionError(null);
+    try {
+      const result = await customFetch<{ ok: boolean; invite: { id: string; code: string } }>(
+        `/api/admin/invite-requests/${id}/send-invite`, { method: 'POST' },
+      );
+      const link    = `https://pshpsh.net/invite/${result.invite.code}`;
+      const message = `you're invited to pshpsh — follow pets, not people. it's brand new, and you're one of the first to see it. 🐾 ${link}`;
+      if (Platform.OS === 'web') {
+        try {
+          await (navigator as unknown as { share(o: object): Promise<void> }).share({ text: message, url: link });
+        } catch {
+          try {
+            await (navigator as unknown as { clipboard: { writeText(s: string): Promise<void> } }).clipboard.writeText(message);
+            setActionError('share sheet unavailable — invite message copied to clipboard instead.');
+          } catch {
+            setActionError(`share sheet unavailable — invite link: ${link}`);
+          }
+        }
+      } else {
+        await Share.share({ message });
+      }
+      await refetch();
+    } catch (e) {
+      setActionError(`send invite failed: ${errMsg(e)}`);
+      await refetch(); // invite may have been created even if sharing failed
     } finally {
       removePending(id);
     }
@@ -88,6 +141,24 @@ export default function AdminInvitesScreen() {
           <ActivityIndicator size="small" color={colors.mutedForeground} />
         ) : isActionable ? (
           <View style={styles.actions}>
+            {item.inviteId ? (
+              <>
+                <Text style={[styles.sentLabel, { color: colors.mutedForeground }]}>invite sent</Text>
+                <Text style={[styles.sep, { color: colors.border }]}>·</Text>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity
+                  onPress={() => sendInvite(item.id)}
+                  style={styles.actionBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send invite"
+                >
+                  <Text style={[styles.actionText, { color: colors.primary }]}>send invite</Text>
+                </TouchableOpacity>
+                <Text style={[styles.sep, { color: colors.border }]}>·</Text>
+              </>
+            )}
             {item.status !== 'contacted' && (
               <>
                 <TouchableOpacity
@@ -113,7 +184,7 @@ export default function AdminInvitesScreen() {
         ) : null}
       </View>
     );
-  }, [colors, pendingIds, mutate]);
+  }, [colors, pendingIds, mutate, sendInvite]);
 
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
@@ -127,6 +198,18 @@ export default function AdminInvitesScreen() {
         </TouchableOpacity>
       </View>
 
+      {actionError && (
+        <TouchableOpacity
+          onPress={() => setActionError(null)}
+          accessibilityRole="button"
+          accessibilityLabel="Dismiss error"
+        >
+          <Text style={[styles.actionError, { color: colors.destructive }]}>
+            {actionError} · tap to dismiss
+          </Text>
+        </TouchableOpacity>
+      )}
+
       {isLoading ? (
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
       ) : isError ? (
@@ -139,9 +222,46 @@ export default function AdminInvitesScreen() {
         </View>
       ) : (
         <FlatList
-          data={requests}
+          data={activeRequests}
           keyExtractor={(r) => r.id}
           renderItem={renderItem}
+          ListEmptyComponent={
+            <Text style={[styles.archiveEmpty, { color: colors.mutedForeground }]}>
+              no open requests.
+            </Text>
+          }
+          ListFooterComponent={
+            closedRequests.length > 0 ? (
+              <View style={styles.archiveSection}>
+                <TouchableOpacity
+                  onPress={() => setClosedExpanded((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={closedExpanded ? 'Collapse closed requests' : 'Show closed requests'}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.archiveToggle, { color: colors.mutedForeground }]}>
+                    {closedExpanded ? 'closed — show less ↑' : `closed (${closedRequests.length}) ↓`}
+                  </Text>
+                </TouchableOpacity>
+                {closedExpanded && closedRequests.map((item) => (
+                  <View key={item.id} style={[styles.archiveRow, { borderBottomColor: colors.border }]}>
+                    <View style={styles.cardTop}>
+                      <Text numberOfLines={1} style={[styles.archiveEmail, { color: colors.mutedForeground }]}>
+                        {item.email}
+                      </Text>
+                      <Text style={[styles.age, { color: colors.mutedForeground }]}>{formatAge(item.requestedAt)}</Text>
+                    </View>
+                    {item.note ? (
+                      <Text numberOfLines={2} style={[styles.archiveNote, { color: colors.mutedForeground }]}>
+                        {item.note}
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null
+          }
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
         />
@@ -187,5 +307,14 @@ const styles = StyleSheet.create({
   actions:    { flexDirection: 'row', alignItems: 'center', gap: 4, paddingTop: 4 },
   actionBtn:  { paddingVertical: 4, paddingHorizontal: 2 },
   actionText: { fontFamily: 'Inter_500Medium', fontSize: 13 },
+  sentLabel:  { fontFamily: 'Inter_400Regular', fontSize: 13, fontStyle: 'italic' },
   sep:        { fontSize: 13, paddingHorizontal: 2 },
+
+  archiveSection: { paddingTop: 16, gap: 0 },
+  archiveToggle:  { fontFamily: 'Inter_500Medium', fontSize: 13, paddingVertical: 4 },
+  archiveRow:     { paddingVertical: 10, gap: 4, borderBottomWidth: StyleSheet.hairlineWidth, opacity: 0.7 },
+  archiveEmail:   { fontFamily: 'Inter_400Regular', fontSize: 13, flex: 1, marginRight: 8 },
+  archiveNote:    { fontFamily: 'Inter_400Regular', fontSize: 12, lineHeight: 17 },
+  archiveEmpty:   { fontFamily: 'Inter_400Regular', fontSize: 13, paddingVertical: 8 },
+  actionError: { fontFamily: 'Inter_400Regular', fontSize: 13, paddingHorizontal: 16, paddingTop: 10 },
 });

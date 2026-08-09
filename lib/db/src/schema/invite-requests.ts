@@ -7,6 +7,9 @@ export const inviteRequestsTable = pgTable("invite_requests", {
   note:        text("note"),
   requestedAt: timestamp("requested_at").defaultNow().notNull(),
   status:      text("status").notNull().default("pending"),
+  // Set when an admin sends a real invite for this request ("send invite"
+  // action) — reference only, no FK cascade semantics needed.
+  inviteId:    text("invite_id"),
 });
 
 export type InviteRequest = typeof inviteRequestsTable.$inferSelect;
