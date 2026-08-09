@@ -1,0 +1,20 @@
+CONTEXT: The feed's post container/card is likely hard-coded to a fixed aspect ratio, rather than being sized by each individual post's own confirmed crop rect aspect. This means a post confirmed at 1:1 (or 4:5/Original) in Adjust still renders in the feed at a fixed tall shape, cover-cropping/clipping the confirmed framing — the same root-cause pattern already found and fixed twice today on the New Post preview screen (container aspect hard-coded instead of matching the confirmed crop rect).
+
+GOAL: INVESTIGATE FIRST, then fix if confirmed. 
+1. Confirm whether the feed's post card container is currently sized by a fixed/hard-coded aspect ratio, or by each post's own crop rect aspect.
+2. If hard-coded: apply the same fix pattern already proven correct in post-detail (app/post/[id].tsx, hasFullCropRect + rect-aspect container) — size each feed post's container by that post's own confirmed crop rect aspect (rect.w × naturalWidth / (rect.h × naturalHeight)), not a fixed feed-wide aspect. A 1:1 post should render as a square card in the feed, 4:5 as 4:5, Tall as tall, Original as the photo's native shape — matching exactly what post detail already correctly shows for that same post.
+3. Legacy posts (pre-dating the crop-rect system, isContain-based) should continue rendering exactly as they do today — this only affects posts that have a confirmed crop rect.
+
+DO NOT MODIFY:
+- FocalImage's core rect-driven cover math — correct, reuse as-is.
+- Post detail, share cards, or the New Post compose preview — all already correct and already using this same pattern, untouched.
+- Any post's stored crop_rect or crop_fill_color data — read-only for this fix.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a container-sizing fix on the feed's post card, reusing the exact pattern already proven correct in post-detail and the New Post preview.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Post a photo with a 1:1 crop confirmed (with zoom-out + fill if applicable) — confirm the feed shows this post as a square card matching what Adjust and the New Post preview showed, not a tall shape.
+2. Test 4:5, Tall, and Original the same way — confirm each renders in the feed at its own correct aspect.
+3. Confirm an OLDER/legacy post (no crop rect) still renders exactly as it did before this change.
+4. Confirm post detail, share cards, and the New Post preview are all unaffected (already correct).
+5. Golden path: post at 1:1 with zoom-out fill → confirm feed shows it as a square, matching Adjust/New-Post-preview/post-detail → sign out. Verified live on pshpsh.net.

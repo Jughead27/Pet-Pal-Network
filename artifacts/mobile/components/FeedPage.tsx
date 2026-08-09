@@ -55,6 +55,10 @@ import { setFeedCellDimensions } from '@/utils/feedCellDimensions';
 // RAIL_EXCLUSION_X is computed dynamically inside handleMediaPress from pageWidthRef.current
 // so it stays correct inside the 430-px web column (Dimensions.get returns the full window
 // width on web, not the column width).
+// Per-URI natural-size cache — avoids repeat Image.getSize calls as pager
+// cells recycle and the same post scrolls back into view.
+const heroNatSizeCache = new Map<string, { w: number; h: number }>();
+
 const RAIL_TOUCH_WIDTH   = 40;
 const RAIL_RIGHT_INSET   = 14;
 const RAIL_MARGIN        = 24;
@@ -358,6 +362,69 @@ export default function FeedPage({
     [post.mediaKey, post.mediaUrl],
   );
 
+  // ── Rect-aspect hero frame (same pattern as post detail) ─────────────────
+  // Posts with a complete crop rect render in a frame whose aspect equals the
+  // rect's own aspect (rect.w×natW / rect.h×natH) — WYSIWYG with Adjust, the
+  // compose preview, and post detail. Legacy posts (no complete rect) keep the
+  // full-bleed cover rendering exactly as before.
+  const hasFullCropRect =
+    typeof post.cropX === 'number' && typeof post.cropY === 'number' &&
+    typeof post.cropW === 'number' && typeof post.cropH === 'number' &&
+    post.cropW > 0 && post.cropH > 0;
+
+  const [pageWidth, setPageWidth] = useState(0);
+  const [natSize, setNatSize] = useState<{ w: number; h: number } | null>(null);
+  // getSize failed (expired URL, network) — fall back to full-bleed rendering
+  // instead of leaving the page permanently blank.
+  const [natSizeFailed, setNatSizeFailed] = useState(false);
+  const heroUri = typeof heroImage === 'object' && heroImage !== null && 'uri' in (heroImage as object)
+    ? (heroImage as { uri: string }).uri
+    : null;
+  useEffect(() => {
+    // Reset synchronously on any source change — FlatList may recycle this
+    // mounted FeedPage for a different post, and stale dimensions would frame
+    // the new post's rect with the old photo's aspect.
+    setNatSize(null);
+    setNatSizeFailed(false);
+    if (!hasFullCropRect || !heroUri) return;
+    const cached = heroNatSizeCache.get(heroUri);
+    if (cached) { setNatSize(cached); return; }
+    let live = true;
+    Image.getSize(
+      heroUri,
+      (w, h) => {
+        if (w > 0 && h > 0) {
+          heroNatSizeCache.set(heroUri, { w, h });
+          if (live) setNatSize({ w, h });
+        }
+      },
+      () => { if (live) setNatSizeFailed(true); },
+    );
+    return () => { live = false; };
+  }, [hasFullCropRect, heroUri]);
+
+  const rectAspect = hasFullCropRect && natSize
+    ? ((post.cropW as number) * natSize.w) / Math.max((post.cropH as number) * natSize.h, 1e-6)
+    : null;
+  // Frame: full page width at the rect's aspect, capped to the page height
+  // (shrinking width proportionally when capped), centered on the page.
+  const heroFrame = useMemo(() => {
+    if (!rectAspect || pageWidth <= 0 || height <= 0) return null;
+    let fw = pageWidth;
+    let fh = fw / rectAspect;
+    if (fh > height) {
+      fh = height;
+      fw = fh * rectAspect;
+    }
+    return {
+      position: 'absolute' as const,
+      width:  fw,
+      height: fh,
+      left:   (pageWidth - fw) / 2,
+      top:    (height - fh) / 2,
+    };
+  }, [rectAspect, pageWidth, height]);
+
   // ── Derived display values for share card overlay ─────────────────────────
   // Declared before handleSharePress so they can appear in its dep array.
   const caption     = post.caption ?? '';
@@ -442,25 +509,47 @@ export default function FeedPage({
       onLayout={(e) => {
         const w = e.nativeEvent.layout.width;
         pageWidthRef.current = w;
+        setPageWidth(w);
         // Write the exact rendered cell size so the compose screen can lock its
         // crop frame and preview to the same aspect without guessing.
         setFeedCellDimensions(w, height);
       }}
     >
-      {/* Full-bleed hero image — respects poster's crop rect/mode or focal point */}
-      <FocalImage
-        source={heroImage}
-        style={styles.heroImage}
-        focusX={post.cropFocusX}
-        focusY={post.cropFocusY}
-        cropX={post.cropX ?? null}
-        cropY={post.cropY ?? null}
-        cropW={post.cropW ?? null}
-        cropH={post.cropH ?? null}
-        mode={post.cropMode ?? null}
-        cropFillColor={post.cropFillColor ?? null}
-        containAlignBottom={bottomOffset + petInfoHeightRef.current + 16}
-      />
+      {/* Hero image. Posts with a complete crop rect render in a centered
+          rect-aspect frame (WYSIWYG with Adjust / compose preview / detail);
+          legacy posts keep the original full-bleed cover/contain rendering.
+          While a rect post's natural size is still resolving, nothing is
+          drawn (dark page background) to avoid a mis-cropped flash. */}
+      {hasFullCropRect && !natSizeFailed ? (
+        heroFrame ? (
+          <FocalImage
+            source={heroImage}
+            style={heroFrame}
+            focusX={post.cropFocusX}
+            focusY={post.cropFocusY}
+            cropX={post.cropX ?? null}
+            cropY={post.cropY ?? null}
+            cropW={post.cropW ?? null}
+            cropH={post.cropH ?? null}
+            mode={post.cropMode ?? null}
+            cropFillColor={post.cropFillColor ?? null}
+          />
+        ) : null
+      ) : (
+        <FocalImage
+          source={heroImage}
+          style={styles.heroImage}
+          focusX={post.cropFocusX}
+          focusY={post.cropFocusY}
+          cropX={post.cropX ?? null}
+          cropY={post.cropY ?? null}
+          cropW={post.cropW ?? null}
+          cropH={post.cropH ?? null}
+          mode={post.cropMode ?? null}
+          cropFillColor={post.cropFillColor ?? null}
+          containAlignBottom={bottomOffset + petInfoHeightRef.current + 16}
+        />
+      )}
 
       {/* Media tap target (sits below all interactive overlays) */}
       <Pressable style={StyleSheet.absoluteFill} onPress={handleMediaPress} />
