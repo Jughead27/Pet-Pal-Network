@@ -41,6 +41,7 @@ export const GetFeedResponse = zod.object({
   "cropW": zod.number().nullish().describe('Crop rect width as fraction of original width.'),
   "cropH": zod.number().nullish().describe('Crop rect height as fraction of original height.'),
   "cropFillColor": zod.string().nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; fills frame space the photo doesn\'t cover when zoomed out. null = photo covers the frame.'),
+  "cropFillThumb": zod.string().nullish().describe('Tiny (~24px) thumbnail of the photo as a data URI; static surfaces stretch it under the photo for a blurred-looking fill. null = solid-color fill only.'),
   "viewerIsAuthor": zod.boolean().optional().describe('True when the viewer is the author of this post — treat action is blocked for authors.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -335,6 +336,7 @@ export const GetPetResponse = zod.object({
   "cropW": zod.number().nullish().describe('Crop rect width as fraction of original width.'),
   "cropH": zod.number().nullish().describe('Crop rect height as fraction of original height.'),
   "cropFillColor": zod.string().nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; fills frame space the photo doesn\'t cover when zoomed out. null = photo covers the frame.'),
+  "cropFillThumb": zod.string().nullish().describe('Tiny (~24px) thumbnail of the photo as a data URI; static surfaces stretch it under the photo for a blurred-looking fill. null = solid-color fill only.'),
   "viewerIsAuthor": zod.boolean().optional().describe('True when the viewer is the author of this post — treat action is blocked for authors.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -375,6 +377,7 @@ export const GetPetResponse = zod.object({
   "cropW": zod.number().nullish().describe('Crop rect width as fraction of original width.'),
   "cropH": zod.number().nullish().describe('Crop rect height as fraction of original height.'),
   "cropFillColor": zod.string().nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; fills frame space the photo doesn\'t cover when zoomed out. null = photo covers the frame.'),
+  "cropFillThumb": zod.string().nullish().describe('Tiny (~24px) thumbnail of the photo as a data URI; static surfaces stretch it under the photo for a blurred-looking fill. null = solid-color fill only.'),
   "viewerIsAuthor": zod.boolean().optional().describe('True when the viewer is the author of this post — treat action is blocked for authors.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -581,6 +584,10 @@ export const createPostBodyCropHMin = 0;
 export const createPostBodyCropHMax = 9;
 
 export const createPostBodyCropFillColorRegExp = new RegExp('^#[0-9A-Fa-f]{6}$');
+export const createPostBodyCropFillThumbMax = 20000;
+
+
+export const createPostBodyCropFillThumbRegExp = new RegExp('^data:image/(jpeg|png);base64,[A-Za-z0-9+/=]+$');
 
 
 export const CreatePostBody = zod.object({
@@ -595,7 +602,8 @@ export const CreatePostBody = zod.object({
   "cropY": zod.number().min(createPostBodyCropYMin).max(createPostBodyCropYMax).nullish().describe('Crop rect top edge as fraction of original height. May be negative when zoomed out.'),
   "cropW": zod.number().min(createPostBodyCropWMin).max(createPostBodyCropWMax).nullish().describe('Crop rect width as fraction of original width. May exceed 1 when zoomed out.'),
   "cropH": zod.number().min(createPostBodyCropHMin).max(createPostBodyCropHMax).nullish().describe('Crop rect height as fraction of original height. May exceed 1 when zoomed out.'),
-  "cropFillColor": zod.string().regex(createPostBodyCropFillColorRegExp).nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; rendered behind the photo wherever the crop rect extends past the image.')
+  "cropFillColor": zod.string().regex(createPostBodyCropFillColorRegExp).nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; rendered behind the photo wherever the crop rect extends past the image.'),
+  "cropFillThumb": zod.string().max(createPostBodyCropFillThumbMax).regex(createPostBodyCropFillThumbRegExp).nullish().describe('Tiny (~24px) thumbnail of the photo as a base64 data URI; stretched under the photo on static surfaces for a blurred-looking fill.')
 }).describe('Request body for creating a post')
 
 export const CreatePostResponse = zod.object({

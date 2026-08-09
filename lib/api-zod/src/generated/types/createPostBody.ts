@@ -62,4 +62,10 @@ export interface CreatePostBody {
      * @pattern ^#[0-9A-Fa-f]{6}$
      */
   cropFillColor?: string | null;
+  /**
+     * Tiny (~24px) thumbnail of the photo as a base64 data URI; stretched under the photo on static surfaces for a blurred-looking fill.
+     * @maxLength 20000
+     * @pattern ^data:image/(jpeg|png);base64,[A-Za-z0-9+/=]+$
+     */
+  cropFillThumb?: string | null;
 }

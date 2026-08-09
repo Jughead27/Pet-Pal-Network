@@ -47,6 +47,7 @@ import {
 import type { Pet } from '@workspace/api-client-react';
 import { compressImage } from '@/utils/compressImage';
 import { computeAverageColor } from '@/utils/luminance';
+import { computeFillThumb } from '@/utils/fillThumb';
 import CropEditor from '@/components/CropEditor';
 import FocalImage from '@/components/FocalImage';
 import PetAvatar from '@/components/PetAvatar';
@@ -120,6 +121,9 @@ export default function AddScreen() {
   // cover when zoomed out past the old floor. Persisted with the post so every
   // surface (editor, feed, detail, share cards) renders the identical fill.
   const [cropFillColor, setCropFillColor] = useState<string | null>(null);
+  // Tiny thumbnail data URI — stretched under the photo on static surfaces
+  // for a blurred-looking fill. Sampled alongside the fill color.
+  const [cropFillThumb, setCropFillThumb] = useState<string | null>(null);
   // Monotonic token: ignores stale async color-sample completions after the
   // user swaps photos mid-sample.
   const fillColorToken = useRef(0);
@@ -163,6 +167,7 @@ export default function AddScreen() {
     // Clear any previous photo's fill color immediately and bump the token so
     // an in-flight sample for the OLD photo can't overwrite the new one.
     setCropFillColor(null);
+    setCropFillThumb(null);
     fillColorToken.current += 1;
     setStep('compressing');
     setIsChangingPhoto(false); // dismiss source-picker overlay the moment processing starts
@@ -193,6 +198,11 @@ export default function AddScreen() {
       computeAverageColor(uri)
         .then((c) => { if (fillColorToken.current === token) setCropFillColor(c); })
         .catch(() => { if (fillColorToken.current === token) setCropFillColor(null); });
+      // Tiny blur thumbnail — same token guard; null on failure (solid-color
+      // fill remains the fallback everywhere).
+      computeFillThumb(uri)
+        .then((t) => { if (fillColorToken.current === token) setCropFillThumb(t); })
+        .catch(() => { if (fillColorToken.current === token) setCropFillThumb(null); });
     } catch {
       setError('Failed to process image. Please try another photo.');
       setStep('idle');
@@ -361,6 +371,12 @@ export default function AddScreen() {
       if (needsFill && !effectiveFillColor && compressedUri) {
         effectiveFillColor = await computeAverageColor(compressedUri).catch(() => null);
       }
+      // Blur thumbnail is best-effort: await it only when a fill is actually
+      // needed and the async sample hasn't landed yet; null = solid fallback.
+      let effectiveFillThumb: string | null = cropFillThumb;
+      if (needsFill && !effectiveFillThumb && compressedUri) {
+        effectiveFillThumb = await computeFillThumb(compressedUri).catch(() => null);
+      }
 
       await createPost({
         data: {
@@ -380,6 +396,7 @@ export default function AddScreen() {
           // Sampled fill color — only meaningful when the rect extends past
           // the image (zoomed out); harmless otherwise.
           cropFillColor: effectiveFillColor,
+          cropFillThumb: needsFill ? effectiveFillThumb : null,
         },
       });
 
@@ -395,6 +412,7 @@ export default function AddScreen() {
       setCropRect(null);
       setCropMode('cover');
       setCropFillColor(null);
+      setCropFillThumb(null);
       setPetSearchQuery('');
       setStep('idle');
       if (pets.length === 1) setSelectedPetIds(new Set([pets[0].id]));
@@ -409,7 +427,7 @@ export default function AddScreen() {
     }
   }, [
     compressedUri, selectedPetIds, hasOwnPetSelected, isUploading, presignUpload, createPost,
-    caption, isNursery, cropFocusX, cropFocusY, cropRect, cropMode, cropFillColor,
+    caption, isNursery, cropFocusX, cropFocusY, cropRect, cropMode, cropFillColor, cropFillThumb,
     queryClient, pets,
   ]);
 

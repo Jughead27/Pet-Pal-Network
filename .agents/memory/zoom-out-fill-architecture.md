@@ -17,3 +17,9 @@ The compose crop editor allows zooming OUT below cover (floor = coverScale/3, ga
 - **Renderers:** FocalImage/ShareCard get `cropFillColor` prop → solid background behind rect-positioned image. Web canvas share path: when fill color present, fill + clip photo area and draw the FULL image at `dx - sx*scale, dy - sy*scale, nw*scale, nh*scale` (out-of-bounds 9-arg drawImage source is unreliable across browsers); keep legacy 9-arg path when no fill.
 - **Validation:** openapi cropFillColor pattern `^#[0-9A-Fa-f]{6}$`; server enforces all-or-none crop tuple with positive w/h. Renderer predicates must require ALL FOUR rect fields (FocalImage silently falls back otherwise).
 - **Post detail:** posts with a full crop rect render FocalImage in a container whose aspect = the rect's own aspect (needs Image.getSize natural size), capped at 75% window height — exact WYSIWYG of the rect.
+
+## Blur-look fill upgrade (thumb stretch)
+- posts.crop_fill_thumb: tiny (~24px) JPEG data URI generated at compose time (utils/fillThumb.ts native manipulator / fillThumb.web.ts canvas), sent only when the rect needs fill.
+- Static surfaces (FocalImage, ShareCard native, shareCardAction web canvas) layer: solid crop_fill_color first (instant fallback), thumb stretched cover above it, photo on top. CropEditor stays solid-color for gesture perf.
+- Rule: any failure in thumb generation/decoding must degrade to solid color — never blank. Legacy posts have null thumb.
+- Feed hero renders rect posts in a centered rect-aspect frame (letterboxed), NOT full-bleed; pet-info chrome and action rail reposition relative to the photo's rendered bottom edge (fillSeamY) on bottom-fill posts.

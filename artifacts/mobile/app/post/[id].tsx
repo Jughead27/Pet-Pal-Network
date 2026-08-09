@@ -186,6 +186,7 @@ export default function PostDetailScreen() {
               cropH={post.cropH ?? null}
               mode={post.cropMode ?? null}
               cropFillColor={post.cropFillColor ?? null}
+              cropFillThumb={post.cropFillThumb ?? null}
             />
           ) : (
             <MediaImage

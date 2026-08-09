@@ -211,11 +211,8 @@ export default function FeedPage({
   // Lift the rail so all four icons sit on the photo, not straddling the blur.
   // 120 = nominal petInfo height, 16 = containAlignBottom gap, 8 = margin.
   const FIT_RAIL_LIFT = 144;
-  // Lift the reaction rail off the bottom for posts that show blur letterboxing
-  // (explicit contain / Fit-mode posts only — cover posts are always full-bleed).
-  const railBottom = post.cropMode === 'contain'
-    ? bottomOffset + FIT_RAIL_LIFT
-    : bottomOffset;
+  // (railBottom is computed below, after the rect-aspect frame values it
+  // depends on for letterboxed posts.)
 
   // Live refs for values used inside the stable spawnPop callback.
   // Written every render so the callback always reads the current value.
@@ -450,6 +447,32 @@ export default function FeedPage({
     ? { top: Math.min(fillSeamY + CHROME_FILL_GAP, height - (insets.bottom + 8) - petInfoH) }
     : { bottom: bottomOffset };
 
+  // ── Action rail placement ─────────────────────────────────────────────────
+  // Same rule the Fit-mode lift already expresses: the icons sit ON the photo.
+  //   • Full-bleed / legacy cover posts: fixed bottomOffset (pixel-identical).
+  //   • Legacy contain (Fit) posts: existing hard-coded FIT_RAIL_LIFT.
+  //   • Rect posts (letterboxed frame and/or bottom fill): ride just above the
+  //     photo's rendered bottom edge when that edge is higher than the default
+  //     rail zone; never below the default; if the photo is too short for the
+  //     whole rail, center the rail on the frame instead.
+  const [railH, setRailH] = useState(220);
+  let railBottom = post.cropMode === 'contain'
+    ? bottomOffset + FIT_RAIL_LIFT
+    : bottomOffset;
+  if (heroFrame && hasFullCropRect) {
+    const photoBottomY = fillSeamY != null
+      ? fillSeamY
+      : heroFrame.top + heroFrame.height;
+    const lifted = (height - photoBottomY) + 12;
+    if (lifted > railBottom) {
+      // Keep the rail's top inside the frame; if it can't fit, center on frame.
+      const maxBottom = height - heroFrame.top - railH;
+      railBottom = lifted <= maxBottom
+        ? lifted
+        : Math.max(bottomOffset, height - heroFrame.top - (heroFrame.height + railH) / 2);
+    }
+  }
+
   // ── Derived display values for share card overlay ─────────────────────────
   // Declared before handleSharePress so they can appear in its dep array.
   const caption     = post.caption ?? '';
@@ -509,6 +532,7 @@ export default function FeedPage({
         cropW: post.cropW ?? null,
         cropH: post.cropH ?? null,
         cropFillColor: post.cropFillColor ?? null,
+        cropFillThumb: post.cropFillThumb ?? null,
       });
     } catch (err) {
       // User dismissed the share sheet — not an error worth surfacing.
@@ -522,7 +546,7 @@ export default function FeedPage({
     } finally {
       setIsSharing(false);
     }
-  }, [heroImage, showToast, allPetNames, displayName, caption, post.cropX, post.cropY, post.cropW, post.cropH, post.cropFillColor]);
+  }, [heroImage, showToast, allPetNames, displayName, caption, post.cropX, post.cropY, post.cropW, post.cropH, post.cropFillColor, post.cropFillThumb]);
 
   const petName   = post.pet.name;
   const petBreed  = post.pet.breed ?? '';
@@ -558,6 +582,7 @@ export default function FeedPage({
             cropH={post.cropH ?? null}
             mode={post.cropMode ?? null}
             cropFillColor={post.cropFillColor ?? null}
+            cropFillThumb={post.cropFillThumb ?? null}
           />
         ) : null
       ) : (
@@ -609,6 +634,10 @@ export default function FeedPage({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           { pointerEvents: (chromeVisible ? 'box-none' : 'none') as any },
         ]}
+        onLayout={(e) => {
+          const h = e.nativeEvent.layout.height;
+          setRailH((prev) => (Math.abs(prev - h) > 0.5 ? h : prev));
+        }}
       >
         <ActionRail
           postId={post.id}
@@ -742,6 +771,7 @@ export default function FeedPage({
           cropW={post.cropW ?? null}
           cropH={post.cropH ?? null}
           cropFillColor={post.cropFillColor ?? null}
+          cropFillThumb={post.cropFillThumb ?? null}
           displayName={displayName}
           caption={caption}
           barTheme={barTheme}

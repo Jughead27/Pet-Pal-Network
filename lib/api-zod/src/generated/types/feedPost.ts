@@ -33,6 +33,8 @@ export interface FeedPost {
   cropH?: number | null;
   /** Hex color (e.g. '#AABBCC') sampled from the photo; fills frame space the photo doesn't cover when zoomed out. null = photo covers the frame. */
   cropFillColor?: string | null;
+  /** Tiny (~24px) thumbnail of the photo as a data URI; static surfaces stretch it under the photo for a blurred-looking fill. null = solid-color fill only. */
+  cropFillThumb?: string | null;
   /** True when the viewer is the author of this post — treat action is blocked for authors. */
   viewerIsAuthor?: boolean;
   isNursery: boolean;

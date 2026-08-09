@@ -1,0 +1,21 @@
+CONTEXT: Blur upgrade for the crop fill. Currently, when a post's photo doesn't fully cover its frame, a flat sampled color fills the empty space (already shipped, works correctly). We want to upgrade this to look like a blurred extension of the photo — but only on STATIC render surfaces (feed, post detail, share cards), not the live Adjust/crop editor, which must stay on the cheap solid-color fill for gesture performance.
+
+GOAL: Implement blur via a tiny-thumbnail-stretch technique (not a true blur filter) — this avoids platform-specific blur API differences between web and native entirely.
+1. At post time (same moment crop_fill_color is currently sampled), also generate a very small thumbnail of the photo (e.g. ~24×24px) and store it — a data URI is fine given the tiny size, in a new column (e.g. crop_fill_thumb).
+2. On the static render surfaces (feed, post detail, share card web + native paths), when a fill is needed: render this tiny thumbnail stretched/scaled to cover the fill area (object-fit: cover or equivalent), UNDER the actual photo. The natural upscale interpolation should produce a soft blurred look. Keep crop_fill_color as an instant-available fallback/background so there's no flash of empty space while the thumbnail loads.
+3. The Adjust/crop editor screen is explicitly UNCHANGED — it keeps rendering the flat sampled color live during editing, not the thumbnail.
+4. If thumbnail generation or loading fails for any reason, fall back cleanly to the existing solid-color fill — never a blank/broken area.
+
+DO NOT MODIFY:
+- The Adjust/crop editor's live rendering — stays on solid color, untouched.
+- crop_fill_color itself, or how/when it's sampled — reuse as the fallback, don't replace it.
+- The core crop-rect data model or any of the WYSIWYG rendering logic already fixed today — this only adds a new optional layer on top.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is an additive enhancement to the existing fill mechanism on static surfaces only.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Post a photo with zoom-out triggering a fill — confirm feed, post detail, and share card (both web and native) now show a soft blurred-looking fill instead of a flat color.
+2. Confirm the Adjust/crop editor screen still shows the flat solid color live, unchanged, with no performance regression during pinch/zoom.
+3. Confirm there's no flash of empty space — solid color shows instantly, thumbnail-blur layers in once ready.
+4. Test a post from BEFORE this change (solid color only, no thumbnail stored) — confirm it still renders correctly with the solid-color fallback.
+5. Golden path: post with zoom-out fill → confirm blurred fill on feed/detail/share card → open Adjust on a new photo → confirm still solid-color, responsive → sign out. Verified live on pshpsh.net.

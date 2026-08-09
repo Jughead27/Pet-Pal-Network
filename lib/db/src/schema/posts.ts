@@ -37,6 +37,10 @@ export const postsTable = pgTable(
     // Hex color sampled from the photo; fills frame space the photo doesn't
     // cover when the poster zoomed out past the image bounds. null = full cover.
     cropFillColor: text("crop_fill_color"),
+    // Tiny (~24px) thumbnail of the photo as a data URI. Static surfaces
+    // stretch it under the photo for a blurred-looking fill; null = solid
+    // crop_fill_color fallback only.
+    cropFillThumb: text("crop_fill_thumb"),
   },
   (table) => [
     index("posts_pet_id_idx").on(table.petId),

@@ -61,6 +61,13 @@ interface FocalImageProps {
    */
   cropFillColor?: string | null;
   /**
+   * Tiny (~24px) thumbnail data URI stretched over the fill area under the
+   * photo — the upscale interpolation reads as a soft blur. Rendered above
+   * the solid cropFillColor (which stays as the instant fallback) and below
+   * the photo. null = solid-color fill only.
+   */
+  cropFillThumb?: string | null;
+  /**
    * Contain mode only. When set, positions the photo so its bottom edge is
    * this many px above the container's bottom edge — placing it just above
    * a name/caption overlay. Omit to vertically centre the photo.
@@ -78,7 +85,7 @@ interface FocalImageProps {
 
 // ─── FocalImage ───────────────────────────────────────────────────────────────
 
-export default function FocalImage({ source, style, focusX, focusY, cropX, cropY, cropW, cropH, mode, cropFillColor, containAlignBottom, naturalWidth, naturalHeight }: FocalImageProps) {
+export default function FocalImage({ source, style, focusX, focusY, cropX, cropY, cropW, cropH, mode, cropFillColor, cropFillThumb, containAlignBottom, naturalWidth, naturalHeight }: FocalImageProps) {
   const hasKnownNatural =
     typeof naturalWidth === 'number' && naturalWidth > 0 &&
     typeof naturalHeight === 'number' && naturalHeight > 0;
@@ -304,6 +311,16 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
         <View
           pointerEvents="none"
           style={[StyleSheet.absoluteFill, { backgroundColor: cropFillColor }]}
+        />
+      ) : null}
+      {/* Blur-look fill: tiny thumbnail stretched to cover; sits above the
+          solid color (instant fallback) and below the photo. */}
+      {cropFillColor && cropFillThumb && imageStyle ? (
+        <Image
+          source={{ uri: cropFillThumb }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          blurRadius={2}
         />
       ) : null}
       {imageStyle ? (

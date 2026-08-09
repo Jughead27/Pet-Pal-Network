@@ -230,6 +230,7 @@ async function main() {
   await pool.query(`ALTER TABLE pets ADD COLUMN IF NOT EXISTS avatar_crop_w real`);
   await pool.query(`ALTER TABLE pets ADD COLUMN IF NOT EXISTS avatar_crop_h real`);
   await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS crop_fill_color text`);
+  await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS crop_fill_thumb text`);
 
   // ── Species / breeds — one-time setup, skip when already present ─────────
   // On every deploy after the first, the species table is already populated

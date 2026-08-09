@@ -82,6 +82,8 @@ export interface ShareCardParams {
   cropH?: number | null;
   /** Sampled fill color shown behind the photo when the crop rect extends past the image. */
   cropFillColor?: string | null;
+  /** Tiny thumbnail data URI stretched over the fill area for a blur look. */
+  cropFillThumb?: string | null;
 }
 
 export async function executeShareCard({
@@ -91,10 +93,10 @@ export async function executeShareCard({
   petNames,
   displayName,
   caption,
-  cropX, cropY, cropW, cropH, cropFillColor,
+  cropX, cropY, cropW, cropH, cropFillColor, cropFillThumb,
 }: ShareCardParams): Promise<void> {
   if (Platform.OS === 'web') {
-    await webShareCard(mediaUri, showToast, petNames, displayName, caption, cropX, cropY, cropW, cropH, cropFillColor);
+    await webShareCard(mediaUri, showToast, petNames, displayName, caption, cropX, cropY, cropW, cropH, cropFillColor, cropFillThumb);
   } else {
     await nativeShareCard(cardRef, showToast, petNames);
   }
@@ -164,6 +166,7 @@ async function webShareCard(
   cropW?: number | null,
   cropH?: number | null,
   cropFillColor?: string | null,
+  cropFillThumb?: string | null,
 ): Promise<void> {
   // Make absolute so fetch works from any page path.
   const absoluteUri = mediaUri.startsWith('/')
@@ -214,6 +217,21 @@ async function webShareCard(
       ctx.clip();
       ctx.fillStyle = cropFillColor;
       ctx.fillRect(0, 0, CARD_W, PHOTO_H);
+      // Blur-look fill: stretch the tiny thumbnail to cover the photo area
+      // over the solid color (which stays as the instant/failure fallback).
+      if (cropFillThumb) {
+        try {
+          const thumb = await loadImage(cropFillThumb);
+          const tScale = Math.max(CARD_W / thumb.naturalWidth, PHOTO_H / thumb.naturalHeight);
+          const tw = thumb.naturalWidth * tScale;
+          const th = thumb.naturalHeight * tScale;
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(thumb, (CARD_W - tw) / 2, (PHOTO_H - th) / 2, tw, th);
+        } catch {
+          // Thumbnail failed to decode — solid color already painted.
+        }
+      }
       // Full image destination: shift so image (0,0) lands at dx - sx*scale.
       ctx.drawImage(img, dx - sx * scale, dy - sy * scale, nw * scale, nh * scale);
       ctx.restore();

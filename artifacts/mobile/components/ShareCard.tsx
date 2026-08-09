@@ -78,6 +78,8 @@ interface Props {
   cropH?:        number | null;
   /** Sampled fill color shown behind the photo when the crop rect extends past the image. */
   cropFillColor?: string | null;
+  /** Tiny thumbnail data URI stretched over the fill area for a blur look. */
+  cropFillThumb?: string | null;
   /** Pre-formatted pet name(s) for the bar ("Mochi", "Mochi & Luna", …). */
   displayName?:  string;
   /** Post caption for the bar. */
@@ -98,6 +100,7 @@ const ShareCard = forwardRef<View, Props>(({
   source,
   cropX, cropY, cropW, cropH,
   cropFillColor = null,
+  cropFillThumb = null,
   displayName = '',
   caption = '',
   barTheme = 'dark',
@@ -159,6 +162,16 @@ const ShareCard = forwardRef<View, Props>(({
       {/* ── Photo — full-bleed, no overlays ── */}
       {/* Sampled fill color shows wherever the crop rect extends past the image. */}
       <View style={[styles.photoClip, useCropStyle && cropFillColor ? { backgroundColor: cropFillColor } : null]}>
+        {/* Blur-look fill: tiny thumbnail stretched to cover, under the photo.
+            Solid color above remains the instant fallback. */}
+        {useCropStyle && cropFillColor && cropFillThumb ? (
+          <Image
+            source={{ uri: cropFillThumb }}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+            blurRadius={2}
+          />
+        ) : null}
         <Image
           source={source}
           style={useCropStyle ? imageStyle! : styles.photoCover}

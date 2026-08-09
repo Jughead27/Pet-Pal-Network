@@ -41,7 +41,7 @@ router.post("/posts", async (req, res) => {
     return;
   }
 
-  const { petIds, mediaKey, caption, isNursery, cropFocusX, cropFocusY, cropMode, cropX, cropY, cropW, cropH, cropFillColor } = parsed.data;
+  const { petIds, mediaKey, caption, isNursery, cropFocusX, cropFocusY, cropMode, cropX, cropY, cropW, cropH, cropFillColor, cropFillThumb } = parsed.data;
 
   // Crop rect must be a coherent all-or-none tuple with positive dimensions —
   // renderers require all four fields, so a partial rect is a client bug.
@@ -121,6 +121,7 @@ router.post("/posts", async (req, res) => {
       cropW:          cropW     ?? null,
       cropH:          cropH     ?? null,
       cropFillColor:  cropFillColor ?? null,
+      cropFillThumb:  cropFillThumb ?? null,
       postedByUserId: userId,
     })
     .returning();
