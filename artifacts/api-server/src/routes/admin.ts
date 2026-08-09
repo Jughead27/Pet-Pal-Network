@@ -1105,13 +1105,14 @@ adminRouter.get("/admin/invite-management", async (req, res) => {
     FROM users u
     LEFT JOIN users ib ON ib.id = u.invited_by
     LEFT JOIN invites i ON i.inviter_id = u.id
+    WHERE u.deleted_at IS NULL
     GROUP BY u.id, u.username, u.role, u.invite_quota, ib.username
     ORDER BY u.username ASC
     LIMIT ${limit} OFFSET ${offset}
   `);
 
   const { rows: [{ total }] } = await db.execute(sql`
-    SELECT COUNT(*)::int AS total FROM users
+    SELECT COUNT(*)::int AS total FROM users WHERE deleted_at IS NULL
   `);
 
   res.json({ defaultQuota, users: userRows, total: (total as number) });

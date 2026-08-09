@@ -102,6 +102,7 @@ export default function AdminInviteManagementScreen() {
     if (raw !== '' && (isNaN(quota as number) || (quota as number) < 0)) return;
 
     setSavingId(userId);
+    setActionError(null);
     try {
       await customFetch<{ ok: boolean }>('/api/admin/invite-management/quota', {
         method: 'POST',
@@ -118,7 +119,7 @@ export default function AdminInviteManagementScreen() {
         ),
       );
       qc.invalidateQueries({ queryKey: ['admin-invite-management'] });
-    } catch { /* silent */ } finally {
+    } catch (e) { setActionError(`quota update failed: ${errMsg(e)}`); } finally {
       setSavingId(null);
     }
   }, [quotaInput, defaultQuota, qc]);
@@ -131,16 +132,24 @@ export default function AdminInviteManagementScreen() {
   const [armedAction, setArmedAction]     = useState<{ userId: string; kind: 'suspend' | 'delete' } | null>(null);
   const [enforcingIds, setEnforcingIds]   = useState<Set<string>>(new Set());
 
+  // Last failed admin action — surfaced instead of silently swallowed.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const errMsg = (e: unknown): string => {
+    const err = e as { data?: { error?: string }; message?: string };
+    return err?.data?.error ?? err?.message ?? 'something went wrong.';
+  };
+
   const handleSuspendToggle = useCallback(async (userId: string, suspended: boolean) => {
     if (enforcingIds.has(userId)) return;
     setEnforcingIds((s) => new Set(s).add(userId));
     setArmedAction(null);
+    setActionError(null);
     try {
       await customFetch(`/api/admin/users/${userId}/${suspended ? 'unsuspend' : 'suspend'}`, { method: 'POST' });
       // Optimistic flag flip only — no query invalidation. Invalidating here
       // would refetch every loaded page and re-append them to allRows.
       setAllRows((prev) => prev.map((r) => (r.id === userId ? { ...r, suspended: !suspended } : r)));
-    } catch { /* silent — row simply stays unchanged */ } finally {
+    } catch (e) { setActionError(`${suspended ? 'unsuspend' : 'suspend'} failed: ${errMsg(e)}`); } finally {
       setEnforcingIds((s) => { const n = new Set(s); n.delete(userId); return n; });
     }
   }, [enforcingIds, qc]);
@@ -149,6 +158,7 @@ export default function AdminInviteManagementScreen() {
     if (enforcingIds.has(userId)) return;
     setEnforcingIds((s) => new Set(s).add(userId));
     setArmedAction(null);
+    setActionError(null);
     try {
       await customFetch(`/api/admin/users/${userId}/delete`, { method: 'POST' });
       // Deletion shifts server-side offset pagination (every later row moves
@@ -157,7 +167,7 @@ export default function AdminInviteManagementScreen() {
       setAllRows([]);
       setOffset(0);
       await qc.invalidateQueries({ queryKey: ['admin-invite-management'] });
-    } catch { /* silent */ } finally {
+    } catch (e) { setActionError(`delete failed: ${errMsg(e)}`); } finally {
       setEnforcingIds((s) => { const n = new Set(s); n.delete(userId); return n; });
     }
   }, [enforcingIds, qc]);
@@ -189,6 +199,19 @@ export default function AdminInviteManagementScreen() {
         </Text>
 
         <View style={[styles.divider, { borderTopColor: colors.border }]} />
+
+        {/* Action error — real server message, dismissible */}
+        {actionError && (
+          <TouchableOpacity
+            onPress={() => setActionError(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss error"
+          >
+            <Text style={[styles.actionError, { color: colors.destructive }]}>
+              {actionError} · tap to dismiss
+            </Text>
+          </TouchableOpacity>
+        )}
 
         {/* Loading */}
         {isLoading && allRows.length === 0 && (
@@ -438,6 +461,7 @@ const styles = StyleSheet.create({
   scroll:  { flexGrow: 1, paddingHorizontal: 20 },
   centered: { alignItems: 'center', paddingVertical: 40 },
   emptyText: { fontFamily: 'Inter_400Regular', fontSize: 15 },
+  actionError: { fontFamily: 'Inter_400Regular', fontSize: 13, marginBottom: 12 },
 
   backRow:  { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 24 },
   backText: { fontSize: 14, fontFamily: 'Inter_400Regular' },
