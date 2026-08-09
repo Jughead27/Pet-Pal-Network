@@ -1,0 +1,19 @@
+CONTEXT: Investigation confirmed a second, distinct bug from the one just fixed. The New Post compose preview's container is hard-coded to feed-aspect (tall, ~0.46 on typical screens) regardless of what aspect ratio was actually confirmed in Adjust. When a non-feed-aspect crop is confirmed (e.g. 1:1 with zoom-out triggering a fill), FocalImage's cover-math correctly scales the square rect to fill the tall container — but this means the container clips off the left/right margins of the rect, which is exactly where the fill color lives. What remains visible is pure photo, making it look like nothing changed even though the crop/fill data is present and correctly applied. This bug predates the previous fix and was masked until now because the default auto-frame rect happens to match feed-aspect.
+
+GOAL: Size the New Post compose preview's container by the CONFIRMED CROP RECT's own aspect ratio (rect.w × naturalWidth / (rect.h × naturalHeight)), capped to the existing previewH constraint — not hard-coded to feed-aspect. Reuse the exact same pattern already correctly implemented in post-detail's fix (app/post/[id].tsx, the `hasFullCropRect` + rect-aspect container logic) rather than writing new sizing logic.
+
+DO NOT MODIFY:
+- The feed's cover-crop rendering — intentionally different (fixed tile aspect for grid consistency), must NOT be changed to match rect aspect.
+- Post detail — already correct, reuse its pattern as reference only, don't touch its code.
+- FocalImage's core rect-driven cover math, or the previous dimension-passing fix — both correct, untouched.
+- Any other part of compose (pet tagging, caption, posting logic).
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a container-sizing fix on the New Post preview only, reusing the exact pattern already proven correct in post-detail.
+
+ACCEPTANCE TEST (must end in golden path):
+1. In compose, select a tall/portrait photo, choose 1:1 in Adjust, zoom out enough to trigger the fill color, tap Done — confirm the New Post preview now shows a SQUARE container matching the confirmed 1:1 crop, with the fill color visible on the appropriate margins.
+2. Test 4:5 and Original ratios the same way — confirm the preview container correctly matches each ratio's aspect.
+3. Test the default/feed-aspect case (e.g. Tall ratio on a portrait photo, no zoom-out) — confirm no regression, still renders correctly.
+4. Confirm the feed grid itself is completely unaffected — still shows its consistent cover-cropped tile aspect regardless of what ratio was chosen at post time.
+5. Confirm post detail is unaffected (already correct, untouched).
+6. Golden path: compose → pick 1:1 → zoom out to trigger fill → Done → confirm preview container matches the square crop with fill visible → complete post → confirm feed (cropped) and post detail (full framing) both render correctly → sign out. Verified live on pshpsh.net.

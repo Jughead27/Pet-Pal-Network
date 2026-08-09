@@ -84,11 +84,12 @@ export default function AddScreen() {
       ? screenW / screenH                           // web: windowHeight ≈ screenH
       : screenW / Math.max(1, screenH - insets.top); // native: subtract status bar
 
-  // Preview = a deterministically scaled feed cell.
-  // Both dimensions are computed explicitly — do NOT combine aspectRatio with
-  // maxHeight; Yoga clamps height only and silently changes the ratio.
-  const previewH = Math.round(screenH * 0.40);        // ~40 % of viewport
-  const previewW = Math.round(previewH * feedAspect); // exact same ratio
+  // Preview container sized by the CONFIRMED crop rect's own aspect
+  // (rect.w × naturalW / rect.h × naturalH) — same pattern as post detail's
+  // hasFullCropRect + rect-aspect container. Falls back to feedAspect before
+  // a rect exists. Both dimensions are computed explicitly — do NOT combine
+  // aspectRatio with maxHeight; Yoga clamps height only and silently changes
+  // the ratio. (previewW/previewH are assigned below, after cropRect state.)
 
   // The web tab bar is position:absolute with minHeight:84 (set in _layout.tsx).
   const WEB_TAB_BAR_HEIGHT = 84;
@@ -122,6 +123,21 @@ export default function AddScreen() {
   // Monotonic token: ignores stale async color-sample completions after the
   // user swaps photos mid-sample.
   const fillColorToken = useRef(0);
+
+  // ── Preview container dimensions (rect-aspect; see comment above) ────────
+  const natW = naturalSize.current.width;
+  const natH = naturalSize.current.height;
+  const rectAspect =
+    cropRect && cropRect.w > 0 && cropRect.h > 0 && natW > 0 && natH > 0
+      ? (cropRect.w * natW) / Math.max(cropRect.h * natH, 1e-6)
+      : feedAspect;
+  const previewMaxW = Math.min(screenW - 48, 480); // stay inside scroll padding
+  let previewH = Math.round(screenH * 0.40);       // ~40 % of viewport (cap)
+  let previewW = Math.round(previewH * rectAspect);
+  if (previewW > previewMaxW) {
+    previewW = Math.round(previewMaxW);
+    previewH = Math.round(previewW / rectAspect);
+  }
 
   // Refiner modal visibility.
   const [refinerOpen,   setRefinerOpen]   = useState(false);

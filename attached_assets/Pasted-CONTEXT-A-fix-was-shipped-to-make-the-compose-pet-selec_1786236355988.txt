@@ -1,0 +1,11 @@
+CONTEXT: A fix was shipped to make the compose pet-selection/caption screen's photo preview match the crop confirmed in Adjust (root cause diagnosed as FocalImage failing to resolve natural dimensions for local blob/data URIs on web, fixed by passing dimensions in directly from compose). After that fix was published, the SAME mismatch is still occurring: selecting 1:1, zooming out to trigger the fill-color path, tapping Done — the New Post screen still shows the original full/tall photo instead of the confirmed 1:1 crop with fill.
+
+GOAL: INVESTIGATE ONLY — no fix yet, we need certainty on the actual cause before touching code again.
+1. First, confirm the deployed build actually contains the previous fix's code (check the current live bundle/commit against what was intended to ship) — rule out a failed/rolled-back publish before assuming the code itself is wrong.
+2. If the fix's code IS live: trace the exact render path for the New Post screen's photo preview specifically for the 1:1 + zoomed-out + fill-color case. Confirm whether the dimension-passing fix from the previous prompt is actually being applied on this code path, or whether there's a second/different preview code path that was missed.
+3. Add temporary logging or directly inspect (via debugger/console) what crop-rect and fill-color values are actually present in the component's props/state at the moment this screen renders, immediately after returning from Adjust with a 1:1 + zoomed-out selection.
+4. Report exactly what's happening: is the crop/fill data missing entirely at this point, present but not being used by the render logic, or something else?
+
+DO NOT MODIFY: No code changes — this is a diagnostic pass only, to get a confirmed root cause before another fix attempt.
+
+ACCEPTANCE TEST: A clear report identifying exactly why this specific case (1:1 + zoom-out + fill) still shows the wrong preview, with enough specificity (file/line, actual observed prop/state values) to write a correct fix on the first try.
