@@ -126,8 +126,11 @@ export default function NurseryScreen() {
   }, []);
 
   // ── View-mode state ────────────────────────────────────────────────────────
-  const [viewMode,        setViewMode]        = useState<ViewMode>('grid');
-  const [pagerStartIndex, setPagerStartIndex] = useState(0);
+  const [viewMode,     setViewMode]     = useState<ViewMode>('grid');
+  // The tapped post's ID — not its array index. The index is resolved against
+  // the pager's CURRENT data at render time, so a list reorder between tap
+  // and mount (live react-query refetch) can never land on the wrong post.
+  const [pagerStartId, setPagerStartId] = useState<string | null>(null);
 
   // ── Grid scroll preservation ───────────────────────────────────────────────
   // onScroll writes the current offset into a ref (no re-render).
@@ -135,9 +138,6 @@ export default function NurseryScreen() {
   const gridScrollY      = useRef(0);
   const gridListRef      = useRef<FlatList<FeedPost>>(null);
   const pagerListRef     = useRef<FlatList<FeedPost>>(null);
-  // Guards the one-shot initial scroll so subsequent onLayout/re-render
-  // calls don't re-trigger it after the pager is already positioned.
-  const pagerScrolledRef = useRef(false);
 
   // ── Pager lifted sheet state ───────────────────────────────────────────────
   const [commentConfig, setCommentConfig] = useState<CommentSheetConfig | null>(null);
@@ -145,15 +145,22 @@ export default function NurseryScreen() {
   const openCommentSheet  = useCallback((cfg: CommentSheetConfig) => setCommentConfig(cfg), []);
   const closeCommentSheet = useCallback(() => setCommentConfig(null), []);
 
-  // ── Open pager at index ────────────────────────────────────────────────────
-  const openPost = useCallback((index: number) => {
-    pagerScrolledRef.current = false; // reset so the new pager scrolls to the right index
-    setPagerStartIndex(index);
+  // ── Open pager at post ID ──────────────────────────────────────────────────
+  const openPost = useCallback((postId: string) => {
+    setPagerStartId(postId);
+    if (Platform.OS === 'web') {
+      webPagerRunToken.current += 1; // invalidate any still-running loop
+      webPagerCorrectionDone.current = false;
+    }
     setViewMode('pager');
   }, []);
 
   // ── Return to grid ─────────────────────────────────────────────────────────
   const closePost = useCallback(() => {
+    if (Platform.OS === 'web') {
+      webPagerRunToken.current += 1; // stale loop exits + restores snap itself
+      webPagerCorrectionDone.current = true;
+    }
     // Close any open sheets before returning to grid
     setCommentConfig(null);
     setViewMode('grid');
@@ -170,34 +177,110 @@ export default function NurseryScreen() {
     });
   }, []);
 
-  // ── Initial pager scroll (replaces initialScrollIndex) ────────────────────
-  //
-  // Root cause of the crash: initialScrollIndex calls into the native scroll
-  // layer before the freshly-mounted FlatList's scroll view has finished its
-  // own layout pass, producing an invalid scroll offset (scroll container
-  // height is 0 on frame 1 even though pageHeight state is non-zero).
-  //
-  // Fix: omit initialScrollIndex entirely. After the component commits to the
-  // DOM/native layer, requestAnimationFrame defers the scroll command until
-  // the layout pass is complete — runs before the next paint, so no visible
-  // flash at any index.
-  useEffect(() => {
-    if (viewMode !== 'pager') return;
-    if (pagerScrolledRef.current) return;
-    pagerScrolledRef.current = true;
+  // ── Web-only initial-scroll verification ──────────────────────────────────
+  // Direct port of the proven Sniff (discovery.tsx) fix. On native,
+  // initialScrollIndex positions the FlatList before first paint — correct
+  // and untouched. On WEB, react-native-web implements initialScrollIndex as
+  // a one-shot imperative scrollToIndex fired from the list's onLayout; the
+  // browser clamps scrollTop if the content isn't fully sized at that
+  // instant, the library's internal flag burns with no retry, and the pager
+  // lands on the wrong post. So on web we verify the actual scrollTop against
+  // the expected offset after mount and correct + re-verify each frame until
+  // it sticks (bounded, to avoid looping in a genuine edge case). Refs (not
+  // state) so the loop always reads current values without re-renders.
+  const webPagerCorrectionDone = useRef(true);
+  // Monotonic run token: each pager open/close bumps it, so a loop from a
+  // previous opening detects it is stale, restores its own snap node, and
+  // exits WITHOUT touching the shared done flag of the newer run.
+  const webPagerRunToken       = useRef(0);
+  const pagerStartIdRef        = useRef<string | null>(null);
+  pagerStartIdRef.current      = pagerStartId;
+  const postsForPagerRef       = useRef<FeedPost[]>([]);
+  const pageHeightForPagerRef  = useRef(0);
 
-    if (pagerStartIndex === 0 || effectivePageHeight <= 0) return; // already at top
-
-    requestAnimationFrame(() => {
-      pagerListRef.current?.scrollToOffset({
-        offset:   pagerStartIndex * effectivePageHeight,
-        animated: false,
-      });
-    });
-    // Intentionally excludes effectivePageHeight from deps — we want this to
-    // fire exactly once per pager open, not re-fire if height updates later.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, pagerStartIndex]);
+  const runWebPagerCorrection = useCallback(() => {
+    if (Platform.OS !== 'web' || webPagerCorrectionDone.current) return;
+    const runToken = webPagerRunToken.current; // this loop belongs to this opening
+    // Bounds: total watch window (covers data arriving late), settle attempts
+    // once the target IS resolvable, and consecutive stable frames required
+    // before restoring scroll-snap (so the mandatory snap can't re-yank while
+    // the virtualizer is still committing cells around the landing offset).
+    const MAX_TOTAL_FRAMES  = 120; // ~2s hard cap
+    const MAX_SETTLE_FRAMES = 30;
+    const STABLE_FRAMES     = 12;  // ~200ms of confirmed-correct position
+    let totalFrames  = 0;
+    let settleFrames = 0;
+    let stableFrames = 0;
+    let snapNode: HTMLElement | null = null;
+    const restoreSnap = () => {
+      if (snapNode) {
+        snapNode.style.scrollSnapType = ''; // back to RNW's mandatory snap
+        snapNode = null;
+      }
+    };
+    const finish = () => {
+      webPagerCorrectionDone.current = true;
+      restoreSnap();
+    };
+    const tick = () => {
+      // Stale run (pager closed or reopened since this loop started): restore
+      // OWN snap node and exit without touching the newer run's shared flag.
+      if (webPagerRunToken.current !== runToken) {
+        restoreSnap();
+        return;
+      }
+      if (webPagerCorrectionDone.current) {
+        restoreSnap();
+        return;
+      }
+      const list = pagerListRef.current as unknown as {
+        getScrollableNode?: () => HTMLElement | null;
+      } | null;
+      const node  = list?.getScrollableNode?.() ?? null;
+      const pageH = pageHeightForPagerRef.current;
+      if (node && pageH > 0) {
+        // Suppress mandatory CSS scroll-snap during the landing window —
+        // otherwise the browser re-snaps a successful correction back to the
+        // nearest already-rendered cell edge (the confirmed yank-back bug).
+        if (!snapNode) {
+          snapNode = node;
+          node.style.scrollSnapType = 'none';
+        }
+        // NEVER match while the target post is absent from the data — a
+        // findIndex of -1 must keep the loop watching, not falsely match
+        // index 0 (the confirmed false-match bug). Re-resolving each frame
+        // also re-arms the loop when data arrives or reorders.
+        const idx = postsForPagerRef.current.findIndex(
+          (p) => p.id === pagerStartIdRef.current,
+        );
+        if (idx >= 0) {
+          const expected = idx * pageH;
+          if (Math.abs(node.scrollTop - expected) <= 1) {
+            stableFrames += 1;
+            if (stableFrames >= STABLE_FRAMES) {
+              finish(); // held the correct offset long enough — snap restored
+              return;
+            }
+          } else {
+            stableFrames = 0;
+            node.scrollTop = expected; // clamped if content still short
+            settleFrames += 1;
+            if (settleFrames >= MAX_SETTLE_FRAMES) {
+              finish(); // bounded give-up once the target was resolvable
+              return;
+            }
+          }
+        }
+      }
+      totalFrames += 1;
+      if (totalFrames < MAX_TOTAL_FRAMES) {
+        requestAnimationFrame(tick);
+      } else {
+        finish(); // hard cap — e.g. target post genuinely gone from the feed
+      }
+    };
+    requestAnimationFrame(tick);
+  }, []);
 
   // ── Pager item renderer (hoisted + memoised) ──────────────────────────────
   // Must be a stable reference: if renderItem changes on every NurseryScreen
@@ -413,6 +496,18 @@ export default function NurseryScreen() {
   if (viewMode === 'pager') {
     const backBtnTop = Platform.OS === 'web' ? 67 + 8 : insets.top + 8;
 
+    // Resolve the tapped post ID against the pager's CURRENT data at render
+    // time — immune to index shifts from refetches between tap and mount.
+    // Falls back to 0 if the post vanished from the list (e.g. filtered out).
+    const startIndex = Math.max(
+      0,
+      posts.findIndex((p) => p.id === pagerStartId),
+    );
+
+    // Keep the web correction loop's inputs current on every pager render.
+    postsForPagerRef.current      = posts;
+    pageHeightForPagerRef.current = effectivePageHeight;
+
     return (
       <View
         style={containerStyle}
@@ -426,7 +521,8 @@ export default function NurseryScreen() {
             renderItem={renderPagerItem}
             keyExtractor={(item) => item.id}
             getItemLayout={getPagerItemLayout}
-            // initialScrollIndex removed — see the useEffect above.
+            initialScrollIndex={startIndex}
+            onLayout={Platform.OS === 'web' ? runWebPagerCorrection : undefined}
             // Paging
             pagingEnabled
             snapToInterval={effectivePageHeight}
@@ -474,7 +570,7 @@ export default function NurseryScreen() {
 
   const renderGridItem = ({ item, index }: { item: FeedPost; index: number }) => (
     <TouchableOpacity
-      onPress={() => openPost(index)}
+      onPress={() => openPost(item.id)}
       activeOpacity={0.85}
       style={[styles.cell, { width: thumbnailSize, height: thumbnailSize }]}
       accessibilityRole="button"

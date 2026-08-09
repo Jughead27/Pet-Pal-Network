@@ -1,0 +1,25 @@
+CONTEXT: Nursery's post-viewing pager (app/(tabs)/nursery.tsx) has the same navigation bug that was fixed on the Sniff page (app/(tabs)/discovery.tsx) after three rounds of investigation there. Nursery's pager still uses the OLD broken pattern in full: index-based `pagerStartIndex`, a one-shot `pagerScrolledRef` guard, and an unretried `scrollToOffset` call. None of the fixes already proven correct on Sniff have been ported here. This bug is currently invisible in Nursery only because there are very few posts there — it will surface as post count grows.
+
+GOAL: Port the exact same fix already shipped and confirmed working on Sniff's discovery.tsx to nursery.tsx's pager. Specifically:
+1. Replace index-based post targeting with ID-based targeting — grid taps should hand off the tapped post's ID, not its array index.
+2. Use `initialScrollIndex` + the existing (or newly added, if missing) `getItemLayout` for direct mount-time positioning, resolving the actual start index from the post ID against the pager's current data at mount time.
+3. Remove the one-shot `pagerScrolledRef` flag pattern entirely — replace with the same web-only bounded verify-and-correct loop already proven on Sniff (`runWebPagerCorrection` or equivalent), which:
+   - Never declares success while the target post ID is absent from the currently available data (keeps watching/re-arms on data change, does not false-match against index 0).
+   - Suppresses mandatory CSS scroll-snap during the landing/correction window (since pagingEnabled compiles to scroll-snap-type: y mandatory on web, which can yank a correction back to the nearest already-committed cell), and restores snap once the position is confirmed stable across multiple consecutive frames.
+   - Uses a run token so a stale loop from a rapid pager close/reopen safely exits without interfering with a newer run.
+4. Native behavior must stay exactly as-is (gated on Platform.OS === 'web', matching the Sniff fix) — initialScrollIndex works correctly on native already.
+
+DO NOT MODIFY:
+- discovery.tsx (Sniff) — already correct, untouched, used only as the reference implementation to port from.
+- Any other part of Nursery (grid layout, hatchling/baby-post marking, filters) — scoped to the grid→pager tap handoff only.
+- Native pager behavior.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a direct port of already-proven logic from discovery.tsx into nursery.tsx's equivalent pager code — reuse the pattern, don't reinvent it.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Tap several different photos in the Nursery grid at different positions — confirm each opens directly on the correct, exact tapped post, with no flash-shuffle through other posts.
+2. Repeat multiple times in a row (timing-dependent nature of this bug class) — confirm consistent correct behavior.
+3. Confirm normal swipe/paging between posts after landing works correctly, with scroll-snap restored to normal.
+4. Confirm native app behavior is completely unaffected.
+5. Confirm rapid open/close of the pager (tap a post, quickly back out, tap another) doesn't cause a stale correction loop to interfere.
+6. Golden path: open Nursery → tap photos at several different positions, multiple times → confirm every one lands correctly and instantly → swipe normally → sign out. Verified live on pshpsh.net.
