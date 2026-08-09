@@ -1,0 +1,30 @@
+CONTEXT: Admin currently has no way to hide a comment or post without a report existing first, and no unhide capability at all (even via the report path — the hiddenByAdmin flag is currently one-way). Investigation confirmed: the sole hide path is POST /admin/reports/:id/hide, deriving the target from the report record; sole UI trigger is a report card in reports.tsx.
+
+GOAL:
+
+Part 1 — Direct hide/unhide endpoints:
+1. Add POST /admin/posts/:postId/hide and POST /admin/comments/:commentId/hide — each takes just the content ID (no report required), sets hiddenByAdmin: true, writes an audit entry (e.g. post.hide / comment.hide, tagged via: "direct" to distinguish from report-triggered hides). 404 if the target doesn't exist.
+2. Add POST /admin/posts/:postId/unhide and POST /admin/comments/:commentId/unhide — sets hiddenByAdmin: false, writes a corresponding audit entry (post.unhide / comment.unhide). This is new capability — no unhide currently exists at all, even via reports, so this closes that gap too.
+3. These new endpoints must coexist cleanly with the existing report-based hide action — both just set/unset the same hiddenByAdmin flag, so a report-triggered hide can be reversed via the new direct unhide, and vice versa.
+
+Part 2 — UI triggers on the content itself:
+1. On post detail: add an admin-only action (e.g. in an overflow/three-dot menu, visible only when the viewer is an admin) to hide or unhide that specific post — label reflects current state (Hide / Unhide).
+2. In the comment sheet: add the same admin-only hide/unhide action on each individual comment.
+3. Both actions need a brief confirmation before executing (consequential action) — reuse whatever confirmation pattern already exists for report-triggered hide, for consistency.
+4. After a successful hide/unhide, the content's visibility state should update immediately in the UI the admin is viewing (e.g. a hidden-content indicator visible only to admin, since hidden content is already filtered from public reads).
+
+DO NOT MODIFY:
+- The existing report-based hide action on reports.tsx — untouched, continues to work as-is, now also reversible via the new unhide endpoint.
+- The excludeBlocked/public-read filtering logic that already respects hiddenByAdmin — reuse as-is.
+- Any non-admin-visible UI — these actions must only ever be visible to admin users.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Adds four new endpoints (hide/unhide × post/comment) and wires them into existing content-viewing screens — no new screens, no duplicated business logic.
+
+ACCEPTANCE TEST (must end in golden path):
+1. As admin, on post detail, hide a post directly with no report — confirm it's hidden from public reads.
+2. Unhide it — confirm it's visible again.
+3. As admin, in the comment sheet, hide a specific comment directly with no report — confirm it's hidden from public reads.
+4. Unhide it — confirm it's visible again.
+5. Confirm these actions are NOT visible to non-admin users.
+6. Confirm the existing report-based hide flow still works unchanged, and that a report-triggered hide can now also be reversed via the new direct unhide.
+7. Golden path: hide a post directly → unhide it → hide a comment directly → unhide it → confirm non-admin can't see these actions → sign out. Verified live on pshpsh.net.

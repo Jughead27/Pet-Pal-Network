@@ -28,7 +28,7 @@ import { router } from 'expo-router';
 import ReportFlow from '@/components/ReportFlow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatCircle } from 'phosphor-react-native';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@clerk/clerk-expo';
 import { useColors } from '@/hooks/useColors';
 import {
@@ -36,6 +36,7 @@ import {
   useCreateComment,
   useDeleteComment,
   getGetPostCommentsQueryKey,
+  customFetch,
 } from '@workspace/api-client-react';
 import type { PostComment } from '@workspace/api-client-react';
 
@@ -56,6 +57,13 @@ function CommentRow({
   onLongPress,
   onDelete,
   onPressAuthor,
+  isAdmin,
+  adminHidden,
+  hideArmed,
+  hidePending,
+  onArmHide,
+  onCancelHide,
+  onConfirmHide,
 }: {
   comment: PostComment;
   colors: ReturnType<typeof useColors>;
@@ -66,6 +74,17 @@ function CommentRow({
   onDelete: () => void;
   /** Called when the viewer taps the author's name — navigates to their profile. */
   onPressAuthor: () => void;
+  /** True when the viewer is an admin — shows the hide/unhide whisper. */
+  isAdmin: boolean;
+  /** Admin-visible hidden state of THIS comment (hiddenByAdmin flag). */
+  adminHidden: boolean;
+  /** True when this comment's hide/unhide two-tap confirm is armed. */
+  hideArmed: boolean;
+  /** True while this comment's hide/unhide request is in flight. */
+  hidePending: boolean;
+  onArmHide: () => void;
+  onCancelHide: () => void;
+  onConfirmHide: () => void;
 }) {
   // Display name with fallback — never the raw username/userID.
   // authorDisplayName is served by the API but not yet in the generated type
@@ -137,6 +156,55 @@ function CommentRow({
             </Text>
           </TouchableOpacity>
         )}
+        {/* Admin-only hidden indicator — hidden comments are filtered from
+            public reads, so only the admin in this session sees this row. */}
+        {isAdmin && adminHidden && (
+          <Text style={[styles.deleteWhisper, { color: '#EF4444', opacity: 1 }]}>
+            hidden by admin — not visible to members
+          </Text>
+        )}
+        {/* Admin-only hide/unhide — direct, no report required. Two-tap
+            confirm matching the reports-queue typographic pattern. */}
+        {isAdmin && (
+          hidePending ? (
+            <ActivityIndicator size="small" color={colors.mutedForeground} style={styles.adminHideSpinner} />
+          ) : hideArmed ? (
+            <View style={styles.adminHideRow}>
+              <TouchableOpacity
+                onPress={onConfirmHide}
+                accessibilityRole="button"
+                accessibilityLabel={adminHidden ? 'Confirm unhide comment' : 'Confirm hide comment'}
+                hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
+              >
+                <Text style={[styles.deleteWhisper, { color: '#EF4444' }]}>
+                  {adminHidden ? 'confirm unhide?' : 'confirm hide?'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onCancelHide}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel"
+                hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
+              >
+                <Text style={[styles.deleteWhisper, { color: colors.mutedForeground }]}>
+                  cancel
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              onPress={onArmHide}
+              activeOpacity={0.5}
+              accessibilityRole="button"
+              accessibilityLabel={adminHidden ? 'Unhide comment' : 'Hide comment'}
+              hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
+            >
+              <Text style={[styles.deleteWhisper, { color: colors.mutedForeground }]}>
+                {adminHidden ? 'unhide' : 'hide'}
+              </Text>
+            </TouchableOpacity>
+          )
+        )}
       </View>
     </Pressable>
   );
@@ -165,6 +233,40 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
     setPrevSessionKey(sessionKey);
     if (postedThisSession) setPostedThisSession(false);
   }
+
+  // ── Admin hide/unhide — admin-only, direct (no report required) ───────────
+  // isAdmin is server-sourced from the same cached query the profile uses.
+  const { data: inviteData } = useQuery({
+    queryKey: ['my-invites'],
+    queryFn:  () => customFetch<{ isAdmin: boolean }>('/api/invites/mine'),
+    enabled:  visible,
+  });
+  const isAdmin = inviteData?.isAdmin ?? false;
+  // Comments visible in the sheet are un-hidden (public reads filter hidden
+  // ones) — track hides made THIS session so the row reflects state at once.
+  const [hiddenCommentIds, setHiddenCommentIds] = useState<Set<string>>(new Set());
+  const [armedHideId,      setArmedHideId]      = useState<string | null>(null);
+  const [hidePendingId,    setHidePendingId]    = useState<string | null>(null);
+
+  const handleAdminHideToggle = async (commentId: string) => {
+    if (hidePendingId) return;
+    const currentlyHidden = hiddenCommentIds.has(commentId);
+    setHidePendingId(commentId);
+    try {
+      await customFetch<{ ok: boolean }>(
+        `/api/admin/comments/${commentId}/${currentlyHidden ? 'unhide' : 'hide'}`,
+        { method: 'POST' },
+      );
+      setHiddenCommentIds((prev) => {
+        const next = new Set(prev);
+        if (currentlyHidden) next.delete(commentId); else next.add(commentId);
+        return next;
+      });
+    } catch { /* silent — state unchanged, admin can retry */ } finally {
+      setHidePendingId(null);
+      setArmedHideId(null);
+    }
+  };
 
   // Report state — which comment is being reported (null = none open)
   const [reportingCommentId, setReportingCommentId] = useState<string | null>(null);
@@ -319,6 +421,13 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
                   comment={item}
                   colors={colors}
                   isOwn={!!userId && item.authorId === userId}
+                  isAdmin={isAdmin}
+                  adminHidden={hiddenCommentIds.has(item.id)}
+                  hideArmed={armedHideId === item.id}
+                  hidePending={hidePendingId === item.id}
+                  onArmHide={() => setArmedHideId(item.id)}
+                  onCancelHide={() => setArmedHideId(null)}
+                  onConfirmHide={() => handleAdminHideToggle(item.id)}
                   onDelete={() => setDeletingCommentId(item.id)}
                   onLongPress={() => {
                     if (!!userId && item.authorId === userId) {
@@ -559,6 +668,17 @@ const styles = StyleSheet.create({
     fontSize:   11,
     opacity:    0.35,
     marginTop:  3,
+  },
+  // Admin hide/unhide confirm row + in-flight spinner
+  adminHideRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           12,
+  },
+  adminHideSpinner: {
+    alignSelf: 'flex-start',
+    marginTop: 3,
+    transform: [{ scale: 0.6 }],
   },
   emptyState: {
     flex:           1,

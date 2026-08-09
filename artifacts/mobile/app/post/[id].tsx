@@ -27,7 +27,7 @@ import FocalImage from '@/components/FocalImage';
 import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { getGetFeedQueryKey, useRemovePostPetTag, customFetch } from '@workspace/api-client-react';
@@ -51,6 +51,37 @@ export default function PostDetailScreen() {
   // mechanism (same as the post-report "block this owner" step).
   const [blockConfirm,   setBlockConfirm]   = useState(false);
   const [blocking,       setBlocking]       = useState(false);
+
+  // ── Admin hide/unhide — admin-only, direct (no report required) ───────────
+  // isAdmin is server-sourced from the same cached query the profile uses.
+  const { data: inviteData } = useQuery({
+    queryKey: ['my-invites'],
+    queryFn:  () => customFetch<{ isAdmin: boolean }>('/api/invites/mine'),
+  });
+  const isAdmin = inviteData?.isAdmin ?? false;
+  // Local visibility state — a post reachable here is visible, so it starts
+  // un-hidden unless the cache says otherwise; toggles optimistically.
+  const [adminHidden,  setAdminHidden]  = useState<boolean | null>(null);
+  const [hideConfirm,  setHideConfirm]  = useState(false);
+  const [hiding,       setHiding]       = useState(false);
+
+  const handleAdminHideToggle = useCallback(async (currentlyHidden: boolean) => {
+    if (hiding || !id) return;
+    setHiding(true);
+    try {
+      await customFetch<{ ok: boolean }>(
+        `/api/admin/posts/${id}/${currentlyHidden ? 'unhide' : 'hide'}`,
+        { method: 'POST' },
+      );
+      setAdminHidden(!currentlyHidden);
+      // Hidden posts are filtered from public reads — drop the cached feed so
+      // it reconciles on next fetch.
+      await queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
+    } catch { /* silent — state stays as-is, admin can retry */ } finally {
+      setHiding(false);
+      setHideConfirm(false);
+    }
+  }, [hiding, id, queryClient]);
 
   const { mutateAsync: removeTag } = useRemovePostPetTag();
 
@@ -282,12 +313,65 @@ export default function PostDetailScreen() {
             </Text>
           )}
 
+          {/* Admin-only hidden indicator — hidden content is filtered from
+              public reads, so only the admin viewing this screen sees it. */}
+          {isAdmin && (adminHidden ?? !!(post as unknown as { hiddenByAdmin?: boolean }).hiddenByAdmin) && (
+            <Text style={[styles.hiddenIndicator, { color: '#EF4444' }]}>
+              hidden by admin — not visible to members
+            </Text>
+          )}
+
           {/* Timestamp + report whisper — same row, timestamp left, report right */}
           <View style={styles.timestampRow}>
             <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>
               {formatPostAge(post.createdAt)}
             </Text>
             <View style={styles.whisperCluster}>
+              {/* Admin hide/unhide — direct, no report required. Two-tap
+                  confirm, same typographic pattern as block. Admin only. */}
+              {isAdmin && (() => {
+                const hidden = adminHidden ?? !!(post as unknown as { hiddenByAdmin?: boolean }).hiddenByAdmin;
+                return hideConfirm ? (
+                  <>
+                    <Text style={[styles.reportWhisper, { color: colors.mutedForeground }]}>
+                      {hidden ? 'unhide this post?' : 'hide this post?'}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => handleAdminHideToggle(hidden)}
+                      disabled={hiding}
+                      accessibilityRole="button"
+                      accessibilityLabel={hidden ? 'Confirm unhide' : 'Confirm hide'}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.reportWhisper, { color: '#EF4444', opacity: hiding ? 0.4 : 1 }]}>
+                        yes
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => setHideConfirm(false)}
+                      disabled={hiding}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={[styles.reportWhisper, { color: colors.mutedForeground }]}>
+                        cancel
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setHideConfirm(true)}
+                    accessibilityRole="button"
+                    accessibilityLabel={hidden ? 'Unhide this post' : 'Hide this post'}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Text style={[styles.reportWhisper, { color: colors.mutedForeground }]}>
+                      {hidden ? 'unhide' : 'hide'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })()}
               {/* Direct block — only when the viewer doesn't own this pet */}
               {(() => {
                 const ownerUserId = (post.pet as unknown as { ownerId?: string }).ownerId;
@@ -463,6 +547,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems:    'center',
     gap:           14,
+  },
+  // Admin-only hidden-content indicator
+  hiddenIndicator: {
+    fontSize:   11,
+    fontFamily: 'Inter_500Medium',
+    marginTop:  6,
   },
   // "report" — smallest muted text, barely visible, per copy-law spec
   reportWhisper: {

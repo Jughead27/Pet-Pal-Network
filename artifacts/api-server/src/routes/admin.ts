@@ -414,6 +414,112 @@ adminRouter.post("/admin/users/:userId/unsuspend", async (req, res) => {
 });
 
 /**
+ * POST /admin/posts/:postId/hide      — set hidden_by_admin, no report needed
+ * POST /admin/posts/:postId/unhide    — clear hidden_by_admin
+ * POST /admin/comments/:commentId/hide
+ * POST /admin/comments/:commentId/unhide
+ *
+ * Standalone content moderation — take just the content ID, no report
+ * required. They set/unset the SAME hiddenByAdmin flag as the report path
+ * (POST /admin/reports/:id/hide), so the two coexist: a report-triggered
+ * hide can be reversed via direct unhide and vice versa. Unhide is new
+ * capability — the flag was previously one-way.
+ * Audit: post.hide / post.unhide / comment.hide / comment.unhide,
+ * metadata { via: "direct" } to distinguish from report.hide.
+ */
+adminRouter.post("/admin/posts/:postId/hide", async (req, res) => {
+  const { postId }          = req.params;
+  const { userId: actorId } = (req as Express.RequestWithAuth).auth!;
+
+  const result = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(postsTable)
+      .set({ hiddenByAdmin: true })
+      .where(sql`${postsTable.id}::text = ${postId}`)
+      .returning({ id: postsTable.id });
+
+    if (!updated) return null;
+    await writeAudit(tx, actorId, "post.hide", "post", postId, { via: "direct" });
+    return updated;
+  });
+
+  if (!result) {
+    res.status(404).json({ error: "Post not found" });
+    return;
+  }
+  res.json({ ok: true, postId, hiddenByAdmin: true });
+});
+
+adminRouter.post("/admin/posts/:postId/unhide", async (req, res) => {
+  const { postId }          = req.params;
+  const { userId: actorId } = (req as Express.RequestWithAuth).auth!;
+
+  const result = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(postsTable)
+      .set({ hiddenByAdmin: false })
+      .where(sql`${postsTable.id}::text = ${postId}`)
+      .returning({ id: postsTable.id });
+
+    if (!updated) return null;
+    await writeAudit(tx, actorId, "post.unhide", "post", postId, { via: "direct" });
+    return updated;
+  });
+
+  if (!result) {
+    res.status(404).json({ error: "Post not found" });
+    return;
+  }
+  res.json({ ok: true, postId, hiddenByAdmin: false });
+});
+
+adminRouter.post("/admin/comments/:commentId/hide", async (req, res) => {
+  const { commentId }       = req.params;
+  const { userId: actorId } = (req as Express.RequestWithAuth).auth!;
+
+  const result = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(commentsTable)
+      .set({ hiddenByAdmin: true })
+      .where(sql`${commentsTable.id}::text = ${commentId}`)
+      .returning({ id: commentsTable.id });
+
+    if (!updated) return null;
+    await writeAudit(tx, actorId, "comment.hide", "comment", commentId, { via: "direct" });
+    return updated;
+  });
+
+  if (!result) {
+    res.status(404).json({ error: "Comment not found" });
+    return;
+  }
+  res.json({ ok: true, commentId, hiddenByAdmin: true });
+});
+
+adminRouter.post("/admin/comments/:commentId/unhide", async (req, res) => {
+  const { commentId }       = req.params;
+  const { userId: actorId } = (req as Express.RequestWithAuth).auth!;
+
+  const result = await db.transaction(async (tx) => {
+    const [updated] = await tx
+      .update(commentsTable)
+      .set({ hiddenByAdmin: false })
+      .where(sql`${commentsTable.id}::text = ${commentId}`)
+      .returning({ id: commentsTable.id });
+
+    if (!updated) return null;
+    await writeAudit(tx, actorId, "comment.unhide", "comment", commentId, { via: "direct" });
+    return updated;
+  });
+
+  if (!result) {
+    res.status(404).json({ error: "Comment not found" });
+    return;
+  }
+  res.json({ ok: true, commentId, hiddenByAdmin: false });
+});
+
+/**
  * POST /admin/users/:userId/delete
  *
  * Admin-triggered account deletion (enforcement cases). Runs the same shared
