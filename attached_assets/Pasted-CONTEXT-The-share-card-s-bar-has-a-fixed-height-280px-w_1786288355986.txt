@@ -1,0 +1,22 @@
+CONTEXT: The share card's bar has a fixed height (280px web / 127px native) with the pet name (bold) + caption (lighter) as the left-dominant text block. Long captions currently have nothing truncating them, risking overflow or a broken layout.
+
+GOAL: Cap the caption at 2 lines, with an ellipsis on truncation, breaking at word boundaries (never mid-word/mid-character). This is a rendering-only truncation — the full caption remains completely unchanged in the database and everywhere else in the app; only the share card's visual rendering clips it.
+1. Web (shareCardAction.ts, canvas-based): implement word-wrapping text layout that measures actual rendered width at the card's real font size, wraps to 2 lines maximum, and truncates the 2nd line with an ellipsis if content remains beyond it.
+2. Native (ShareCard.tsx, real RN component): use the platform's native line-clamping (e.g. numberOfLines={2} + ellipsizeMode) to achieve the same visual result.
+3. If a post has NO caption, the layout must gracefully collapse to show just the pet name — no empty second line, no dead space where a caption would have been.
+4. Verify this doesn't break the existing multi-pet name formatter or the right-side "pshpsh.net" + slogan block — this only touches the caption specifically.
+
+DO NOT MODIFY:
+- The stored caption data itself — full text remains fully intact in the database and in-app everywhere else (post detail, feed, etc.) — this is display-only truncation on the share card.
+- The right-side "pshpsh.net" + slogan block, bar color/theme logic, edge-softening gradient, or any other part of the share card.
+- Any other screen that displays captions.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a text-layout fix scoped to the share card's caption rendering on both platforms.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Share a post with a very long caption (multiple sentences) — confirm it truncates cleanly at 2 lines with an ellipsis, no overflow, no mid-word cuts.
+2. Share a post with a short caption (fits in 1 line) — confirm it renders normally, no unnecessary truncation.
+3. Share a post with NO caption — confirm the layout collapses gracefully, no empty space.
+4. Confirm web and native produce visually equivalent results for the same post.
+5. Confirm the multi-pet name formatter and right-side brand block are unaffected.
+6. Golden path: share a post with a long caption → confirm clean 2-line truncation → share a post with no caption → confirm graceful collapse → sign out. Verified live on pshpsh.net.

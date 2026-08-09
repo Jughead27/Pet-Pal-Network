@@ -294,15 +294,32 @@ async function webShareCard(
     const BAR_MID_Y   = PHOTO_H + BAR_H / 2;
 
     // ── LEFT — pet name (dominant) + caption ──────────────────────────────────
-    const NAME_SIZE   = 70;
-    const CAP_SIZE    = 42;
-    const NAME_GAP    = 20;          // gap between name baseline and caption top
-    const BLOCK_H     = NAME_SIZE + NAME_GAP + CAP_SIZE;
-    const NAME_Y      = BAR_MID_Y - BLOCK_H / 2 + NAME_SIZE;    // baseline
-    const CAP_Y       = NAME_Y + NAME_GAP + CAP_SIZE;
+    // Caption is display-truncated to 2 word-wrapped lines with an ellipsis
+    // (rendering only — stored caption is untouched). When there is no
+    // caption, the block collapses to just the name — no reserved dead space.
+    const NAME_SIZE    = 70;
+    const CAP_SIZE     = 42;
+    const NAME_GAP     = 20;   // gap between name baseline and caption block top
+    const CAP_LINE_H   = 52;   // caption line height (baseline-to-baseline)
 
     ctx.textAlign    = 'left';
     ctx.textBaseline = 'alphabetic';
+
+    const maxCapW = CARD_W * 0.55 - PAD_X;
+
+    // Measure/wrap with the real caption font active so widths are exact.
+    let capLines: string[] = [];
+    if (caption) {
+      ctx.font          = `400 ${CAP_SIZE}px ${FONT_STACK}`;
+      ctx.letterSpacing = '0px';
+      capLines = wrapCaptionLines(ctx, caption, maxCapW, 2);
+    }
+
+    const capBlockH = capLines.length > 0
+      ? NAME_GAP + CAP_SIZE + (capLines.length - 1) * CAP_LINE_H
+      : 0;
+    const BLOCK_H = NAME_SIZE + capBlockH;
+    const NAME_Y  = BAR_MID_Y - BLOCK_H / 2 + NAME_SIZE;   // name baseline
 
     if (displayName) {
       ctx.fillStyle     = theme.name;
@@ -312,12 +329,13 @@ async function webShareCard(
       ctx.fillText(displayName, PAD_X, NAME_Y, maxNameW);
     }
 
-    if (caption) {
+    if (capLines.length > 0) {
       ctx.fillStyle     = theme.caption;
       ctx.font          = `400 ${CAP_SIZE}px ${FONT_STACK}`;
       ctx.letterSpacing = '0px';
-      const maxCapW     = CARD_W * 0.55 - PAD_X;
-      ctx.fillText(caption, PAD_X, CAP_Y, maxCapW);
+      capLines.forEach((line, i) => {
+        ctx.fillText(line, PAD_X, NAME_Y + NAME_GAP + CAP_SIZE + i * CAP_LINE_H);
+      });
     }
 
     // ── RIGHT — brand name + slogan (secondary) ───────────────────────────────
@@ -373,6 +391,76 @@ async function webShareCard(
   } finally {
     URL.revokeObjectURL(objectUrl);
   }
+}
+
+/**
+ * Word-wrap `text` into at most `maxLines` lines that fit `maxWidth` at the
+ * currently-set canvas font. The final line gets an ellipsis if content
+ * remains beyond it. Breaks only at word boundaries for normal text; the
+ * single pathological case of one unbroken token wider than maxWidth is
+ * character-clipped with an ellipsis (mirroring native tail ellipsis), since
+ * canvas fillText would otherwise overflow into the brand block.
+ */
+function wrapCaptionLines(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number,
+  maxLines: number,
+): string[] {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [];
+
+  // Ellipsize `s` so `…` fits within maxWidth: drop trailing words first
+  // (word-boundary truncation), then — only for a single over-width token —
+  // shave characters. Never emits a line wider than maxWidth.
+  const ellipsize = (s: string): string => {
+    let clipped = s.replace(/…$/, '');
+    while (ctx.measureText(`${clipped}…`).width > maxWidth && clipped.includes(' ')) {
+      clipped = clipped.slice(0, clipped.lastIndexOf(' '));
+    }
+    while (clipped.length > 1 && ctx.measureText(`${clipped}…`).width > maxWidth) {
+      clipped = clipped.slice(0, -1);
+    }
+    return `${clipped}…`;
+  };
+
+  // Fit a token onto an empty line: keep whole if it fits, char-clip if not.
+  const fitToken = (word: string): string =>
+    ctx.measureText(word).width <= maxWidth ? word : ellipsize(word);
+
+  const lines: string[] = [];
+  let current = '';
+
+  for (let i = 0; i < words.length; i++) {
+    const word = words[i];
+    const candidate = current ? `${current} ${word}` : null;
+
+    if (candidate && ctx.measureText(candidate).width <= maxWidth) {
+      current = candidate;
+      continue;
+    }
+    if (!current) {
+      // First word on the line — char-clipped only if over-width by itself.
+      current = fitToken(word);
+      continue;
+    }
+
+    // Word doesn't fit on the current line.
+    if (lines.length === maxLines - 1) {
+      // Current is the last allowed line — ellipsize at word boundaries
+      // (char-level only for a single over-width token).
+      lines.push(ellipsize(current));
+      return lines;
+    }
+
+    lines.push(current);
+    current = fitToken(word);
+  }
+
+  if (current && lines.length < maxLines) {
+    lines.push(current);
+  }
+  return lines;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {

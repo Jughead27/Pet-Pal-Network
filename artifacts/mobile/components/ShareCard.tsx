@@ -196,10 +196,11 @@ const ShareCard = forwardRef<View, Props>(({
               {displayName}
             </Text>
           ) : null}
-          {caption ? (
+          {caption.trim() ? (
             <Text
               style={[styles.caption, { color: theme.caption }]}
               numberOfLines={2}
+              ellipsizeMode="tail"
             >
               {caption}
             </Text>
