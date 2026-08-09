@@ -536,6 +536,24 @@ export default function PetProfileScreen() {
     }
   }, [petId, queryClient]);
 
+  // ── Forced revoke handler (primary owner removes a co-owner) ─────────────
+  const [revokeConfirmId, setRevokeConfirmId] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const handleRevoke = useCallback(async (targetUserId: string) => {
+    if (revokingId) return;
+    setRevokingId(targetUserId);
+    try {
+      await customFetch(`/api/pets/${petId}/co-owners/${targetUserId}`, { method: 'DELETE' });
+      setRevokeConfirmId(null);
+      queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
+    } catch {
+      // Keep the row; primary can retry.
+      setRevokeConfirmId(null);
+    } finally {
+      setRevokingId(null);
+    }
+  }, [revokingId, petId, queryClient]);
+
   // ── Co-owner invite handler (owner sends invite by username) ─────────────
   const handleCoOwnerInvite = useCallback(async () => {
     const uname = coOwnerUsername.trim();
@@ -909,6 +927,9 @@ export default function PetProfileScreen() {
             <Text style={[styles.coOwnerBannerText, { color: colors.foreground }]}>
               {myPendingInvite.inviterUsername} wants to share {pet.name} with you.
             </Text>
+            <Text style={[styles.coOwnerBannerDisclosure, { color: colors.mutedForeground }]}>
+              accepting means you'll be able to post, edit, or delete posts for this pet — and the primary owner can remove your access at any time. your posts will stay on the pet's profile even if that happens.
+            </Text>
             <View style={styles.coOwnerBannerActions}>
               <TouchableOpacity
                 onPress={async () => {
@@ -1000,6 +1021,34 @@ export default function PetProfileScreen() {
                       {o.displayName?.trim() || 'a pshpsh member'}
                     </Text>
                   </TouchableOpacity>
+                  {/* Forced revoke — visible only to the primary owner, never on their own row */}
+                  {(pet as unknown as { ownerId?: string }).ownerId === myUserId &&
+                    o.userId !== myUserId && (
+                      revokingId === o.userId ? (
+                        <ActivityIndicator size="small" color={colors.mutedForeground} />
+                      ) : (
+                        <TouchableOpacity
+                          onPress={() =>
+                            revokeConfirmId === o.userId
+                              ? handleRevoke(o.userId)
+                              : setRevokeConfirmId(o.userId)
+                          }
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove ${o.displayName?.trim() || 'this member'} as a co-owner`}
+                          activeOpacity={0.7}
+                        >
+                          <Text
+                            style={[
+                              styles.ownerPendingCancel,
+                              { color: revokeConfirmId === o.userId ? colors.destructive : colors.mutedForeground },
+                            ]}
+                          >
+                            {revokeConfirmId === o.userId ? 'confirm remove?' : 'remove'}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    )}
                 </View>
               ))}
 
@@ -2396,6 +2445,12 @@ const styles = StyleSheet.create({
     fontFamily: "Inter_400Regular",
     fontSize: 14,
     lineHeight: 20,
+  },
+  coOwnerBannerDisclosure: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    lineHeight: 17,
+    opacity: 0.75,
   },
   coOwnerBannerActions: {
     flexDirection: "row",

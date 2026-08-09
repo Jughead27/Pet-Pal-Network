@@ -1,0 +1,25 @@
+SCOPE: Reintroduce a lightweight primary-owner concept, add forced co-owner revocation gated to primary, reuse existing repoint behavior on revoke, and add disclosure copy to both the invite and accept flows.
+
+DO NOT MODIFY: the existing voluntary self-removal path (DELETE /pets/:id/co-owners/me) — this stays as-is for any owner including primary. Do not touch isPetOwner's post-management symmetry (edit/delete/tag) — that stays fully symmetric among all current owners regardless of primary status; primary status ONLY gates the new forced-revoke action, nothing else.
+
+1) SCHEMA — MINIMAL PRIMARY REFERENCE
+- Add a primary-owner reference — NOT a role enum, just enough to identify one owner as primary. Simplest option: a nullable primary_owner_user_id on the pets table (or an is_primary boolean on pet_owners if that fits the existing shape better — pick whichever requires less migration surgery).
+- Backfill: for every existing pet, set primary = the pet's original creator (use whatever field already identifies pet creation — check pets table for a created_by/owner_id field from before the ownership model was made symmetric).
+- New pets: creator is automatically primary at creation time.
+
+2) FORCED REVOKE ENDPOINT
+- New endpoint, e.g. DELETE /pets/:id/co-owners/:userId — gated to primary owner only (403 for any non-primary caller, including other co-owners).
+- Cannot target self (self-removal already exists via the /me endpoint) and cannot target a pet down to zero owners (same invariant as self-removal).
+- Audit-logged (e.g. co_owner.revoked, distinct from the existing co_owner.left for voluntary exits).
+
+3) REPOINT ON REVOKE
+- Reuse the exact same behavior already proven for voluntary self-removal and account-deletion cleanup: the revoked user's posts stay live and attributed as before, management rights (edit/delete/tag) simply follow from isPetOwner against the pet's current owner set — no explicit "transfer" step needed since permissions were already computed dynamically, not stored per-post. Confirm this holds true for forced revoke exactly as it does for the existing self-removal path.
+
+4) DISCLOSURE COPY — TWO LOCATIONS
+- Invite (co-owner) step: update the existing disclosure text to: "optional — co-owners can post, edit, or delete any post for this pet, including ones you've already shared. you can remove a co-owner later; their posts will stay on the pet's profile."
+- Accept/decline screen for an incoming co-ownership invite (currently has no disclosure): add "accepting means you'll be able to post, edit, or delete posts for this pet — and the primary owner can remove your access at any time. your posts will stay on the pet's profile even if that happens."
+- Both are inline text additions to existing screens — no new modal/popup UI.
+
+5) ACCEPTANCE
+- tsc clean both packages.
+- Dev/live check: confirm an existing pet's primary owner backfilled correctly (matches original creator). As primary, revoke a co-owner → succeeds, audit-logged, that user's posts remain live and manageable by remaining owners. As a non-primary co-owner, attempt to revoke another co-owner → 403. Attempt to revoke self via the new endpoint → blocked (self-removal still goes through the existing /me path). Attempt to revoke down to zero owners → blocked. Confirm both new disclosure lines render correctly on their respective screens. Golden path: invite a co-owner (see updated disclosure) → they accept (see new disclosure) → primary revokes them → their prior posts still visible and editable by primary. Identical on web/iOS/Android.

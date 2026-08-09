@@ -4,7 +4,13 @@
  * Any owner can invite another user by username.
  * Invite lifecycle: pending → accepted | declined.
  * Accepted requests create a pet_owners row.
- * Only self-removal is allowed; a pet must always retain at least one owner.
+ *
+ * Removal paths:
+ *   - Self-removal (any owner): DELETE /pets/:id/co-owners/me
+ *   - Forced revoke (primary owner only): DELETE /pets/:id/co-owners/:userId
+ * "Primary" = pets.owner_id (the original creator). Primary status gates ONLY
+ * the forced-revoke action — post management stays fully symmetric among all
+ * current owners (isPetOwner). A pet must always retain at least one owner.
  */
 
 import { Router, type IRouter } from "express";
@@ -560,6 +566,78 @@ router.delete("/pets/:id/co-owners/me", async (req, res) => {
     });
   });
 
+  res.json({ ok: true });
+});
+
+// ─── DELETE /pets/:id/co-owners/:userId ──────────────────────────────────────
+// Forced revoke — primary owner (pets.owner_id, the original creator) only.
+// The revoked user's posts stay live and attributed; management rights follow
+// dynamically from isPetOwner, so no repoint/transfer step is needed (same as
+// the voluntary self-removal path).
+router.delete("/pets/:id/co-owners/:userId", async (req, res) => {
+  const { id: petId, userId: targetUserId } = req.params;
+  const callerId = (req as any).auth.userId as string;
+
+  // Self-removal has its own endpoint with different semantics.
+  if (targetUserId === callerId) {
+    res.status(400).json({ error: "Use the leave action to remove yourself" });
+    return;
+  }
+
+  // All checks + the delete run in ONE transaction with the pet's ownership
+  // rows locked (SELECT … FOR UPDATE), so a concurrent self-leave or duplicate
+  // revoke cannot produce a stale-primary revoke, an orphaned pet, or a
+  // phantom audit row.
+  const outcome = await db.transaction(async (tx) => {
+    const [pet] = await tx
+      .select({ ownerId: petsTable.ownerId })
+      .from(petsTable)
+      .where(eq(petsTable.id, petId))
+      .limit(1);
+
+    if (!pet) return { status: 404 as const, error: "Pet not found" };
+
+    // Lock every ownership row for this pet for the duration of the tx.
+    const ownerRows = await tx
+      .select({ userId: petOwnersTable.userId })
+      .from(petOwnersTable)
+      .where(eq(petOwnersTable.petId, petId))
+      .for("update");
+
+    const callerIsOwner = ownerRows.some((r) => r.userId === callerId);
+    if (pet.ownerId !== callerId || !callerIsOwner) {
+      return { status: 403 as const, error: "Only the primary owner can remove a co-owner" };
+    }
+
+    if (!ownerRows.some((r) => r.userId === targetUserId)) {
+      return { status: 404 as const, error: "That user is not an owner of this pet" };
+    }
+
+    // Invariant: never orphan a pet (caller remains, so this is belt-and-braces).
+    if (ownerRows.length <= 1) {
+      return { status: 400 as const, error: "Cannot remove the only owner of this pet" };
+    }
+
+    const deleted = await tx
+      .delete(petOwnersTable)
+      .where(and(eq(petOwnersTable.petId, petId), eq(petOwnersTable.userId, targetUserId)))
+      .returning({ id: petOwnersTable.id });
+
+    if (deleted.length === 0) {
+      // Row vanished between lock and delete (shouldn't happen under the lock).
+      return { status: 409 as const, error: "Co-owner was already removed" };
+    }
+
+    await writeAudit(tx, callerId, "co_owner.revoked", "pet", petId, {
+      removedUserId: targetUserId,
+    });
+    return { status: 200 as const };
+  });
+
+  if (outcome.status !== 200) {
+    res.status(outcome.status).json({ error: outcome.error });
+    return;
+  }
   res.json({ ok: true });
 });
 

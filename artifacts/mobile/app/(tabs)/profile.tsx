@@ -540,6 +540,9 @@ export default function ProfileScreen() {
                   <Text style={[styles.inviteCardText, { color: colors.foreground }]}>
                     {req.inviterUsername} wants to share {req.petName} with you.
                   </Text>
+                  <Text style={[styles.inviteCardDisclosure, { color: colors.mutedForeground }]}>
+                    accepting means you'll be able to post, edit, or delete posts for this pet — and the primary owner can remove your access at any time. your posts will stay on the pet's profile even if that happens.
+                  </Text>
                   <View style={styles.inviteCardActions}>
                     <TouchableOpacity
                       onPress={() => handleCoOwnerDecline(req.id)}
@@ -1038,7 +1041,7 @@ export default function ProfileScreen() {
               co-own any pets with this person?
             </Text>
             <Text style={[styles.pickerSub, { color: colors.mutedForeground }]}>
-              optional — co-owners can post, edit, or delete any post for this pet, including ones you've already shared.
+              optional — co-owners can post, edit, or delete any post for this pet, including ones you've already shared. you can remove a co-owner later; their posts will stay on the pet's profile.
             </Text>
             {pets.map((pet) => {
               const selected = selectedCoPetIds.has(pet.id);
@@ -1626,6 +1629,12 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize:   14,
     lineHeight: 20,
+  },
+  inviteCardDisclosure: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   12,
+    lineHeight: 17,
+    opacity:    0.75,
   },
   inviteCardActions: {
     flexDirection: 'row',

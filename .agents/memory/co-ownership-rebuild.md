@@ -51,3 +51,8 @@ description: Symmetric co-ownership system replacing the role-based model. No pr
 
 ## Schema migration note
 `drizzle-kit push` needs a TTY for interactive enum-conflict prompts — it will fail silently in non-TTY shells. Use `executeSql()` directly in CodeExecution for schema migrations that add/drop enums or tables.
+
+## Primary owner + forced revoke (Aug 2026)
+- "Primary" = pets.owner_id (original creator) — no new column, no backfill needed. Primary status gates ONLY forced revoke; post management stays symmetric via isPetOwner.
+- DELETE /pets/:id/co-owners/:userId — primary-only forced revoke; all checks + delete + co_owner.revoked audit inside one tx with SELECT…FOR UPDATE on the pet's pet_owners rows (architect flagged TOCTOU on first draft; lock-in-tx pattern is the fix).
+- Voluntary self-leave (/me, co_owner.left) untouched; mobile "remove"/"confirm remove?" whisper in Owners list visible only to primary, never own row.

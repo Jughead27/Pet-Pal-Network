@@ -15,6 +15,7 @@
  *   POST /admin/breed-suggestions/approve    — create breed in taxonomy, remap pets
  *   POST /admin/breed-suggestions/reject     — clear free-text breed from pets
  *   GET  /admin/audit                         — paginated audit log, newest first
+ *   GET  /admin/stats                         — total user/post/comment/treat/boop counts
  *
  * Audit-log: every mutating handler writes an audit_log row IN THE SAME
  * TRANSACTION as the action via writeAudit(tx, ...).  If the transaction rolls
@@ -39,6 +40,8 @@ import {
   configTable,
   quotaRequestsTable,
   spotlightStateTable,
+  treatsTable,
+  boopsTable,
 } from "@workspace/db";
 import { eq, asc, desc, sql, and, isNull } from "drizzle-orm";
 import { PETS_INCLUDING_DELETED } from "../lib/petQueries.js";
@@ -64,6 +67,40 @@ adminRouter.use("/admin", requireRole("admin"));
 // ─── Ping ─────────────────────────────────────────────────────────────────────
 adminRouter.get("/admin/ping", (_req, res) => {
   res.json({ ok: true, role: "admin" });
+});
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+
+/**
+ * GET /admin/stats
+ *
+ * Quiet health-check totals for the admin hub.
+ * Posts/comments count LIVE content only (not archived, not hidden_by_admin);
+ * users count everyone regardless of suspension; treats/boops are raw totals.
+ */
+adminRouter.get("/admin/stats", async (_req, res) => {
+  const count = sql<number>`count(*)::int`;
+  const [[users], [posts], [comments], [treats], [boops]] = await Promise.all([
+    db.select({ count }).from(usersTable),
+    db
+      .select({ count })
+      .from(postsTable)
+      .where(and(isNull(postsTable.archivedAt), eq(postsTable.hiddenByAdmin, false))),
+    db
+      .select({ count })
+      .from(commentsTable)
+      .where(and(isNull(commentsTable.deletedAt), eq(commentsTable.hiddenByAdmin, false))),
+    db.select({ count }).from(treatsTable),
+    db.select({ count }).from(boopsTable),
+  ]);
+
+  res.json({
+    users:    users.count,
+    posts:    posts.count,
+    comments: comments.count,
+    treats:   treats.count,
+    boops:    boops.count,
+  });
 });
 
 // ─── Reports triage ───────────────────────────────────────────────────────────

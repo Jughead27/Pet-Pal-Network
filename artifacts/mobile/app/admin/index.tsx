@@ -74,6 +74,15 @@ export default function AdminIndexScreen() {
   });
   const quotaPendingCount = quotaCountData?.pending ?? 0;
 
+  // Health-check totals — quiet row above the section list; never blocks it.
+  const { data: stats } = useQuery({
+    queryKey: ['admin-stats'],
+    queryFn:  () =>
+      customFetch<{ users: number; posts: number; comments: number; treats: number; boops: number }>(
+        '/api/admin/stats',
+      ),
+  });
+
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
       <ScrollView
@@ -101,6 +110,24 @@ export default function AdminIndexScreen() {
         </Text>
 
         <View style={[styles.divider, { borderTopColor: colors.border }]} />
+
+        {/* Stats row — quiet health-check totals, above the reports section */}
+        <View style={styles.statsRow}>
+          {([
+            ['users',    stats?.users],
+            ['posts',    stats?.posts],
+            ['comments', stats?.comments],
+            ['treats',   stats?.treats],
+            ['boops',    stats?.boops],
+          ] as const).map(([label, value]) => (
+            <View key={label} style={styles.statItem}>
+              <Text style={[styles.statValue, { color: colors.foreground }]}>
+                {value ?? '–'}
+              </Text>
+              <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{label}</Text>
+            </View>
+          ))}
+        </View>
 
         {SECTIONS.map(({ route, label, description }) => {
           const pendingCount = route === '/admin/quota-requests' ? quotaPendingCount : 0;
@@ -158,6 +185,22 @@ const styles = StyleSheet.create({
   divider: {
     borderTopWidth: StyleSheet.hairlineWidth,
     marginVertical: 24,
+  },
+
+  statsRow: {
+    flexDirection:  'row',
+    justifyContent: 'space-between',
+    marginBottom:   24,
+  },
+  statItem: { alignItems: 'center', gap: 2 },
+  statValue: {
+    fontFamily:    'Inter_700Bold',
+    fontSize:      18,
+    letterSpacing: -0.3,
+  },
+  statLabel: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   11,
   },
 
   row: {
