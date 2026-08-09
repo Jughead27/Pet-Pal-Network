@@ -513,6 +513,20 @@ export default function FeedPage({
         : Math.max(bottomOffset, height - heroFrame.top - (heroFrame.height + railH) / 2);
     }
   }
+  // ── HARD INVARIANT: rail bottom must clear the chrome top ────────────────
+  // One final, unconditional clamp applied AFTER every path-specific rail
+  // computation above: the rail's bottom-most edge may never sit at or below
+  // the top of the pet-name/caption block, minus an 8px minimum gap (the same
+  // margin the contain-mode lift already uses). chromeTopY mirrors
+  // petInfoPosition exactly — rect posts below a seam pin the chrome via
+  // `top`, every other path anchors it via `bottom: bottomOffset`. When the
+  // underlying math is right this is a no-op; it exists as a global guarantee
+  // for any case the math above hasn't anticipated.
+  const RAIL_CHROME_MIN_GAP = 8;
+  const chromeTopY = chromeSeamY != null
+    ? Math.min(chromeSeamY + CHROME_FILL_GAP, height - bottomOffset - petInfoH)
+    : height - bottomOffset - petInfoH;
+  railBottom = Math.max(railBottom, height - chromeTopY + RAIL_CHROME_MIN_GAP);
 
   // ── Derived display values for share card overlay ─────────────────────────
   // Declared before handleSharePress so they can appear in its dep array.

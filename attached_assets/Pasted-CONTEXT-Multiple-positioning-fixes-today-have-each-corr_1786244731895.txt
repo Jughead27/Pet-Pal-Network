@@ -1,0 +1,15 @@
+CONTEXT: Multiple positioning fixes today have each correctly handled specific cases (rect-frame posts, legacy contain posts, tagged-with rows, etc.), but there is no single, absolute guarantee anywhere in the code that the action rail's bottom-most element stays above the pet-name/caption block. This needs to become a hard invariant, enforced globally, regardless of which rendering path or math determined the rail's position.
+
+GOAL: After all existing rail-positioning logic runs (whichever path a given post takes — rect-frame or legacy contain), apply ONE final, unconditional clamp: the rail's bottom-most edge must never be positioned at or below the top of the pet-name/caption block, minus a minimum gap (reuse whatever gap value is already established as correct, e.g. the 8px or 14px already used elsewhere). This clamp applies AFTER all other computed positioning, as a final safety net — it should never actually trigger if the underlying math is correct, but it GUARANTEES the invariant holds even in a case we haven't found or anticipated yet.
+
+DO NOT MODIFY:
+- The existing positioning math for rect-frame or legacy contain posts — keep all of today's fixes exactly as they are. This is an additive final check, not a replacement for the underlying calculations.
+- Any other layout logic outside the rail/chrome relationship.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is one additional, unconditional clamp applied after existing positioning logic, functioning as a hard guarantee rather than a case-specific fix.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Review every post type already tested today (legacy contain solo, legacy contain tagged-with, rect-frame full-bleed, rect-frame short/1:1, rect-frame with fill) — confirm the rail's bottom edge is above the caption top on every single one, with the new clamp active.
+2. Deliberately construct or reason through an edge case not yet tested (e.g. an unusually large photo, an unusual combination of tagging + fill) — confirm the clamp holds even here, without needing a new case-specific fix.
+3. Confirm the clamp does not visually trigger/change anything on posts that were already correct — it should be invisible when the underlying math is right, and only save the day when something is off.
+4. Golden path: view a range of post types → confirm rail never falls below the pet name on any of them → sign out. Verified live on pshpsh.net.
