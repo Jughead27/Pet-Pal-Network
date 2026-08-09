@@ -713,7 +713,7 @@ export default function AddScreen() {
               accessibilityLabel="Add a photo"
             >
               <ImageSquare size={22} color={colors.foreground} weight="regular" />
-              <Text style={[s.sourceRowText, { color: colors.foreground }]}>Add a photo</Text>
+              <Text style={[s.sourceRowText, { color: colors.foreground }]}>Add a photo of your pet</Text>
               <CaretRight size={18} color={colors.mutedForeground} weight="regular" />
             </TouchableOpacity>
           </View>

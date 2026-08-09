@@ -71,6 +71,7 @@ export default function SignUpScreen() {
 
   // ── ToS/Privacy consent — required before any signup path (email or OAuth)
   const [tosAgreed, setTosAgreed] = useState(false);
+  const [animalsAgreed, setAnimalsAgreed] = useState(false);
 
   // ── Load invite code on mount ─────────────────────────────────────────────
   // Priority: URL param (from /invite/[code]) > SecureStore (from previous landing page visit)
@@ -108,6 +109,10 @@ export default function SignUpScreen() {
       setError('please agree to the terms of service and privacy policy first.');
       return;
     }
+    if (!animalsAgreed) {
+      setError('please agree to keep it about the animals first.');
+      return;
+    }
     const name = displayName.trim();
     if (!name) {
       setError('please tell us what to call you.');
@@ -130,7 +135,7 @@ export default function SignUpScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isLoaded, signUp, email, password, displayName, tosAgreed]);
+  }, [isLoaded, signUp, email, password, displayName, tosAgreed, animalsAgreed]);
 
   // ── Step 2: Verify email OTP ──────────────────────────────────────────────
   const handleVerify = useCallback(async () => {
@@ -509,6 +514,23 @@ export default function SignUpScreen() {
             </Text>
           </Pressable>
 
+          {/* ── Animals-only content rule — same gate pattern as ToS ── */}
+          <Pressable
+            style={s.consentRow}
+            onPress={() => { setAnimalsAgreed((v) => !v); setError(null); }}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: animalsAgreed }}
+            accessibilityLabel="I'll keep it about the animals — human-only posts get removed"
+            hitSlop={6}
+          >
+            <View style={[s.checkbox, animalsAgreed && s.checkboxChecked]}>
+              {animalsAgreed && <Text style={s.checkboxMark}>✓</Text>}
+            </View>
+            <Text style={s.consentText}>
+              i'll keep it about the animals — human-only posts get removed
+            </Text>
+          </Pressable>
+
           {error ? <Text style={s.errorText}>{error}</Text> : null}
 
           {/* ── Primary action — shared hairline-outline CTA ── */}
@@ -516,7 +538,7 @@ export default function SignUpScreen() {
             variant="primary"
             fullWidth
             onPress={handleSignUp}
-            disabled={loading || !email || !displayName.trim() || password.length < 8 || !tosAgreed}
+            disabled={loading || !email || !displayName.trim() || password.length < 8 || !tosAgreed || !animalsAgreed}
             style={s.createBtn}
           >
             {loading
@@ -526,10 +548,14 @@ export default function SignUpScreen() {
 
           {/* ── Google SSO — also gated on consent ── */}
           <Pressable
-            style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed, !tosAgreed && s.disabled]}
+            style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed, (!tosAgreed || !animalsAgreed) && s.disabled]}
             onPress={() => {
               if (!tosAgreed) {
                 setError('please agree to the terms of service and privacy policy first.');
+                return;
+              }
+              if (!animalsAgreed) {
+                setError('please agree to keep it about the animals first.');
                 return;
               }
               handleGoogle();
