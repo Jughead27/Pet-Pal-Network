@@ -136,10 +136,16 @@ router.get("/users/:id/profile", async (req, res) => {
       tiktok:       usersTable.tiktok,
       // Two-way block check — same correlated EXISTS both-directions pattern
       // as every other blocked read surface.
+      //
+      // NOTE: columns interpolated into a sql`` template that is used as a
+      // SELECT field are rendered UNQUALIFIED (just "id"), and inside the
+      // EXISTS subquery that binds to blocks.id (uuid) — producing
+      // `operator does not exist: text = uuid` at runtime. Qualify the outer
+      // column by hand (users.id) instead of interpolating the drizzle column.
       blocked: sql<boolean>`EXISTS(
         SELECT 1 FROM blocks b
-        WHERE (b.blocker_id = ${userId} AND b.blocked_id = ${usersTable.id})
-           OR (b.blocker_id = ${usersTable.id} AND b.blocked_id = ${userId})
+        WHERE (b.blocker_id = ${userId} AND b.blocked_id = users.id)
+           OR (b.blocker_id = users.id AND b.blocked_id = ${userId})
       )`,
     })
     .from(usersTable)
@@ -157,9 +163,12 @@ router.get("/users/:id/profile", async (req, res) => {
       species:        petsTable.species,
       breed:          petsTable.breed,
       avatarKey:      petsTable.avatarKey,
+      // Same unqualified-interpolation hazard as the blocks EXISTS above:
+      // ${petsTable.id} here would render as "id" and bind to posts.id,
+      // silently matching nothing. Qualify pets.id by hand.
       recentMediaKey: sql<string | null>`(
         SELECT p.media_key FROM posts p
-        WHERE p.pet_id = ${petsTable.id} AND p.archived_at IS NULL
+        WHERE p.pet_id = pets.id AND p.archived_at IS NULL
         ORDER BY p.created_at DESC LIMIT 1
       )`,
     })

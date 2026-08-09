@@ -30,4 +30,5 @@
 - [React TDZ in long components](react-tdz-hook-order.md) — `const` vars used by hooks/derived state must be declared BEFORE the line that reads them; TypeScript does not catch this, it crashes at runtime.
 - [CropEditor Architecture](crop-editor-architecture.md) — unified crop/frame editor (fixed window, image pans/zooms); avatar WYSIWYG fix via avatarCropX/Y/W/H DB columns. isCropContain section is stale.
 - [RN-web initialScrollIndex is not mount-time](rnw-initial-scroll-index.md) — web fires a one-shot unretried scrollToIndex from onLayout; needs web-only verify-and-correct rAF loop via getScrollableNode.
+- [Drizzle sql`` select-field columns](drizzle-sql-select-field-columns.md) — interpolated columns render unqualified; subqueries capture them → prod 500s. Hand-qualify (users.id).
 - [Zoom-out + Fill Architecture](zoom-out-fill-architecture.md) — rect fractions may exceed [0,1]; canonical compose-time avg color in crop_fill_color; allowZoomOut gate; web canvas full-image draw trick.
