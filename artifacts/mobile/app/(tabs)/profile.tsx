@@ -1038,7 +1038,7 @@ export default function ProfileScreen() {
               co-own any pets with this person?
             </Text>
             <Text style={[styles.pickerSub, { color: colors.mutedForeground }]}>
-              optional — only select pets you want this person to be able to post for.
+              optional — co-owners can post, edit, or delete any post for this pet, including ones you've already shared.
             </Text>
             {pets.map((pet) => {
               const selected = selectedCoPetIds.has(pet.id);
