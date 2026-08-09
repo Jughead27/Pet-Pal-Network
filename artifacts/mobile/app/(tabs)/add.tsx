@@ -46,6 +46,7 @@ import {
 } from '@workspace/api-client-react';
 import type { Pet } from '@workspace/api-client-react';
 import { compressImage } from '@/utils/compressImage';
+import { maybeConvertHeic } from '@/utils/maybeConvertHeic';
 import { computeAverageColor } from '@/utils/luminance';
 import { computeFillThumb } from '@/utils/fillThumb';
 import CropEditor from '@/components/CropEditor';
@@ -174,7 +175,15 @@ export default function AddScreen() {
     setStep('compressing');
     setIsChangingPhoto(false); // dismiss source-picker overlay the moment processing starts
     try {
-      const compressed = await compressImage(asset.uri, asset.width, asset.height);
+      // HEIC/HEIF pre-step: converts to JPEG on web (lazy-loaded decoder);
+      // no-op on native where the manipulator decodes HEIC directly.
+      const sourceUri  = await maybeConvertHeic(asset.uri, asset.mimeType ?? undefined);
+      const compressed = await compressImage(sourceUri, asset.width, asset.height);
+      // The intermediate decoded-JPEG object URL (web HEIC path only) has
+      // served its purpose once compression has consumed it — revoke it.
+      if (sourceUri !== asset.uri && sourceUri.startsWith('blob:')) {
+        URL.revokeObjectURL(sourceUri);
+      }
       const uri = compressed.uri;
       const w   = (compressed as { width?: number }).width  ?? asset.width;
       const h   = (compressed as { height?: number }).height ?? asset.height;
@@ -206,7 +215,7 @@ export default function AddScreen() {
         .then((t) => { if (fillColorToken.current === token) setCropFillThumb(t); })
         .catch(() => { if (fillColorToken.current === token) setCropFillThumb(null); });
     } catch {
-      setError('Failed to process image. Please try another photo.');
+      setError("Couldn't read this photo — the file may be damaged or in a format we can't decode. Please try a different photo.");
       setStep('idle');
     }
   }, [feedAspect]);
@@ -233,8 +242,8 @@ export default function AddScreen() {
 
     const asset = result.assets[0];
     const mime  = asset.mimeType ?? '';
-    if (mime && !['image/jpeg', 'image/png', 'image/webp'].includes(mime)) {
-      setError('Only JPEG, PNG, and WebP images are supported.');
+    if (mime && !['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(mime)) {
+      setError('Only JPEG, PNG, WebP, and HEIC images are supported.');
       return;
     }
     if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {
@@ -271,8 +280,8 @@ export default function AddScreen() {
 
     const asset = result.assets[0];
     const mime  = asset.mimeType ?? '';
-    if (mime && !['image/jpeg', 'image/png', 'image/webp'].includes(mime)) {
-      setError('Only JPEG, PNG, and WebP images are supported.');
+    if (mime && !['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(mime)) {
+      setError('Only JPEG, PNG, WebP, and HEIC images are supported.');
       return;
     }
     if (asset.fileSize && asset.fileSize > 10 * 1024 * 1024) {

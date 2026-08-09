@@ -922,7 +922,19 @@ adminRouter.get("/admin/users-overview", async (_req, res) => {
     ORDER BY u.created_at DESC
   `);
 
-  res.json({ users: rows });
+  // Summary strip totals — same exclusion conventions as the table:
+  // tombstoned users excluded, live posts only. Invite totals system-wide.
+  const { rows: summaryRows } = await db.execute(sql`
+    SELECT
+      (SELECT COUNT(*)::int FROM users u2 WHERE u2.deleted_at IS NULL)      AS "totalUsers",
+      (SELECT COUNT(*)::int FROM invites)                                   AS "totalInvites",
+      (SELECT COUNT(*)::int FROM invites i2 WHERE i2.status = 'used')       AS "totalInvitesAccepted",
+      (SELECT COUNT(*)::int FROM posts p2
+        WHERE p2.archived_at IS NULL
+          AND p2.hidden_by_admin = FALSE)                                   AS "totalPosts"
+  `);
+
+  res.json({ users: rows, summary: summaryRows[0] });
 });
 
 // ─── Breed suggestions ────────────────────────────────────────────────────────

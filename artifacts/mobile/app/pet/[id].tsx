@@ -67,6 +67,7 @@ import type { FeedPost, PackResult } from "@workspace/api-client-react";
 import { useAuth } from "@clerk/clerk-expo";
 import { resolveMediaKey } from "@/utils/mediaKey";
 import { compressImage } from "@/utils/compressImage";
+import { maybeConvertHeic } from "@/utils/maybeConvertHeic";
 import AddToPackLink from "@/components/AddToPackLink";
 import InterestChip from "@/components/InterestChip";
 import { useFollowsContext } from "@/context/FollowsContext";
@@ -318,7 +319,15 @@ export default function PetProfileScreen() {
     setAvatarStep("compressing");
     setAvatarError(null);
     try {
-      const compressed = await compressImage(uri, width, height);
+      // HEIC/HEIF pre-step: converts to JPEG on web (lazy-loaded decoder);
+      // no-op on native where the manipulator decodes HEIC directly.
+      const sourceUri  = await maybeConvertHeic(uri);
+      const compressed = await compressImage(sourceUri, width, height);
+      // The intermediate decoded-JPEG object URL (web HEIC path only) has
+      // served its purpose once compression has consumed it — revoke it.
+      if (sourceUri !== uri && sourceUri.startsWith("blob:")) {
+        URL.revokeObjectURL(sourceUri);
+      }
       avatarNatural.current = {
         width:  (compressed as { width?: number }).width  ?? width,
         height: (compressed as { height?: number }).height ?? height,
@@ -327,7 +336,7 @@ export default function PetProfileScreen() {
       setAvatarSrcKey(srcKey ?? null);
       setAvatarStep("framing");
     } catch {
-      setAvatarError("Failed to process image. Please try again.");
+      setAvatarError("Couldn't read this photo — the file may be damaged or in a format we can't decode. Please try a different one.");
       setAvatarStep("sheet");
     }
   }, []);

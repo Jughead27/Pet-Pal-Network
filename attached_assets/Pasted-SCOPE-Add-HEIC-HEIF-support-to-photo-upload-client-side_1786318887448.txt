@@ -1,0 +1,23 @@
+SCOPE: Add HEIC/HEIF support to photo upload — client-side conversion to JPEG, reusing the existing compression pipeline. Applies to both the compose flow and the avatar flow.
+
+DO NOT MODIFY: the server presign/verify logic (uploads.ts) — it stays JPEG/PNG/WebP-only by design, since conversion happens before any upload request is made. Do not touch the existing JPEG/PNG/WebP path for those formats — this is purely additive for HEIC/HEIF.
+
+PRESERVATION CLAUSE: JPEG, PNG, and WebP uploads must continue to work exactly as they do today, on every platform, with zero change in behavior or file size/quality.
+
+1) NATIVE (iOS/Android)
+- Let HEIC/HEIF mimeTypes through the existing MIME gate in add.tsx (both library and camera pick paths) instead of rejecting them.
+- Confirm expo-image-manipulator's existing compressImage step correctly decodes HEIC input and outputs JPEG as it already does for other formats — no new native dependency should be needed here per the investigation, just removing the rejection.
+
+2) WEB
+- Add a HEIC decoder (e.g. heic2any or equivalent wasm-based library) as a LAZY-loaded dependency — only fetched/imported when a picked file is actually detected as HEIC/HEIF, not bundled into the main app load for every user. This matters: most users aren't on iPhone-web and shouldn't pay any bundle-size cost for this.
+- When a HEIC file is detected on web, decode it via this library, then feed the result into the existing canvas-based compressImage pipeline exactly as any other format would be — same JPEG output, same size/quality handling.
+
+3) AVATAR FLOW
+- Apply the same fix to the avatar upload path (pet/[id].tsx) — currently has no MIME gate at all and falls into a generic failure on web for HEIC. Route it through the same detect → lazy-decode → existing-compress pipeline as the compose flow, rather than adding a separate one-off implementation.
+
+4) FALLBACK MESSAGING
+- For any image that still fails to process after this change (corrupt file, truly unsupported format, decode failure), replace the generic "Failed to process image. Please try another photo." with a message that's honest about what happened, distinct from the "unsupported format" message — these are different failure modes and should read differently to the user.
+
+5) ACCEPTANCE
+- tsc clean both packages.
+- Dev/live check: upload a genuine HEIC photo (from an iPhone, or a HEIC test file for web/desktop testing) through both the compose flow and the avatar flow, on native AND web — confirm it converts and posts successfully rather than being rejected. Confirm JPEG/PNG/WebP uploads are completely unaffected on all platforms. Confirm the web bundle doesn't load the HEIC decoder unless a HEIC file is actually picked (check network tab). Confirm a genuinely corrupt/unsupported file still fails gracefully with an honest, distinct error message.

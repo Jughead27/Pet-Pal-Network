@@ -22,6 +22,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
 import { customFetch } from '@workspace/api-client-react';
 
+interface UsersSummary {
+  totalUsers:           number;
+  totalInvites:         number;
+  totalInvitesAccepted: number;
+  totalPosts:           number;
+}
+
 interface UserOverviewRow {
   id:             string;
   displayName:    string | null;
@@ -40,10 +47,11 @@ export default function AdminUsersScreen() {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin-users-overview'],
-    queryFn:  () => customFetch<{ users: UserOverviewRow[] }>('/api/admin/users-overview'),
+    queryFn:  () => customFetch<{ users: UserOverviewRow[]; summary?: UsersSummary }>('/api/admin/users-overview'),
   });
 
-  const users = data?.users ?? [];
+  const users   = data?.users ?? [];
+  const summary = data?.summary;
 
   const renderItem = ({ item }: { item: UserOverviewRow }) => (
     <View style={[styles.row, { borderBottomColor: colors.border }]}>
@@ -93,12 +101,19 @@ export default function AdminUsersScreen() {
           keyExtractor={(u) => u.id}
           renderItem={renderItem}
           ListHeaderComponent={
-            <View style={[styles.row, styles.headRow, { borderBottomColor: colors.border }]}>
+            <>
+              {summary && (
+                <Text style={[styles.summaryStrip, { color: colors.mutedForeground }]}>
+                  {summary.totalUsers} users · {summary.totalInvitesAccepted}/{summary.totalInvites} invites accepted · {summary.totalPosts} posts
+                </Text>
+              )}
+              <View style={[styles.row, styles.headRow, { borderBottomColor: colors.border }]}>
               <Text style={[styles.cellName, styles.headText, { color: colors.mutedForeground }]}>name</Text>
               <Text style={[styles.cellInviter, styles.headText, { color: colors.mutedForeground }]}>invited by</Text>
               <Text style={[styles.cellInvites, styles.headText, { color: colors.mutedForeground }]}>invites</Text>
               <Text style={[styles.cellPosts, styles.headText, { color: colors.mutedForeground }]}>posts</Text>
-            </View>
+              </View>
+            </>
           }
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 40 }]}
           showsVerticalScrollIndicator={false}
@@ -128,6 +143,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
   headRow:  { paddingVertical: 8 },
+  summaryStrip: { fontFamily: 'Inter_400Regular', fontSize: 13, paddingTop: 10, paddingBottom: 6 },
   headText: { fontFamily: 'Inter_500Medium', fontSize: 11, textTransform: 'lowercase' },
 
   cellName:    { flex: 2.2, fontFamily: 'Inter_600SemiBold', fontSize: 13 },
