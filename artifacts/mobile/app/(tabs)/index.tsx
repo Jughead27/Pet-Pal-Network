@@ -26,7 +26,7 @@ import {
 } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
-import { useGetFeed } from '@workspace/api-client-react';
+import { useGetFeed, getGetFeedQueryKey } from '@workspace/api-client-react';
 import { getPostSuccessSignalTime, clearPostSuccessSignal } from '@/utils/feedScrollSignal';
 import type { FeedPost } from '@workspace/api-client-react';
 import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
@@ -37,7 +37,13 @@ import CommentSheet from '@/components/CommentSheet';
 export default function HomeScreen() {
   const colors = useColors();
   const navigation = useNavigation();
-  const { data, dataUpdatedAt, isLoading, isError } = useGetFeed();
+  // refetchOnWindowFocus disabled for the feed ONLY: a passive refocus refetch
+  // can replace the posts array mid-scroll (prepends shift every index while
+  // pixel scrollTop stays put → visual jump). Deliberate invalidations from
+  // add/edit/pet screens still mark this query stale and refetch as before.
+  const { data, dataUpdatedAt, isLoading, isError } = useGetFeed(undefined, {
+    query: { queryKey: getGetFeedQueryKey(), refetchOnWindowFocus: false },
+  });
   const posts = data?.posts ?? [];
 
   // ── Window dimensions — used as the web fallback for page height ──────────
@@ -182,6 +188,43 @@ export default function HomeScreen() {
       runWebFeedRestore();
     }
   }, [runWebFeedRestore]);
+
+  // ── Web viewport-height re-anchoring ─────────────────────────────────────
+  // On mobile web the browser URL bar collapsing/expanding during normal
+  // scrolling changes windowHeight, which resizes EVERY pager cell while the
+  // pixel scrollTop stays put — mandatory scroll-snap then re-commits the feed
+  // to a different index (rapid multi-post "auto-scroll"). Same failure class
+  // as the keyboard resize; same correction: compute which post the user was
+  // on from the PRE-change height, then arm the existing verify-and-correct
+  // loop to re-anchor to that post at the new height.
+  const prevWebHeightRef = useRef(windowHeight);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const prevH = prevWebHeightRef.current;
+    if (windowHeight === prevH) return;
+    prevWebHeightRef.current = windowHeight;
+    // Comment sheet open → keyboard-driven resize; handled by the existing
+    // restore-on-close path. Don't fight it.
+    if (commentSheetPostIdRef.current) return;
+    // A restore already in flight re-reads pageHeightForRestoreRef each frame,
+    // so it adapts to the new height on its own.
+    if (!webRestoreDone.current) return;
+    const node = (flatListRef.current as unknown as {
+      getScrollableNode?: () => HTMLElement | null;
+    } | null)?.getScrollableNode?.() ?? null;
+    if (!node || prevH <= 0) return;
+    const list = postsForRestoreRef.current;
+    if (list.length === 0) return;
+    // scrollTop is still in pre-change pixels at this point — divide by the
+    // OLD height to recover the post the user was actually viewing.
+    const idx = Math.min(Math.max(Math.round(node.scrollTop / prevH), 0), list.length - 1);
+    const target = list[idx];
+    if (!target) return;
+    restoreTargetIdRef.current = target.id;
+    webRestoreToken.current += 1; // invalidate any stale loop
+    webRestoreDone.current = false;
+    runWebFeedRestore();
+  }, [windowHeight, runWebFeedRestore]);
 
   // ── Tab-press scroll-to-top ───────────────────────────────────────────────
   // Tapping the Home tab (even when already focused) always scrolls the feed

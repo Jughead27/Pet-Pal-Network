@@ -1,0 +1,18 @@
+SCOPE: Fix Home feed rapid-scroll bug — two contributing causes, both addressed.
+
+DO NOT MODIFY: keyExtractor, renderItem memoization, image URI comparison, scrollToOffset logic (tabPress scroll-to-top, post-success signal), the comment-sheet restore rAF loop — all already confirmed correct, not part of this bug.
+
+PRESERVATION CLAUSE: the existing verify-and-correct loop for the keyboard-resize case must keep working exactly as it does today — this delivery extends its trigger condition, not its correction logic.
+
+1) VIEWPORT-HEIGHT RE-ANCHORING (primary fix)
+- Extend the existing verify-and-correct loop (currently triggered only by keyboard-driven height changes) to also fire when windowHeight changes for any reason on web — including mobile browser URL-bar collapse/expand during normal scrolling.
+- Do NOT freeze/pin page height as an alternative approach — re-anchor to the current post using the same corrective mechanism already in place for the keyboard case, so there's one consistent strategy for "viewport height changed while scrolling," not two different ones.
+
+2) SCOPED REFETCH-ON-FOCUS FIX (secondary fix)
+- Set `refetchOnWindowFocus: false` specifically on the feed query (via its own query options), not on the global QueryClient defaults. Every other query keeps today's default behavior (staleTime: 0, refetchOnWindowFocus: true) unchanged.
+- Confirm explicit invalidations of the feed key from add.tsx, pet/edit.tsx, and pet/[id].tsx still fire correctly after posting/editing — this fix only removes the passive refocus-triggered refetch, not the deliberate invalidations.
+
+3) ACCEPTANCE
+- tsc clean both packages.
+- Dev/live check: scroll the Home feed on mobile web through enough posts to trigger a URL-bar collapse mid-scroll (or simulate via devtools viewport resize while scrolled several posts deep) → confirm the feed re-anchors to the correct post instead of jumping. Refocus the browser tab/window while scrolled deep into the feed → confirm no visual jump from a background refetch, while confirming a new post still appears in the feed after actually posting one. Keyboard-driven resize (existing case) still works identically to before.
+- Golden path: sign in → Home loads → scroll several posts deep → trigger a viewport resize (URL bar or devtools) → position holds correctly → refocus tab → no jump → post a new photo elsewhere → return to Home → new post appears in feed. Identical behavior on web only (native unaffected, as established).
