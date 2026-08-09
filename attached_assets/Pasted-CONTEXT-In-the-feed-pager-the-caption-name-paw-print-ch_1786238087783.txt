@@ -1,0 +1,19 @@
+CONTEXT: In the feed pager, the caption/name/paw-print chrome is currently positioned at a fixed screen coordinate. For full-bleed posts (photo fills the whole frame) this correctly overlays directly on the photo. But for posts with a fill (photo doesn't fully cover the frame — e.g. letterboxed top/bottom), that same fixed position now lands right at the seam where the photo ends and the fill begins — causing the name/paw-print to visually overlap that boundary line, rather than sitting cleanly on the photo OR dropping below it into the fill area with proper clearance.
+
+GOAL: Make the caption/name/paw-print chrome position CONDITIONAL on whether the post has a fill:
+1. Full-bleed post (no fill, photo covers the entire frame): keep the EXACT current behavior — chrome overlays directly on the photo, unchanged.
+2. Post WITH a fill (photo doesn't cover the full frame): position the chrome BELOW the photo's actual rendered bottom edge, inside the fill area, with clear visual spacing/clearance from the photo edge — it should never overlap or sit directly on the photo/fill boundary line.
+This mirrors how other aspect ratios on this app already correctly behave (per James: "on all other photos it was either directly on the image... or beneath it with clearance") — this is a fix to bring the newly-affected fill case in line with that existing, correct pattern, not a new design.
+
+DO NOT MODIFY:
+- Full-bleed chrome positioning — must remain pixel-identical to current behavior.
+- The crop-rect rendering, fill-color logic, or how a post's aspect is determined — reuse as-is.
+- Any other screen (post detail, share card, compose) — scoped to the feed pager only.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a conditional positioning fix for one element (caption/name/paw-print chrome) in the feed pager.
+
+ACCEPTANCE TEST (must end in golden path):
+1. View a full-bleed feed post — confirm caption/name/paw-print still overlays directly on the photo, pixel-identical to before.
+2. View a feed post WITH a fill (e.g. 1:1 zoomed out on a tall photo) — confirm the caption/name/paw-print now sits cleanly BELOW the photo's actual edge, in the fill area, with visible clearance — no overlap with the photo/fill boundary.
+3. Compare against how 4:5/other ratios already correctly render this (per existing behavior) — confirm the fill case now matches that same clean pattern.
+4. Golden path: view a full-bleed post (unchanged) → view a fill post (chrome now clear of the boundary) → sign out. Verified live on pshpsh.net.

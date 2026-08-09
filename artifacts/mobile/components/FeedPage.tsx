@@ -425,6 +425,31 @@ export default function FeedPage({
     };
   }, [rectAspect, pageWidth, height]);
 
+  // ── Chrome placement for fill posts ───────────────────────────────────────
+  // Full-bleed posts keep the fixed `bottom: bottomOffset` overlay (unchanged).
+  // When the photo does NOT reach the frame's bottom edge (poster zoomed out —
+  // fill color visible below the photo), the fixed position would sit right on
+  // the photo/fill seam. In that case the pet-info chrome moves to just below
+  // the photo's actual rendered bottom edge, inside the fill area, with a
+  // clear gap — matching how other ratios render (on the photo OR cleanly
+  // below it, never straddling the boundary).
+  const [petInfoH, setPetInfoH] = useState(120);
+  const fillSeamY = useMemo(() => {
+    if (!heroFrame || !hasFullCropRect || !post.cropFillColor) return null;
+    // Photo bottom in frame fractions of the rect: (1 − cropY) / cropH.
+    const frac = (1 - (post.cropY as number)) / Math.max(post.cropH as number, 1e-6);
+    if (frac >= 1) return null; // photo reaches the frame bottom — fill is side-only
+    return heroFrame.top + heroFrame.height * frac;
+  }, [heroFrame, hasFullCropRect, post.cropFillColor, post.cropY, post.cropH]);
+
+  const CHROME_FILL_GAP = 14;
+  // Clamp so the chrome never runs off the bottom of the page; in the
+  // degenerate case (photo bottom very low) this converges back to roughly
+  // the default position.
+  const petInfoPosition = fillSeamY != null
+    ? { top: Math.min(fillSeamY + CHROME_FILL_GAP, height - (insets.bottom + 8) - petInfoH) }
+    : { bottom: bottomOffset };
+
   // ── Derived display values for share card overlay ─────────────────────────
   // Declared before handleSharePress so they can appear in its dep array.
   const caption     = post.caption ?? '';
@@ -614,12 +639,14 @@ export default function FeedPage({
       <Animated.View
         style={[
           styles.petInfo,
-          { bottom: bottomOffset, opacity: chromeOpacity },
+          { ...petInfoPosition, opacity: chromeOpacity },
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           { pointerEvents: (chromeVisible ? 'box-none' : 'none') as any },
         ]}
         onLayout={(e) => {
-          petInfoHeightRef.current = e.nativeEvent.layout.height;
+          const h = e.nativeEvent.layout.height;
+          petInfoHeightRef.current = h;
+          setPetInfoH((prev) => (Math.abs(prev - h) > 0.5 ? h : prev));
         }}
       >
         <View style={styles.identityRow}>
