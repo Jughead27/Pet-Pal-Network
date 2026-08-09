@@ -496,26 +496,6 @@ export default function SniffScreen() {
               </Pressable>
             ))}
 
-            {/* Breed narrow — progressive disclosure, only when a species is selected */}
-            {activeSpeciesId !== null && breedOptions.length > 0 && (
-              <Pressable
-                onPress={() => setBreedSheetOpen(true)}
-                style={styles.chipPressable}
-                accessibilityRole="button"
-                accessibilityLabel={activeBreed ? `Breed: ${activeBreed.name}. Change breed` : 'Filter by breed'}
-              >
-                <Text
-                  style={[
-                    styles.chipText,
-                    activeBreed
-                      ? [styles.chipTextActive,   { color: colors.foreground }]
-                      : [styles.chipTextInactive, { color: colors.mutedForeground }],
-                  ]}
-                >
-                  {activeBreed ? activeBreed.name : 'Breed ↓'}
-                </Text>
-              </Pressable>
-            )}
           </ScrollView>
         ) : (
           // No chips yet — placeholder keeps the band height consistent
@@ -572,23 +552,49 @@ export default function SniffScreen() {
         </View>
       </View>
 
-      {/* Spotlight banner — featured pet / active pet-filter state */}
-      <SpotlightBanner
-        colors={colors}
-        activePetFilter={petFilter}
-        onEngage={(pet) => {
-          // Browsing one pet — independent of category filters, so reset them.
-          setActiveSpeciesId(null);
-          setActiveBreed(null);
-          setBreedSheetOpen(false);
-          setPetFilter(pet);
-          gridScrollY.current = 0;
-        }}
-        onClear={() => {
-          setPetFilter(null);
-          gridScrollY.current = 0;
-        }}
-      />
+      {/* Row 3 — Breed chip (left) + Spotlight banner (right). Both slots are
+          conditional; when neither renders content the row has zero height. */}
+      <View style={styles.subFilterRow}>
+        {activeSpeciesId !== null && breedOptions.length > 0 ? (
+          <Pressable
+            onPress={() => setBreedSheetOpen(true)}
+            style={styles.chipPressable}
+            accessibilityRole="button"
+            accessibilityLabel={activeBreed ? `Breed: ${activeBreed.name}. Change breed` : 'Filter by breed'}
+          >
+            <Text
+              style={[
+                styles.chipText,
+                activeBreed
+                  ? [styles.chipTextActive,   { color: colors.foreground }]
+                  : [styles.chipTextInactive, { color: colors.mutedForeground }],
+              ]}
+            >
+              {activeBreed ? activeBreed.name : 'Breed ↓'}
+            </Text>
+          </Pressable>
+        ) : (
+          <View />
+        )}
+
+        {/* Spotlight — passive indicator until tapped; never a default filter */}
+        <SpotlightBanner
+          colors={colors}
+          activePetFilter={petFilter}
+          onEngage={(pet) => {
+            // Browsing one pet — independent of category filters, so reset them.
+            setActiveSpeciesId(null);
+            setActiveBreed(null);
+            setBreedSheetOpen(false);
+            setPetFilter(pet);
+            gridScrollY.current = 0;
+          }}
+          onClear={() => {
+            setPetFilter(null);
+            gridScrollY.current = 0;
+          }}
+        />
+      </View>
     </View>
   );
 
@@ -899,6 +905,17 @@ const styles = StyleSheet.create({
   },
   chipPressable: {
     paddingVertical: 4,
+  },
+
+  // ── Row 3 — breed (left) + spotlight (right); collapses when both empty ───
+  // Only horizontal padding on the row itself so an empty row is zero-height;
+  // vertical spacing comes from the children.
+  subFilterRow: {
+    flexDirection:     'row',
+    alignItems:        'center',
+    justifyContent:    'space-between',
+    paddingHorizontal: 16,
+    gap:               12,
   },
   chipText: {
     fontSize: 15,

@@ -66,7 +66,7 @@ export default function SpotlightBanner({ colors, activePetFilter, onEngage, onC
       accessibilityRole="button"
       accessibilityLabel={`Spotlight: view ${pet.name}'s posts`}
     >
-      <Text style={[styles.spotlightLabel, { color: colors.mutedForeground }]}>spotlight</Text>
+      <Text style={[styles.spotlightLabel, { color: colors.mutedForeground }]}>Spotlight</Text>
       {pet.coverPhotoUrl ? (
         <Image source={{ uri: pet.coverPhotoUrl }} style={[styles.photo, { borderColor: colors.border }]} />
       ) : null}
@@ -77,17 +77,16 @@ export default function SpotlightBanner({ colors, activePetFilter, onEngage, onC
 
 const styles = StyleSheet.create({
   row: {
-    flexDirection:     'row',
-    alignItems:        'center',
-    gap:               8,
-    paddingHorizontal: 16,
-    paddingBottom:     8,
+    // Horizontal padding comes from the parent sub-filter row on Sniff.
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           8,
+    paddingBottom: 8,
   },
   spotlightLabel: {
     fontFamily:    'Inter_400Regular',
     fontSize:      12,
     letterSpacing: 0.6,
-    textTransform: 'lowercase',
   },
   photo: {
     width:        22,

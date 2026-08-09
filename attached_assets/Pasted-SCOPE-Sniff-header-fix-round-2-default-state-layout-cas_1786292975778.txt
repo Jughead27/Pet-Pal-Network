@@ -1,0 +1,24 @@
+SCOPE: Sniff header fix round 2 — default state, layout, casing. Builds on the existing Spotlight + breed filter work.
+
+DO NOT MODIFY: Home feed, post detail, boop/treat/comment logic, admin screens, photo/crop pipeline, auth, the underlying GET /spotlight and GET /feed(petId/breedId) endpoints and their filtering logic (this is a client-side layout + default-state fix only).
+
+PRESERVATION CLAUSE: tap-to-filter-by-Spotlight-pet, breed single-select sheet, and clear affordances must all still work identically — only their default state, position, and casing change.
+
+1) DEFAULT STATE FIX
+- On Sniff mount/re-entry, the grid must load fully unfiltered: no species filter, no breed filter, no petId filter — regardless of whether a Spotlight pet exists. If the current behavior pre-applies the Spotlight pet as a filter on load, that's the bug to fix. The Spotlight banner itself always renders (when a Spotlight pet exists) as a passive, tappable indicator — it only becomes a filter once the user taps it.
+
+2) LAYOUT — two-column header, grouped by function
+- Row 1 (existing masthead) unchanged.
+- Row 2: two columns. LEFT = species chip row (existing horizontal-scroll behavior unchanged). RIGHT = Fresh|Popular sort control (existing behavior unchanged).
+- Row 3 (new, conditional): two columns, same left/right split as row 2. LEFT = breed chip — remove it entirely from the end of the species scroll row; it now lives here, visible only when a species other than "All" is selected, opening the same single-select bottom sheet as before. RIGHT = Spotlight banner — moved here from wherever it currently sits, same tap-to-filter/clear behavior as before.
+- If no species is selected (breed hidden) and no Spotlight pet exists (banner hidden), row 3 collapses cleanly with no dead space — don't reserve empty height for either slot.
+
+3) CASING FIX
+- On Sniff, "Spotlight" is currently the only header label not in Title Case (species chips and Fresh/Popular already are) — fix that one label.
+- Build the new "Breed" label as Title Case from the start.
+- Standing convention going forward: Sniff and Nursery grid-header labels are Title Case. Nursery should already match — do a quick spot-check while in there, but don't assume it's broken.
+- Do not change casing anywhere outside these two screens' headers — the wordmark, slogans, invite copy, and other screens' copy stay as they are. Pet names (e.g. "Finn") keep their natural casing.
+
+4) ACCEPTANCE
+- tsc clean both packages.
+- Dev/live check: open Sniff fresh → grid is fully unfiltered, all species/pets visible, no pre-applied filter. Header shows species+sort on one row, breed+spotlight on the row below, left/right aligned as specced, "Spotlight" and "Breed" both Title Case. Tap Spotlight banner → grid filters to that pet, species/breed reset → tap clear → back to unfiltered. Pick a species → breed chip appears in its new position → pick a breed → grid narrows → clear breed → species filter holds. Open Nursery → confirm header labels are still Title Case, nothing else on that screen changed. Identical on web/iOS/Android.
