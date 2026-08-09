@@ -43,6 +43,8 @@ export const GetFeedResponse = zod.object({
   "cropFillColor": zod.string().nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; fills frame space the photo doesn\'t cover when zoomed out. null = photo covers the frame.'),
   "cropFillThumb": zod.string().nullish().describe('Tiny (~24px) thumbnail of the photo as a data URI; static surfaces stretch it under the photo for a blurred-looking fill. null = solid-color fill only.'),
   "viewerIsAuthor": zod.boolean().optional().describe('True when the viewer is the author of this post — treat action is blocked for authors.'),
+  "authorId": zod.string().nullish().describe('User ID of the post\'s author (posted_by_user_id). Drives the \"Posted by\" profile link.'),
+  "authorDisplayName": zod.string().nullish().describe('Display name of the post\'s author; null when unset.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -338,6 +340,8 @@ export const GetPetResponse = zod.object({
   "cropFillColor": zod.string().nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; fills frame space the photo doesn\'t cover when zoomed out. null = photo covers the frame.'),
   "cropFillThumb": zod.string().nullish().describe('Tiny (~24px) thumbnail of the photo as a data URI; static surfaces stretch it under the photo for a blurred-looking fill. null = solid-color fill only.'),
   "viewerIsAuthor": zod.boolean().optional().describe('True when the viewer is the author of this post — treat action is blocked for authors.'),
+  "authorId": zod.string().nullish().describe('User ID of the post\'s author (posted_by_user_id). Drives the \"Posted by\" profile link.'),
+  "authorDisplayName": zod.string().nullish().describe('Display name of the post\'s author; null when unset.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -379,6 +383,8 @@ export const GetPetResponse = zod.object({
   "cropFillColor": zod.string().nullish().describe('Hex color (e.g. \'#AABBCC\') sampled from the photo; fills frame space the photo doesn\'t cover when zoomed out. null = photo covers the frame.'),
   "cropFillThumb": zod.string().nullish().describe('Tiny (~24px) thumbnail of the photo as a data URI; static surfaces stretch it under the photo for a blurred-looking fill. null = solid-color fill only.'),
   "viewerIsAuthor": zod.boolean().optional().describe('True when the viewer is the author of this post — treat action is blocked for authors.'),
+  "authorId": zod.string().nullish().describe('User ID of the post\'s author (posted_by_user_id). Drives the \"Posted by\" profile link.'),
+  "authorDisplayName": zod.string().nullish().describe('Display name of the post\'s author; null when unset.'),
   "isNursery": zod.boolean(),
   "createdAt": zod.coerce.date(),
   "pet": zod.object({
@@ -798,6 +804,35 @@ export const GetMyPetsResponse = zod.object({
   "avatarCropH": zod.number().nullable().describe('Crop rect height (0–1 of natural image). Null for legacy focal-point avatars.')
 }).describe('A pet owned by a user'))
 }).describe('The caller\'s pets')
+
+
+/**
+ * Read-only public profile for a user — display name, bio, city, social links, and active pets they own or co-own. Returns 404 when the user does not exist OR either party has blocked the other (indistinguishable by design, matching every other blocked surface).
+ * @summary Get a user's public profile
+ */
+export const GetUserProfileParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetUserProfileResponse = zod.object({
+  "id": zod.string(),
+  "displayName": zod.string().nullable(),
+  "locationCity": zod.string().nullable(),
+  "about": zod.string().nullable(),
+  "instagram": zod.string().nullable(),
+  "facebook": zod.string().nullable(),
+  "linkedin": zod.string().nullable(),
+  "xTwitter": zod.string().nullable(),
+  "tiktok": zod.string().nullable(),
+  "pets": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "species": zod.string(),
+  "breed": zod.string().nullable(),
+  "avatarUrl": zod.string().nullable(),
+  "thumbnailUrl": zod.string().nullable()
+}).describe('A pet shown on a user\'s public profile'))
+}).describe('Read-only public profile for a user')
 
 
 /**

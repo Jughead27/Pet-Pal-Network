@@ -65,7 +65,6 @@ import {
 } from "@workspace/api-client-react";
 import type { FeedPost, PackResult } from "@workspace/api-client-react";
 import { useAuth } from "@clerk/clerk-expo";
-import ReportFlow from "@/components/ReportFlow";
 import { resolveMediaKey } from "@/utils/mediaKey";
 import { compressImage } from "@/utils/compressImage";
 import AddToPackLink from "@/components/AddToPackLink";
@@ -102,8 +101,8 @@ export default function PetProfileScreen() {
   const { data: pet, isLoading, isError } = useGetPet(petId ?? "");
   const { userId: myUserId } = useAuth();
 
-  // Report-a-user flow (from the Owners list) — reuses ReportFlow with a user target.
-  const [reportUserId, setReportUserId] = useState<string | null>(null);
+  // Person-level report/block moved to the public profile screen — owner
+  // names below link there instead of carrying an inline report whisper.
 
   const [selectedPostId,  setSelectedPostId]  = useState<string | null>(null);
   const [packMembersOpen, setPackMembersOpen] = useState(false);
@@ -983,23 +982,24 @@ export default function PetProfileScreen() {
               {/* Owner list */}
               {owners.map((o) => (
                 <View key={o.userId} style={styles.ownerRow}>
-                  <Text style={[styles.ownerUsername, { color: colors.foreground }]}>
-                    {o.displayName?.trim() || 'a pshpsh member'}
-                  </Text>
-                  {/* report whisper — never on your own row */}
-                  {o.userId !== myUserId && (
-                    <TouchableOpacity
-                      onPress={() => setReportUserId(o.userId)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Report ${o.displayName?.trim() || 'this member'}`}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={[styles.ownerReportWhisper, { color: colors.mutedForeground }]}>
-                        report
-                      </Text>
-                    </TouchableOpacity>
-                  )}
+                  {/* Tappable name → profile (own name → own Profile tab).
+                      Report/block live on the profile screen now — the old
+                      inline report whisper is gone. */}
+                  <TouchableOpacity
+                    onPress={() =>
+                      o.userId === myUserId
+                        ? router.push('/(tabs)/profile')
+                        : router.push(`/user/${o.userId}`)
+                    }
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`View ${o.displayName?.trim() || 'this member'}'s profile`}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.ownerUsername, { color: colors.foreground }]}>
+                      {o.displayName?.trim() || 'a pshpsh member'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               ))}
 
@@ -1267,15 +1267,6 @@ export default function PetProfileScreen() {
           </>
         )}
       </ScrollView>
-
-      {/* ── Report-a-user flow (Owners list) ── */}
-      <ReportFlow
-        visible={reportUserId !== null}
-        onClose={() => setReportUserId(null)}
-        targetType="user"
-        targetId={reportUserId ?? ''}
-        ownerUserId={reportUserId ?? undefined}
-      />
 
       {/* ── Pack Members Modal ── */}
       <Modal
@@ -2484,11 +2475,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-  },
-  ownerReportWhisper: {
-    fontSize: 11,
-    opacity: 0.35,
-    fontFamily: "Inter_400Regular",
   },
   ownersAddBtn: {
     fontFamily: "Inter_600SemiBold",

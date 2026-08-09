@@ -37,6 +37,10 @@ export interface FeedPost {
   cropFillThumb?: string | null;
   /** True when the viewer is the author of this post — treat action is blocked for authors. */
   viewerIsAuthor?: boolean;
+  /** User ID of the post's author (posted_by_user_id). Drives the "Posted by" profile link. */
+  authorId?: string | null;
+  /** Display name of the post's author; null when unset. */
+  authorDisplayName?: string | null;
   isNursery: boolean;
   createdAt: Date;
   pet: PetSummary;

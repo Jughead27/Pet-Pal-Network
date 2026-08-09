@@ -7,9 +7,11 @@
  */
 
 import { Router } from "express";
-import { db, usersTable, configTable } from "@workspace/db";
+import { db, usersTable, configTable, petsTable, petOwnersTable } from "@workspace/db";
 import { eq, sql, and, ne } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { activePets } from "../lib/petQueries.js";
+import { mediaTokenUrl } from "../lib/r2.js";
 
 const router = Router();
 
@@ -104,6 +106,90 @@ router.get("/me", async (req, res) => {
     role:               user.role,
     acceptedTosVersion: user.acceptedTosVersion ?? null,
     tosCurrentVersion,
+  });
+});
+
+// ─── GET /users/:id/profile ──────────────────────────────────────────────────
+//
+// Read-only public profile — display name, bio, city, socials, and active
+// pets the user owns or co-owns. Nothing admin-only, no blocked lists, no
+// invite history.
+//
+// Blocking: if EITHER party has blocked the other, respond 404 — identical to
+// the post-detail pattern (blocked either direction becomes invisible), so a
+// blocked profile is indistinguishable from a nonexistent one.
+
+router.get("/users/:id/profile", async (req, res) => {
+  const { userId } = (req as Express.RequestWithAuth).auth!;
+  const targetId = req.params.id;
+
+  const [user] = await db
+    .select({
+      id:           usersTable.id,
+      displayName:  usersTable.displayName,
+      locationCity: usersTable.locationCity,
+      about:        usersTable.about,
+      instagram:    usersTable.instagram,
+      facebook:     usersTable.facebook,
+      linkedin:     usersTable.linkedin,
+      xTwitter:     usersTable.xTwitter,
+      tiktok:       usersTable.tiktok,
+      // Two-way block check — same correlated EXISTS both-directions pattern
+      // as every other blocked read surface.
+      blocked: sql<boolean>`EXISTS(
+        SELECT 1 FROM blocks b
+        WHERE (b.blocker_id = ${userId} AND b.blocked_id = ${usersTable.id})
+           OR (b.blocker_id = ${usersTable.id} AND b.blocked_id = ${userId})
+      )`,
+    })
+    .from(usersTable)
+    .where(eq(usersTable.id, targetId));
+
+  if (!user || user.blocked) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+
+  const pets = await db
+    .select({
+      id:             petsTable.id,
+      name:           petsTable.name,
+      species:        petsTable.species,
+      breed:          petsTable.breed,
+      avatarKey:      petsTable.avatarKey,
+      recentMediaKey: sql<string | null>`(
+        SELECT p.media_key FROM posts p
+        WHERE p.pet_id = ${petsTable.id} AND p.archived_at IS NULL
+        ORDER BY p.created_at DESC LIMIT 1
+      )`,
+    })
+    .from(petOwnersTable)
+    .innerJoin(petsTable, eq(petsTable.id, petOwnersTable.petId))
+    .where(and(eq(petOwnersTable.userId, targetId), activePets))
+    .orderBy(petOwnersTable.addedAt);
+
+  res.json({
+    id:           user.id,
+    displayName:  user.displayName  ?? null,
+    locationCity: user.locationCity ?? null,
+    about:        user.about        ?? null,
+    instagram:    user.instagram    ?? null,
+    facebook:     user.facebook     ?? null,
+    linkedin:     user.linkedin     ?? null,
+    xTwitter:     user.xTwitter     ?? null,
+    tiktok:       user.tiktok       ?? null,
+    pets: pets.map((p) => {
+      const avatarUrl = p.avatarKey ? mediaTokenUrl(p.avatarKey) : null;
+      return {
+        id:           p.id,
+        name:         p.name,
+        species:      p.species,
+        breed:        p.breed ?? null,
+        avatarUrl,
+        thumbnailUrl: avatarUrl
+          ?? (p.recentMediaKey ? mediaTokenUrl(p.recentMediaKey) : null),
+      };
+    }),
   });
 });
 

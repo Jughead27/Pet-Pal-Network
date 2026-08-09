@@ -51,6 +51,8 @@ export * from './postCreated';
 export * from './presignBody';
 export * from './presignBodyContentType';
 export * from './presignResult';
+export * from './publicProfile';
+export * from './publicProfilePet';
 export * from './searchPets200';
 export * from './searchPetsParams';
 export * from './speciesItem';

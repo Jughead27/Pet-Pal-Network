@@ -24,6 +24,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { router } from 'expo-router';
 import ReportFlow from '@/components/ReportFlow';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChatCircle } from 'phosphor-react-native';
@@ -54,6 +55,7 @@ function CommentRow({
   isOwn,
   onLongPress,
   onDelete,
+  onPressAuthor,
 }: {
   comment: PostComment;
   colors: ReturnType<typeof useColors>;
@@ -62,6 +64,8 @@ function CommentRow({
   onLongPress: () => void;
   /** Called when the viewer taps the visible "delete" whisper on their own comment. */
   onDelete: () => void;
+  /** Called when the viewer taps the author's name — navigates to their profile. */
+  onPressAuthor: () => void;
 }) {
   // Display name with fallback — never the raw username/userID.
   // authorDisplayName is served by the API but not yet in the generated type
@@ -100,7 +104,14 @@ function CommentRow({
       </View>
       <View style={styles.commentContent}>
         <Text style={[styles.commentAuthor, { color: colors.foreground }]}>
-          {authorName}
+          <Text
+            onPress={onPressAuthor}
+            accessibilityRole="button"
+            accessibilityLabel={`View ${authorName}'s profile`}
+            suppressHighlighting
+          >
+            {authorName}
+          </Text>
           <Text style={[styles.commentTime, { color: colors.mutedForeground }]}>
             {'  '}{relativeTime}
           </Text>
@@ -136,6 +147,20 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
   const [draft, setDraft] = useState('');
   const inputRef = useRef<TextInput>(null);
 
+  // Whether a comment has been posted during THIS sheet session — drives the
+  // header button label only ("Cancel" → "Done"); behavior of the button
+  // (close the sheet) never changes. Reset synchronously DURING render when
+  // the session key (visible + postId) changes, so a reopen or post switch
+  // can never commit a stale "Done" frame (a passive useEffect reset runs
+  // after commit and would flash the previous session's label).
+  const [postedThisSession, setPostedThisSession] = useState(false);
+  const sessionKey = visible ? postId : null;
+  const [prevSessionKey, setPrevSessionKey] = useState<string | null>(sessionKey);
+  if (sessionKey !== prevSessionKey) {
+    setPrevSessionKey(sessionKey);
+    if (postedThisSession) setPostedThisSession(false);
+  }
+
   // Report state — which comment is being reported (null = none open)
   const [reportingCommentId, setReportingCommentId] = useState<string | null>(null);
   // Delete state — which own comment has the delete panel open (null = none)
@@ -163,6 +188,7 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
       {
         onSuccess: (newComment) => {
           setDraft('');
+          setPostedThisSession(true);
           queryClient.setQueryData<PostComment[]>(
             getGetPostCommentsQueryKey(postId),
             (old) => [...(old ?? []), newComment],
@@ -232,9 +258,11 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
               onPress={onClose}
               style={styles.headerActionLeft}
               accessibilityRole="button"
-              accessibilityLabel="Cancel"
+              accessibilityLabel={postedThisSession ? 'Done' : 'Cancel'}
             >
-              <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>Cancel</Text>
+              <Text style={[styles.cancelText, { color: colors.mutedForeground }]}>
+                {postedThisSession ? 'Done' : 'Cancel'}
+              </Text>
             </TouchableOpacity>
 
             <Text style={[styles.headerTitle, { color: colors.foreground }]}>Comments</Text>
@@ -292,6 +320,19 @@ export default function CommentSheet({ visible, onClose, postId, onCommentPosted
                       setDeletingCommentId(item.id);
                     } else {
                       setReportingCommentId(item.id);
+                    }
+                  }}
+                  onPressAuthor={() => {
+                    // Close the sheet first — the RN Modal sits above every
+                    // router screen, so navigation would be invisible under
+                    // it. Closing also triggers the parent's restore-to-
+                    // commented-post logic, keeping the pager correct when
+                    // the user later backs out of the profile.
+                    onClose();
+                    if (!!userId && item.authorId === userId) {
+                      router.push('/(tabs)/profile');
+                    } else {
+                      router.push(`/user/${item.authorId}`);
                     }
                   }}
                 />

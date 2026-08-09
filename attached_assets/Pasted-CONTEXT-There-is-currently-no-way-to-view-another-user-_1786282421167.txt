@@ -1,0 +1,33 @@
+CONTEXT: There is currently no way to view another user's profile — bio/socials/pets fields exist (profile-edit) but nothing lets anyone else see them. This is needed for two new entry points James wants: (1) commenter names in the comment sheet becoming tappable, and (2) a "Posted by [DisplayName]" line on the full photo view, name tappable. A third existing entry point (owner names on a pet's Owners list) should also become tappable to this same destination. Additionally, the existing inline "report" whisper on pet-Owners rows should be REMOVED and consolidated onto this new profile page instead — since names can now surface in places that have nothing to do with pet ownership (a commenter, a poster), the old Owners-list-only report link is no longer sufficient for App Store/regulatory reachability requirements, and a profile page is the standard, expected home for report/block actions.
+
+GOAL:
+
+Part 1 — New public profile screen:
+1. Build a read-only profile view showing: displayName, owned + co-owned pets, bio, city, social links — reusing existing profile-edit data, nothing admin-only, no blocked-lists, no invite history.
+2. This screen must respect blocking exactly like every other surface already does: if either party has blocked the other, the profile is inaccessible (same pattern as feed/comments/pet-profiles/reactions).
+3. If the viewer taps their OWN name from any entry point below, route them to their own existing Profile tab instead of this new read-only view — do not show a "public" version of your own profile with report/block controls on yourself.
+
+Part 2 — Report/Block consolidation:
+1. Move "report this person" and "block this person" onto the new profile screen as the primary, canonical actions for taking action on a person. Reuse the existing ReportFlow component/logic and the existing block mechanism — this is a relocation of entry point, not new backend logic.
+2. REMOVE the inline "report" whisper currently on pet-Owners list rows — those rows should now just be tappable names linking to the profile screen (where report/block live), not carry their own separate inline action.
+
+Part 3 — New entry points:
+1. Comments: each commenter's displayName becomes tappable, navigating to their profile (or own Profile tab, per Part 1.3, if it's the viewer's own comment).
+2. Full photo view: add a simple "Posted by [DisplayName]" line, name tappable to the poster's profile (or own Profile tab if it's the viewer's own post).
+3. Pet profile's Owners list: owner names become tappable to their profile (replacing the old inline report link per Part 2.2).
+
+DO NOT MODIFY:
+- ReportFlow's underlying logic, the block mechanism, or any admin-side report handling — reuse exactly as-is, this is a UI relocation plus new entry points.
+- Comment posting/threading logic, or the recently-shipped comment-navigation fixes — only adding tappability to the displayed name.
+- Any other part of the full photo view, pet profile, or comment sheet layout beyond what's specified.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This adds one new screen, relocates one existing action onto it, and adds tap targets in three existing locations — no new backend logic beyond what already exists for profile data, reporting, and blocking.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Tap a commenter's name in comments (not yourself) — confirm it opens their profile showing displayName, pets, bio, city, socials.
+2. Tap your OWN name anywhere — confirm it routes to your own existing Profile tab, not a duplicate public view.
+3. On the new profile screen, confirm report and block actions are present and functional (reusing existing logic).
+4. On a pet's Owners list, confirm the old inline "report" whisper is gone, and owner names are now tappable to their profile instead.
+5. On the full photo view, confirm a "Posted by [DisplayName]" line appears, tappable to the poster's profile.
+6. Block someone, then attempt to view their profile (or have them view yours) — confirm it's inaccessible, consistent with blocking everywhere else in the app.
+7. Golden path: tap a commenter's name → view their profile → block them → confirm their content disappears everywhere (feed, comments, profile access) → sign out. Verified live on pshpsh.net.

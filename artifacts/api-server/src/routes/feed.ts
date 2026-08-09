@@ -81,6 +81,11 @@ router.get("/feed", async (req, res) => {
       viewerHasTreated: sql<boolean>`coalesce(bool_or(${treatsTable.userId} = ${userId}), false)`,
       // Author flag — viewer cannot treat their own post (authorship, not ownership).
       viewerIsAuthor:   sql<boolean>`(${postsTable.postedByUserId} = ${userId})`,
+      // Post author — drives the tappable "Posted by [DisplayName]" line.
+      authorId:          postsTable.postedByUserId,
+      authorDisplayName: sql<string | null>`(
+        SELECT u.display_name FROM users u WHERE u.id = ${postsTable.postedByUserId}
+      )`,
       // Correlated EXISTS — whether the viewer follows this pet's Pack
       viewerInPack: sql<boolean>`exists(
         select 1 from pack_follows pf
@@ -175,6 +180,8 @@ router.get("/feed", async (req, res) => {
     viewerHasBooped:  r.viewerHasBooped,
     viewerHasTreated: r.viewerHasTreated,
     viewerIsAuthor:   r.viewerIsAuthor,
+    authorId:          r.authorId          ?? null,
+    authorDisplayName: r.authorDisplayName ?? null,
     taggedPets: (() => {
       const raw = r.taggedPetRaw as Array<{ id: string; name: string; ownerId: string; viewerOwnsPet: boolean; avatarKey: string | null }> | null;
       return (Array.isArray(raw) ? raw : []).map((tp) => ({

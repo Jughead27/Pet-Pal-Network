@@ -1215,6 +1215,44 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /users/{id}/profile:
+    get:
+      operationId: getUserProfile
+      tags: [users]
+      summary: Get a user's public profile
+      description: >
+        Read-only public profile for a user — display name, bio, city, social
+        links, and active pets they own or co-own. Returns 404 when the user
+        does not exist OR either party has blocked the other (indistinguishable
+        by design, matching every other blocked surface).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PublicProfile"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: User not found or blocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /posts/{id}/comments/{commentId}:
     delete:
       operationId: deleteComment
@@ -1645,6 +1683,14 @@ components:
         viewerIsAuthor:
           type: boolean
           description: True when the viewer is the author of this post — treat action is blocked for authors.
+        authorId:
+          type: string
+          nullable: true
+          description: User ID of the post's author (posted_by_user_id). Drives the "Posted by" profile link.
+        authorDisplayName:
+          type: string
+          nullable: true
+          description: Display name of the post's author; null when unset.
         isNursery:
           type: boolean
         createdAt:
@@ -1688,6 +1734,79 @@ components:
         - commentCount
         - viewerHasBooped
         - viewerHasTreated
+
+    PublicProfilePet:
+      type: object
+      description: A pet shown on a user's public profile
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        species:
+          type: string
+        breed:
+          type: string
+          nullable: true
+        avatarUrl:
+          type: string
+          nullable: true
+        thumbnailUrl:
+          type: string
+          nullable: true
+      required:
+        - id
+        - name
+        - species
+        - breed
+        - avatarUrl
+        - thumbnailUrl
+
+    PublicProfile:
+      type: object
+      description: Read-only public profile for a user
+      properties:
+        id:
+          type: string
+        displayName:
+          type: string
+          nullable: true
+        locationCity:
+          type: string
+          nullable: true
+        about:
+          type: string
+          nullable: true
+        instagram:
+          type: string
+          nullable: true
+        facebook:
+          type: string
+          nullable: true
+        linkedin:
+          type: string
+          nullable: true
+        xTwitter:
+          type: string
+          nullable: true
+        tiktok:
+          type: string
+          nullable: true
+        pets:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicProfilePet"
+      required:
+        - id
+        - displayName
+        - locationCity
+        - about
+        - instagram
+        - facebook
+        - linkedin
+        - xTwitter
+        - tiktok
+        - pets
 
     FeedResponse:
       type: object

@@ -80,6 +80,10 @@ export interface FeedPost {
   cropFillThumb?: string | null;
   /** True when the viewer is the author of this post — treat action is blocked for authors. */
   viewerIsAuthor?: boolean;
+  /** User ID of the post's author (posted_by_user_id). Drives the "Posted by" profile link. */
+  authorId?: string | null;
+  /** Display name of the post's author; null when unset. */
+  authorDisplayName?: string | null;
   isNursery: boolean;
   createdAt: string;
   pet: PetSummary;
@@ -92,6 +96,34 @@ export interface FeedPost {
   archivedAt: string | null;
   /** All pets tagged in this post (including the primary). Use this array for display. */
   taggedPets: TaggedPet[];
+}
+
+/**
+ * A pet shown on a user's public profile
+ */
+export interface PublicProfilePet {
+  id: string;
+  name: string;
+  species: string;
+  breed: string | null;
+  avatarUrl: string | null;
+  thumbnailUrl: string | null;
+}
+
+/**
+ * Read-only public profile for a user
+ */
+export interface PublicProfile {
+  id: string;
+  displayName: string | null;
+  locationCity: string | null;
+  about: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  linkedin: string | null;
+  xTwitter: string | null;
+  tiktok: string | null;
+  pets: PublicProfilePet[];
 }
 
 /**

@@ -765,6 +765,26 @@ export default function FeedPage({
           {petBreed}
         </Text>
 
+        {/* Posted by — tappable to the poster's profile (own posts → Profile tab) */}
+        {!!post.authorId && (
+          <Text style={[styles.postedBy, { color: 'rgba(240,244,248,0.7)' }]} numberOfLines={1} ellipsizeMode="tail">
+            {'Posted by '}
+            <Text
+              style={styles.postedByName}
+              suppressHighlighting
+              accessibilityRole="button"
+              accessibilityLabel={`View ${post.authorDisplayName?.trim() || 'this member'}'s profile`}
+              onPress={() =>
+                post.viewerIsAuthor
+                  ? router.push('/(tabs)/profile')
+                  : router.push(`/user/${post.authorId}`)
+              }
+            >
+              {post.authorDisplayName?.trim() || 'a pshpsh member'}
+            </Text>
+          </Text>
+        )}
+
         {/* Caption — truncated to 2 lines in the feed; full caption on the detail screen */}
         <TouchableOpacity
           onPress={() => router.push(`/post/${post.id}`)}
@@ -908,6 +928,14 @@ const styles = StyleSheet.create({
     fontWeight: '700' as const,
     letterSpacing: 0.2,
     ...TEXT_SHADOW,
+  },
+  postedBy: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  postedByName: {
+    fontWeight: '700',
+    textDecorationLine: 'underline',
   },
   petBreed: {
     fontSize: 13,
