@@ -1,0 +1,30 @@
+CONTEXT: Admin currently has no way to suspend or delete a user account without a report existing first. Investigation confirmed: (1) suspend has NO standalone endpoint at all — the only one derives the target from a report ID; (2) delete-by-userId already works at the API level (POST /admin/users/:userId/delete takes just a user ID) but has no UI trigger independent of a report card; (3) invite-management.tsx already shows a full alphabetical list of every user (username, role, quota, invited-by) with zero enforcement actions wired to it — the natural place to add this rather than building a new screen.
+
+GOAL:
+
+Part 1 — New suspend endpoint:
+1. Add POST /admin/users/:userId/suspend — takes just a user ID (no report required), sets the user's suspended flag, same effect as the existing report-triggered suspend (403 on all authenticated calls, mobile suspension wall) but callable directly. Reuse the exact suspension logic already used by the report-triggered path — this is a new entry point to existing behavior, not new suspension logic.
+2. Confirm this doesn't conflict with or duplicate the existing report-triggered suspend endpoint — both should be able to coexist, resolving to the same suspended state.
+
+Part 2 — Wire actions into the existing invite-management user list:
+1. On invite-management.tsx's user list, add "Suspend" and "Delete account" actions to each row (e.g. a small action menu or inline buttons), excluding the row for the currently-logged-in admin themselves.
+2. "Suspend" calls the new endpoint from Part 1. "Delete account" calls the existing POST /admin/users/:userId/delete endpoint (already working, already report-independent).
+3. Both actions need a confirmation step before executing (these are consequential actions) — reuse whatever confirmation pattern already exists for the report-triggered versions of these actions, for consistency.
+4. After a successful suspend or delete, the row/list should reflect the new state (e.g. show as suspended, or be removed from the list if deleted).
+5. If a user is already suspended, show an "Unsuspend" action instead (reuse the existing unsuspend endpoint, already standalone).
+
+DO NOT MODIFY:
+- The existing report-triggered suspend/delete actions on reports.tsx — untouched, continue to work as they do today.
+- The delete-account routine's core logic (deleteAccount) — reuse exactly as-is via the existing endpoint.
+- Any other part of invite-management.tsx (quota adjustment, pagination, the user list's existing columns) beyond adding the new action column/menu.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This adds one new endpoint (suspend-by-userId) and wires existing + new endpoints into an existing screen — no new screens, no duplicated business logic.
+
+ACCEPTANCE TEST (must end in golden path):
+1. On invite-management.tsx, find a test user (not yourself) — confirm Suspend and Delete account actions are both available with no report needed.
+2. Suspend them — confirm they're immediately locked out (403 on API calls, suspension wall on mobile) and the row reflects suspended state.
+3. Unsuspend them — confirm access is restored.
+4. Delete a different test account directly from this screen — confirm the full deleteAccount routine runs correctly (same effects as self-serve/report-triggered deletion).
+5. Confirm you cannot suspend or delete your own admin account from this screen.
+6. Confirm the existing report-triggered suspend/delete on reports.tsx still works unchanged.
+7. Golden path: open invite-management → suspend a test user with no report → unsuspend them → delete a different test user with no report → confirm both actions worked correctly → sign out. Verified live on pshpsh.net.

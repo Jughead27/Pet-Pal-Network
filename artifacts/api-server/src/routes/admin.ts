@@ -336,6 +336,51 @@ adminRouter.post("/admin/reports/:id/suspend", async (req, res) => {
 });
 
 /**
+ * POST /admin/users/:userId/suspend
+ *
+ * Standalone suspend — takes just a user ID, no report required. Same
+ * suspended state and same audit action as the report-triggered path
+ * (POST /admin/reports/:id/suspend); the two coexist, this one simply
+ * skips report resolution because there is no report. Guards mirror the
+ * standalone delete route: no self-suspend, no suspending admins.
+ * Audit: user.suspend (metadata { via: "direct" } instead of report info).
+ */
+adminRouter.post("/admin/users/:userId/suspend", async (req, res) => {
+  const { userId: targetUserId } = req.params;
+  const { userId: actorId }      = (req as Express.RequestWithAuth).auth!;
+
+  if (targetUserId === actorId) {
+    res.status(400).json({ error: "Cannot suspend your own account" });
+    return;
+  }
+
+  const [target] = await db
+    .select({ role: usersTable.role, suspended: usersTable.suspended })
+    .from(usersTable)
+    .where(eq(usersTable.id, targetUserId));
+
+  if (!target) {
+    res.status(404).json({ error: "User not found" });
+    return;
+  }
+  if (target.role === "admin") {
+    res.status(403).json({ error: "Cannot suspend an admin account" });
+    return;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(usersTable)
+      .set({ suspended: true })
+      .where(eq(usersTable.id, targetUserId));
+
+    await writeAudit(tx, actorId, "user.suspend", "user", targetUserId, { via: "direct" });
+  });
+
+  res.json({ ok: true, userId: targetUserId, suspended: true });
+});
+
+/**
  * POST /admin/users/:userId/unsuspend
  *
  * Lifts a suspension. Safe to call on already-active users (no-op on the
@@ -776,6 +821,7 @@ adminRouter.get("/admin/invite-management", async (req, res) => {
       u.id,
       u.username,
       u.role,
+      u.suspended                                             AS "suspended",
       u.invite_quota                                          AS "inviteQuota",
       COALESCE(u.invite_quota, ${defaultQuota})::int          AS "effectiveQuota",
       ib.username                                             AS "invitedByUsername",

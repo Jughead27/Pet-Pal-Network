@@ -32,6 +32,7 @@ interface UserQuotaRow {
   id:                string;
   username:          string | null;
   role:              string;          // 'admin' | 'member' — from users.role
+  suspended:         boolean;
   inviteQuota:       number | null;
   effectiveQuota:    number;
   invitedByUsername: string | null;
@@ -80,7 +81,12 @@ export default function AdminInviteManagementScreen() {
       if (offset === 0) {
         setAllRows(data.users);
       } else {
-        setAllRows((prev) => [...prev, ...data.users]);
+        // Dedupe by id — a refetch of an already-loaded page must not
+        // duplicate rows in the accumulated list.
+        setAllRows((prev) => {
+          const seen = new Set(prev.map((r) => r.id));
+          return [...prev, ...data.users.filter((u) => !seen.has(u.id))];
+        });
       }
       setTotal(data.total);
       setDefaultQuota(data.defaultQuota);
@@ -116,6 +122,43 @@ export default function AdminInviteManagementScreen() {
   }, [quotaInput, defaultQuota, qc]);
 
   const handleLoadMore = useCallback(() => setOffset((o) => o + PAGE), []);
+
+  // ── Enforcement actions (standalone — no report needed) ──────────────────
+  // Two-tap confirm pattern, same as reports.tsx: first tap arms the confirm,
+  // second tap executes. armedAction identifies which row+action is armed.
+  const [armedAction, setArmedAction]     = useState<{ userId: string; kind: 'suspend' | 'delete' } | null>(null);
+  const [enforcingIds, setEnforcingIds]   = useState<Set<string>>(new Set());
+
+  const handleSuspendToggle = useCallback(async (userId: string, suspended: boolean) => {
+    if (enforcingIds.has(userId)) return;
+    setEnforcingIds((s) => new Set(s).add(userId));
+    setArmedAction(null);
+    try {
+      await customFetch(`/api/admin/users/${userId}/${suspended ? 'unsuspend' : 'suspend'}`, { method: 'POST' });
+      // Optimistic flag flip only — no query invalidation. Invalidating here
+      // would refetch every loaded page and re-append them to allRows.
+      setAllRows((prev) => prev.map((r) => (r.id === userId ? { ...r, suspended: !suspended } : r)));
+    } catch { /* silent — row simply stays unchanged */ } finally {
+      setEnforcingIds((s) => { const n = new Set(s); n.delete(userId); return n; });
+    }
+  }, [enforcingIds, qc]);
+
+  const handleDeleteAccount = useCallback(async (userId: string) => {
+    if (enforcingIds.has(userId)) return;
+    setEnforcingIds((s) => new Set(s).add(userId));
+    setArmedAction(null);
+    try {
+      await customFetch(`/api/admin/users/${userId}/delete`, { method: 'POST' });
+      // Deletion shifts server-side offset pagination (every later row moves
+      // up one). Restart the list from page 0 so nothing is skipped or
+      // duplicated on subsequent "load more".
+      setAllRows([]);
+      setOffset(0);
+      await qc.invalidateQueries({ queryKey: ['admin-invite-management'] });
+    } catch { /* silent */ } finally {
+      setEnforcingIds((s) => { const n = new Set(s); n.delete(userId); return n; });
+    }
+  }, [enforcingIds, qc]);
 
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
@@ -184,6 +227,12 @@ export default function AdminInviteManagementScreen() {
             onCancelEdit={() => { setEditingId(null); setQuotaInput(''); }}
             onQuotaChange={setQuotaInput}
             onSave={() => handleSetQuota(row.id)}
+            armedAction={armedAction?.userId === row.id ? armedAction.kind : null}
+            isEnforcing={enforcingIds.has(row.id)}
+            onArm={(kind) => setArmedAction({ userId: row.id, kind })}
+            onDisarm={() => setArmedAction(null)}
+            onSuspendToggle={() => handleSuspendToggle(row.id, row.suspended)}
+            onDeleteAccount={() => handleDeleteAccount(row.id)}
           />
         ))}
 
@@ -217,11 +266,19 @@ interface UserRowProps {
   onCancelEdit:  () => void;
   onQuotaChange: (v: string) => void;
   onSave:        () => void;
+  /** Which enforcement confirm is armed on this row (two-tap pattern). */
+  armedAction:     'suspend' | 'delete' | null;
+  isEnforcing:     boolean;
+  onArm:           (kind: 'suspend' | 'delete') => void;
+  onDisarm:        () => void;
+  onSuspendToggle: () => void;
+  onDeleteAccount: () => void;
 }
 
 function UserRow({
   row, defaultQuota, colors, isEditing, isSaving,
   quotaInput, isMe, onStartEdit, onCancelEdit, onQuotaChange, onSave,
+  armedAction, isEnforcing, onArm, onDisarm, onSuspendToggle, onDeleteAccount,
 }: UserRowProps) {
   const hasOverride = row.inviteQuota !== null;
   const isAdmin     = row.role === 'admin';
@@ -241,7 +298,7 @@ function UserRow({
 
           {/* Role badge — quiet typographic, same register as lineage */}
           <Text style={[styles.roleBadge, { color: colors.mutedForeground }]}>
-            {row.role}
+            {row.role}{row.suspended ? ' · suspended' : ''}
           </Text>
 
           {/* Lineage */}
@@ -317,6 +374,52 @@ function UserRow({
           </TouchableOpacity>
         )
       )}
+
+      {/* Enforcement actions — standalone (no report needed). Hidden on the
+          signed-in admin's own row and on other admins (server rejects both). */}
+      {!isMe && !isAdmin && (
+        isEnforcing ? (
+          <ActivityIndicator size={14} color={colors.mutedForeground} style={styles.enforceSpinner} />
+        ) : (
+          <View style={styles.enforceRow}>
+            {armedAction === 'suspend' ? (
+              <>
+                <TouchableOpacity onPress={onSuspendToggle} style={styles.enforceBtn} accessibilityRole="button" accessibilityLabel={row.suspended ? 'Confirm unsuspend' : 'Confirm suspend'}>
+                  <Text style={[styles.enforceText, { color: '#EF4444' }]}>
+                    {row.suspended ? 'confirm unsuspend?' : 'confirm suspend?'}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={[styles.enforceSep, { color: colors.border }]}>·</Text>
+                <TouchableOpacity onPress={onDisarm} style={styles.enforceBtn} accessibilityRole="button" accessibilityLabel="Cancel">
+                  <Text style={[styles.enforceText, { color: colors.mutedForeground }]}>cancel</Text>
+                </TouchableOpacity>
+              </>
+            ) : armedAction === 'delete' ? (
+              <>
+                <TouchableOpacity onPress={onDeleteAccount} style={styles.enforceBtn} accessibilityRole="button" accessibilityLabel="Confirm delete account">
+                  <Text style={[styles.enforceText, { color: '#EF4444' }]}>confirm delete?</Text>
+                </TouchableOpacity>
+                <Text style={[styles.enforceSep, { color: colors.border }]}>·</Text>
+                <TouchableOpacity onPress={onDisarm} style={styles.enforceBtn} accessibilityRole="button" accessibilityLabel="Cancel">
+                  <Text style={[styles.enforceText, { color: colors.mutedForeground }]}>cancel</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                <TouchableOpacity onPress={() => onArm('suspend')} style={styles.enforceBtn} accessibilityRole="button" accessibilityLabel={row.suspended ? 'Unsuspend user' : 'Suspend user'}>
+                  <Text style={[styles.enforceText, { color: row.suspended ? colors.mutedForeground : '#EF4444' }]}>
+                    {row.suspended ? 'unsuspend' : 'suspend'}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={[styles.enforceSep, { color: colors.border }]}>·</Text>
+                <TouchableOpacity onPress={() => onArm('delete')} style={styles.enforceBtn} accessibilityRole="button" accessibilityLabel="Delete account">
+                  <Text style={[styles.enforceText, { color: '#EF4444' }]}>delete account</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        )
+      )}
     </View>
   );
 }
@@ -350,6 +453,28 @@ const styles = StyleSheet.create({
     gap:            8,
   },
   rowInfo:    { flex: 1, gap: 2 },
+  // Enforcement actions
+  enforceRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    gap:           8,
+    marginTop:     8,
+  },
+  enforceBtn: {
+    paddingVertical: 2,
+  },
+  enforceText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   12,
+  },
+  enforceSep: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   12,
+  },
+  enforceSpinner: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
   username:   { fontFamily: 'Inter_600SemiBold', fontSize: 15 },
   youSuffix:  { fontFamily: 'Inter_400Regular', fontSize: 14 },   // "(you)" inline after username
   roleBadge:  { fontFamily: 'Inter_400Regular', fontSize: 11, opacity: 0.6, textTransform: 'lowercase' },
