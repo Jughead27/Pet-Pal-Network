@@ -1,0 +1,16 @@
+CONTEXT: FIT_RAIL_LIFT is a hard-coded constant (144, approximating "120px nominal chrome + 16 gap + 8 margin") that does not track the actual measured chrome height (petInfoH). Real chrome height varies significantly: a tagged-with-another-pet row adds ~23px, caption wrapping adds ~18px per line, and device font scaling affects every text row except the fixed-height identity/Add-to-Pack button row. This causes rail-to-caption clearance to shrink well below the intended margin on posts with taller chrome, and disappear entirely under larger accessibility text settings.
+
+GOAL: Replace the hard-coded FIT_RAIL_LIFT constant with a lift derived from the actual measured chrome height for legacy contain-mode posts: railBottom = bottomOffset + petInfoH + 16 + 8 (reusing petInfoH, which FeedPage already tracks via onLayout and which containAlignBottom already consumes for photo positioning).
+
+DO NOT MODIFY:
+- containAlignBottom itself, or any other contain-mode photo positioning logic — untouched, this only changes the rail's lift calculation.
+- Any of today's new rect-frame/geometry fixes — this is scoped entirely to the legacy contain-mode path.
+- The action rail's positioning logic for non-contain (rect-frame) posts — already correctly fixed separately, untouched here.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Single targeted fix: derive FIT_RAIL_LIFT from real measured chrome height instead of a fixed constant.
+
+ACCEPTANCE TEST (must end in golden path):
+1. A solo-pet contain post with no caption — confirm rail clearance matches the previous correct behavior (no regression).
+2. A tagged-with-another-pet contain post (e.g. "Ripley with Newt") — confirm rail now sits with a full, correct margin above the caption, not the reduced 34.5px from before.
+3. A contain post with a long, wrapping caption — confirm rail clearance scales correctly with the taller chrome.
+4. Golden path: view a solo post (unchanged) → view a tagged-with post (now correctly spaced) → sign out. Verified live on pshpsh.net.

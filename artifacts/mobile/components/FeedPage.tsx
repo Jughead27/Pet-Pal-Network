@@ -209,8 +209,11 @@ export default function FeedPage({
 
   // In Fit (contain) mode the photo tucks just above the name/caption overlay.
   // Lift the rail so all four icons sit on the photo, not straddling the blur.
-  // 120 = nominal petInfo height, 16 = containAlignBottom gap, 8 = margin.
-  const FIT_RAIL_LIFT = 144;
+  // The lift is derived from the MEASURED chrome height (petInfoH) — the same
+  // value containAlignBottom uses for photo positioning — plus the 16px
+  // containAlignBottom gap and an 8px margin. A fixed constant (previously
+  // 144 = 120 nominal + 16 + 8) shrank the rail-to-caption clearance on posts
+  // with taller chrome (tagged-with row, wrapping captions, larger text).
   // (railBottom is computed below, after the rect-aspect frame values it
   // depends on for letterboxed posts.)
 
@@ -368,7 +371,7 @@ export default function FeedPage({
   // by the OLD Fit system, where the rect described the contain window — NOT a
   // source crop. Interpreting it as a source crop breaks their frame aspect,
   // so contain posts ALWAYS take the legacy contain path (containAlignBottom +
-  // FIT_RAIL_LIFT), unconditionally, regardless of which fields are present.
+  // chrome-height rail lift), unconditionally, regardless of which fields are present.
   const hasFullCropRect =
     post.cropMode !== 'contain' &&
     typeof post.cropX === 'number' && typeof post.cropY === 'number' &&
@@ -488,14 +491,14 @@ export default function FeedPage({
   // ── Action rail placement ─────────────────────────────────────────────────
   // Same rule the Fit-mode lift already expresses: the icons sit ON the photo.
   //   • Full-bleed / legacy cover posts: fixed bottomOffset (pixel-identical).
-  //   • Legacy contain (Fit) posts: existing hard-coded FIT_RAIL_LIFT.
+  //   • Legacy contain (Fit) posts: lift derived from measured chrome height.
   //   • Rect posts (letterboxed frame and/or bottom fill): ride just above the
   //     photo's rendered bottom edge when that edge is higher than the default
   //     rail zone; never below the default; if the photo is too short for the
   //     whole rail, center the rail on the frame instead.
   const [railH, setRailH] = useState(220);
   let railBottom = post.cropMode === 'contain'
-    ? bottomOffset + FIT_RAIL_LIFT
+    ? bottomOffset + petInfoH + 16 + 8
     : bottomOffset;
   if (heroFrame && hasFullCropRect) {
     const photoBottomY = fillSeamY != null
