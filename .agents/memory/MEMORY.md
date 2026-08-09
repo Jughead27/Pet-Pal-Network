@@ -33,4 +33,5 @@
 - [Drizzle sql`` select-field columns](drizzle-sql-select-field-columns.md) — interpolated columns render unqualified; subqueries capture them → prod 500s. Hand-qualify (users.id).
 - [Account Deletion Architecture](account-deletion-architecture.md) — tombstone + locked in-tx discovery; delayed Clerk delete via cron; pet_owner_invites schema is dead code.
 - [Spotlight Architecture](spotlight-architecture.md) — singleton state table, auto/manual resolution, invisible treat criterion, breed filter, mutually-exclusive admin confirms.
+- [Animated style pointerEvents race](animated-style-pointerevents-race.md) — never put pointerEvents in an animated style array on web; outer box-none prop + inner toggling View wrapper.
 - [Zoom-out + Fill Architecture](zoom-out-fill-architecture.md) — rect fractions may exceed [0,1]; canonical compose-time avg color in crop_fill_color; allowZoomOut gate; web canvas full-image draw trick.

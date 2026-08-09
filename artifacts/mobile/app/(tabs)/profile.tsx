@@ -898,7 +898,7 @@ export default function ProfileScreen() {
               accessibilityLabel="Our Story"
             >
               <Text style={[styles.feedbackText, { color: colors.mutedForeground }]}>
-                Our Story
+                our story
               </Text>
             </TouchableOpacity>
             <Text style={[styles.legalDot, { color: colors.mutedForeground }]}> · </Text>

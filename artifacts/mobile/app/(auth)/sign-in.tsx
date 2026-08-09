@@ -689,7 +689,7 @@ export default function SignInScreen() {
           {/* ── Footer legal links ── */}
           <View style={s.whisperRow}>
             <Pressable onPress={() => router.push('/about')} hitSlop={8}>
-              <Text style={s.whisper}>Our Story</Text>
+              <Text style={s.whisper}>our story</Text>
             </Pressable>
             <Text style={s.whisperDot}> · </Text>
             <Pressable onPress={() => router.push('/terms')} hitSlop={8}>

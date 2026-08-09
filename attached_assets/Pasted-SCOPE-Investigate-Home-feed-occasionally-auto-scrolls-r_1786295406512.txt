@@ -1,0 +1,14 @@
+SCOPE: Investigate — Home feed occasionally auto-scrolls rapidly through many posts during normal scrolling, unprompted, not reproducible on demand.
+
+DO NOT MODIFY anything yet — investigation-only pass. Report findings before proposing a fix.
+
+SYMPTOM: while scrolling the Home feed normally (no keyboard interaction, no boop/treat immediately beforehand, per user confirmation), the feed will occasionally jump/scroll through many posts in rapid succession on its own.
+
+INVESTIGATE, in this order:
+1) Identify every source of background data change that touches the Home feed's underlying list array while mounted: polling intervals, React Query (or equivalent) background refetch/staleTime behavior, websocket/push-driven cache invalidation, or any effect that re-fetches/re-sorts feed data on a timer or focus event.
+2) For each source found in (1), check what happens to FlatList when that data changes mid-scroll: does the item array get reordered, prepended, or have items inserted/removed such that existing on-screen items shift index? Check whether `keyExtractor` is stable across such updates (e.g., keyed by post ID, not array index) — if items shift index but keys are stable, FlatList should preserve visual position; if keys aren't stable this is a likely culprit on its own.
+3) Check for any `scrollToIndex`, `scrollToOffset`, or `maintainVisibleContentPosition` usage in the feed — confirm whether any such call could fire against a stale index/offset captured before a data update landed (same class of bug as the already-fixed "defer index scrolls past first layout" rule was written for). Check whether this logic is guarded against firing while a background refetch is in flight.
+4) Check whether `renderItem` is properly memoized (useCallback) and whether image sources are compared by URI as already established elsewhere in the codebase — a render-identity mismatch during a background data update could cause FlatList to treat unchanged items as new and mis-recycle cells.
+5) If a background refetch/poll interval is found, note its frequency — if it's short enough to plausibly land mid-scroll on a normal browsing session, that's a strong candidate regardless of whether the exact jump mechanism is fully confirmed.
+
+REPORT BACK: whether a background data-refresh source was found, whether keyExtractor/renderItem stability across that update looks correct, whether any scroll-position API call could fire against stale state, and your best-evidence hypothesis for the jump mechanism — even if you can't reproduce and confirm it directly. Do not implement a fix in this pass; if multiple plausible causes exist, list them ranked by evidence strength rather than picking one to fix blind.

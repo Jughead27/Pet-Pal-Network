@@ -45,7 +45,7 @@ import { useColumnWidth } from '@/hooks/useColumnWidth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { GetFeedSort, useGetFeed } from '@workspace/api-client-react';
+import { GetFeedSort, useGetFeed, useGetSpotlight } from '@workspace/api-client-react';
 import type { FeedPost } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import FocalImage from '@/components/FocalImage';
@@ -133,6 +133,13 @@ export default function SniffScreen() {
     enabled: !!activeSpeciesId,
   });
   const breedOptions = breedsData?.breeds ?? [];
+
+  // Row-3 visibility — same cached query SpotlightBanner uses (no extra fetch).
+  // Divider + row only exist when there is content to separate.
+  const { data: spotlightData } = useGetSpotlight();
+  const breedChipVisible  = activeSpeciesId !== null && breedOptions.length > 0;
+  const spotlightVisible  = petFilter !== null || (spotlightData?.pet ?? null) !== null;
+  const subRowHasContent  = breedChipVisible || spotlightVisible;
 
   // Posts shown in the grid — always the filtered+sorted result.
   const posts: FeedPost[] = filteredData?.posts ?? [];
@@ -553,9 +560,14 @@ export default function SniffScreen() {
       </View>
 
       {/* Row 3 — Breed chip (left) + Spotlight banner (right). Both slots are
-          conditional; when neither renders content the row has zero height. */}
+          conditional; when neither renders content the row (and its divider)
+          collapses to zero height. When breed is hidden, the Spotlight banner
+          expands to fill the full row width, right-aligned. */}
+      {subRowHasContent && (
+        <View style={[styles.subFilterDivider, { backgroundColor: colors.border }]} />
+      )}
       <View style={styles.subFilterRow}>
-        {activeSpeciesId !== null && breedOptions.length > 0 ? (
+        {breedChipVisible && (
           <Pressable
             onPress={() => setBreedSheetOpen(true)}
             style={styles.chipPressable}
@@ -573,11 +585,12 @@ export default function SniffScreen() {
               {activeBreed ? activeBreed.name : 'Breed ↓'}
             </Text>
           </Pressable>
-        ) : (
-          <View />
         )}
 
-        {/* Spotlight — passive indicator until tapped; never a default filter */}
+        {/* Spotlight — passive indicator until tapped; never a default filter.
+            When the breed chip is hidden the wrapper takes the full row and
+            right-aligns the banner; otherwise it sizes to content on the right. */}
+        <View style={breedChipVisible ? undefined : styles.spotlightFullRow}>
         <SpotlightBanner
           colors={colors}
           activePetFilter={petFilter}
@@ -594,6 +607,7 @@ export default function SniffScreen() {
             gridScrollY.current = 0;
           }}
         />
+        </View>
       </View>
     </View>
   );
@@ -916,6 +930,18 @@ const styles = StyleSheet.create({
     justifyContent:    'space-between',
     paddingHorizontal: 16,
     gap:               12,
+  },
+  // Faint separator above row 3 — rendered only when the row has content.
+  subFilterDivider: {
+    height:           StyleSheet.hairlineWidth,
+    marginHorizontal: 16,
+    marginBottom:     8,
+    opacity:          0.6,
+  },
+  // Breed hidden → Spotlight wrapper spans the full row, banner right-aligned.
+  spotlightFullRow: {
+    flex:       1,
+    alignItems: 'flex-end',
   },
   chipText: {
     fontSize: 15,

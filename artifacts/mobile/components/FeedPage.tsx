@@ -683,17 +683,18 @@ export default function FeedPage({
 
       {/* ActionRail */}
       <Animated.View
-        style={[
-          styles.railContainer,
-          { bottom: railBottom, opacity: chromeOpacity },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          { pointerEvents: (chromeVisible ? 'box-none' : 'none') as any },
-        ]}
+        style={[styles.railContainer, { bottom: railBottom, opacity: chromeOpacity }]}
+        pointerEvents="box-none"
         onLayout={(e) => {
           const h = e.nativeEvent.layout.height;
           setRailH((prev) => (Math.abs(prev - h) > 0.5 ? h : prev));
         }}
       >
+        {/* pointerEvents lives on a plain inner View, NOT in the animated
+            style: on web the JS animation driver rewrites the full flattened
+            style every frame, and a late frame could re-apply a stale
+            pointerEvents:'none' after chrome-show, leaving the rail inert. */}
+        <View pointerEvents={chromeVisible ? 'box-none' : 'none'}>
         <ActionRail
           postId={post.id}
           boopCount={boopCount}
@@ -717,22 +718,21 @@ export default function FeedPage({
           reducedMotion={reducedMotion}
           petSpecies={post.pet.species}
         />
+        </View>
       </Animated.View>
 
       {/* Pet info overlay */}
       <Animated.View
-        style={[
-          styles.petInfo,
-          { ...petInfoPosition, opacity: chromeOpacity },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          { pointerEvents: (chromeVisible ? 'box-none' : 'none') as any },
-        ]}
+        style={[styles.petInfo, { ...petInfoPosition, opacity: chromeOpacity }]}
+        pointerEvents="box-none"
         onLayout={(e) => {
           const h = e.nativeEvent.layout.height;
           petInfoHeightRef.current = h;
           setPetInfoH((prev) => (Math.abs(prev - h) > 0.5 ? h : prev));
         }}
       >
+        {/* Same pointerEvents-off-the-animated-node pattern as the rail. */}
+        <View pointerEvents={chromeVisible ? 'box-none' : 'none'}>
         <View style={styles.identityRow}>
           <TouchableOpacity
             onPress={() => router.push(`/pet/${petId}`)}
@@ -783,6 +783,7 @@ export default function FeedPage({
             <Text style={styles.captionExpand}>{'↗'}</Text>
           </Text>
         </TouchableOpacity>
+        </View>
       </Animated.View>
 
       {/* Reaction pop texts */}

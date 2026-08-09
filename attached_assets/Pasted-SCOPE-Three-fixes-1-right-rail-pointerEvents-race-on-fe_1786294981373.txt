@@ -1,0 +1,28 @@
+SCOPE: Three fixes — (1) right rail pointerEvents race on feed chrome toggle, (2) "Our Story" link casing, (3) Sniff row-3 layout when breed is hidden.
+
+DO NOT MODIFY: anything outside the specific files/behaviors named below. No changes to boop/treat/comment logic itself, invite flow, admin screens, auth, Spotlight/breed filtering logic (query params, resolution), or any copy outside the two "Our Story" link instances.
+
+PRESERVATION CLAUSE: all three fixes are structural/visual corrections to existing, working features — nothing about their underlying behavior should change, only the specific defects described.
+
+1) RIGHT RAIL POINTEREVENTS RACE (FeedPage.tsx, used by both Home and Sniff layer 2)
+- Root cause: `pointerEvents` currently lives inside the same animated style array as `opacity` on the ActionRail and pet-info-overlay Animated.Views (~lines 685-691 and 723-729). On web, the JS animation driver rewrites the full flattened style every frame, and a late frame can re-apply a stale `pointerEvents:'none'` after React has already committed `'box-none'`, leaving the rail visually present but untappable until a hard refresh.
+- Fix: wrap ActionRail and the pet-info content each in a plain inner `View` that owns `pointerEvents={chromeVisible ? 'box-none' : 'none'}` directly (not inside the animated style array). The outer `Animated.View` animates opacity only. Same pattern in both locations.
+- Verify: on web, tap image to hide chrome → tap again to reveal → boop/treat/comment/share all respond immediately, no refresh needed. Repeat rapidly (tap-hide-show several times fast) to confirm no race reappears under fast toggling. Confirm native (iOS/Android) behavior is unchanged — it wasn't affected by this bug but must not regress.
+
+2) "OUR STORY" LINK CASING
+- The "Our Story" link currently renders in Title Case in two places: the login/portal screen (next to lowercase "terms · privacy") and Profile (next to lowercase ToS/Privacy Policy links). Both are inconsistent with their neighboring links.
+- Fix: lowercase to "our story" in both locations. Do not touch the Sniff/Nursery grid-header Title Case convention (Spotlight, Breed, species chips, Fresh/Popular) — that's a separate, correct convention on different screens.
+
+3) SNIFF ROW-3 LAYOUT — BREED HIDDEN STATE
+- Current: two-column row below species chips — breed chip (left) + Spotlight banner (right). When "All" is selected, breed is correctly hidden per progressive disclosure, but Spotlight stays pinned to the right column, leaving the left column visibly empty.
+- Fix: when breed is hidden, Spotlight banner expands to fill the full row width, right-aligned within it. When a species is selected and breed appears, the row reverts to its normal two-column split (breed left, Spotlight right, as already shipped).
+- Add a faint horizontal divider above this row (between the species+sort row and this breed/spotlight row) — present in both states (breed hidden or shown), a constant visual separator regardless of row contents.
+- If neither breed nor Spotlight has anything to show (no species picked AND no spotlight pet exists), the row should still collapse cleanly with no dead space, consistent with the existing behavior — the divider only appears when the row itself has content to separate.
+
+4) ACCEPTANCE
+- tsc clean both packages.
+- Dev/live check, in order:
+  a) Feed (Home and Sniff pager): chrome toggle round-trip (hide → show) → all right-rail actions work without refresh, repeated rapid toggling doesn't break it, native unaffected.
+  b) Login screen and Profile: "our story" renders lowercase in both places, matches neighboring link casing, link still navigates correctly.
+  c) Sniff with "All" selected: no breed chip, Spotlight banner spans full row width right-aligned, faint divider visible above the row. Select a species with breed data → breed chip appears on the left, Spotlight snaps back to its normal right-column width, divider still present. Clear back to "All" → layout returns to full-width Spotlight state.
+- Golden path: sign in → Home loads → tap a post's image to hide/show chrome, confirm rail works → Sniff → confirm row-3 behavior in both states → Profile → confirm "our story" casing → sign out → login screen → confirm "our story" casing there too. Identical on web/iOS/Android.
