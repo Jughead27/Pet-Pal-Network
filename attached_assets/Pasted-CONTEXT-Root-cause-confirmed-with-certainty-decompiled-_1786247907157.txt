@@ -1,0 +1,21 @@
+CONTEXT: Root cause confirmed with certainty (decompiled live bundle + react-native-web source trace). On native, initialScrollIndex correctly positions a FlatList before first paint. On web, react-native-web's VirtualizedList implements initialScrollIndex as a one-shot imperative scrollToIndex fired from the list's onLayout handler — the exact fragile, unretried pattern we removed from our own code, just living inside the library instead. Under real-world layout timing (windowSize={3}, removeClippedSubviews, content not fully sized yet at that instant), the browser clamps the scroll short, the library's internal flag burns with no retry, and virtualization then visibly fills in the gap — reproducing the flash-shuffle and wrong-post landing.
+
+GOAL: On WEB ONLY, stop relying on react-native-web's initialScrollIndex to correctly position the Sniff pager. Instead, deterministically verify and correct the scroll position after mount:
+1. After the pager FlatList mounts and has layout, compute the expected scroll offset for the target post using the existing getItemLayout.
+2. Check the actual current scroll position (scrollTop or equivalent) against that expected offset.
+3. If they don't match, explicitly set the scroll position again — and re-verify. Retry this check (e.g. on subsequent layout/frame events) until the actual position matches the expected one, or a reasonable retry limit is reached (to avoid an infinite loop in a genuine edge case).
+4. This must happen invisibly/fast enough that it does not reintroduce a visible flash — the goal is the scroll lands correctly the first time it's checked in the vast majority of cases, with the retry as a safety net for the timing edge case that caused this bug, not a visible multi-step animation.
+
+DO NOT MODIFY:
+- Native behavior — initialScrollIndex works correctly there per React Native's own implementation; do not add this web-specific correction logic to the native path.
+- The ID-based handoff, getItemLayout, or the removed one-shot flag pattern at the app level — all correct and confirmed necessary, untouched.
+- Any other part of the Sniff screen or Home's pager.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a web-specific scroll-position correction layered on top of the existing correct app-level logic — a platform branch, not a rewrite.
+
+ACCEPTANCE TEST (must end in golden path):
+1. On web (pshpsh.net), tap photos at early, middle, and late positions in the Sniff grid — confirm each opens directly on the correct post with no visible flash-shuffle through other posts.
+2. Repeat the test multiple times in a row (to catch the timing-dependent nature of the original bug) — confirm consistent correct behavior, not just occasional success.
+3. Confirm native app behavior (if testable) is completely unaffected — still uses initialScrollIndex directly, no added correction logic.
+4. Confirm swiping between posts after landing still works normally.
+5. Golden path: open Sniff → tap several different photos in sequence → confirm every single one lands correctly and instantly → sign out. Verified live on pshpsh.net, tested multiple times given the timing-dependent nature of the original bug.

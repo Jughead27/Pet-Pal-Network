@@ -161,6 +161,7 @@ export default function SniffScreen() {
   // ── Open / close pager ────────────────────────────────────────────────────
   const openPost = useCallback((postId: string) => {
     setPagerStartId(postId);
+    if (Platform.OS === 'web') webPagerCorrectionDone.current = false;
     setViewMode('pager');
   }, []);
 
@@ -177,9 +178,63 @@ export default function SniffScreen() {
     });
   }, []);
 
-  // (No post-mount imperative scroll: the pager FlatList mounts directly on
-  // the tapped post via initialScrollIndex + the fixed-height getItemLayout,
-  // which eliminates the flash-shuffle and the burned one-shot flag entirely.)
+  // ── Web-only initial-scroll verification ──────────────────────────────────
+  // On native, initialScrollIndex positions the FlatList before first paint —
+  // correct and untouched. On WEB, react-native-web implements
+  // initialScrollIndex as a one-shot imperative scrollToIndex fired from the
+  // list's onLayout; the browser clamps scrollTop if the content isn't fully
+  // sized at that instant, the library's internal flag burns with no retry,
+  // and the pager lands on the wrong post. So on web we verify the actual
+  // scrollTop against the expected offset after mount and correct + re-verify
+  // each frame until it sticks (bounded, to avoid looping in a genuine edge
+  // case). Refs (not state) so the loop always reads current values without
+  // re-renders.
+  const webPagerCorrectionDone = useRef(true);
+  const pagerStartIdRef        = useRef<string | null>(null);
+  pagerStartIdRef.current      = pagerStartId;
+  const postsForPagerRef       = useRef<FeedPost[]>([]);
+  const pageHeightForPagerRef  = useRef(0);
+
+  const runWebPagerCorrection = useCallback(() => {
+    if (Platform.OS !== 'web' || webPagerCorrectionDone.current) return;
+    const MAX_FRAMES = 30; // ~0.5s at 60fps — safety net, not an animation
+    let frames = 0;
+    const tick = () => {
+      if (webPagerCorrectionDone.current) return;
+      const list = pagerListRef.current as unknown as {
+        getScrollableNode?: () => HTMLElement | null;
+      } | null;
+      const node  = list?.getScrollableNode?.() ?? null;
+      const pageH = pageHeightForPagerRef.current;
+      if (node && pageH > 0) {
+        // Re-resolve the index from the post ID each check — stays correct
+        // even if a refetch reorders the list mid-verification.
+        const idx = Math.max(
+          0,
+          postsForPagerRef.current.findIndex(
+            (p) => p.id === pagerStartIdRef.current,
+          ),
+        );
+        const expected = idx * pageH;
+        if (Math.abs(node.scrollTop - expected) <= 1) {
+          webPagerCorrectionDone.current = true; // landed correctly — done
+          return;
+        }
+        node.scrollTop = expected; // browser clamps if content still short —
+        if (Math.abs(node.scrollTop - expected) <= 1) {
+          webPagerCorrectionDone.current = true; // — re-read confirms it stuck
+          return;
+        }
+      }
+      frames += 1;
+      if (frames < MAX_FRAMES) {
+        requestAnimationFrame(tick);
+      } else {
+        webPagerCorrectionDone.current = true; // bounded give-up
+      }
+    };
+    requestAnimationFrame(tick);
+  }, []);
 
   // ── Pager item renderer (hoisted + memoised) ──────────────────────────────
   const renderPagerItem = useCallback(
@@ -426,6 +481,10 @@ export default function SniffScreen() {
       posts.findIndex((p) => p.id === pagerStartId),
     );
 
+    // Keep the web correction loop's inputs current on every pager render.
+    postsForPagerRef.current      = posts;
+    pageHeightForPagerRef.current = effectivePageHeight;
+
     return (
       <View style={containerStyle} onLayout={handleContainerLayout}>
         {effectivePageHeight > 0 && (
@@ -437,6 +496,7 @@ export default function SniffScreen() {
             keyExtractor={(item) => item.id}
             getItemLayout={getPagerItemLayout}
             initialScrollIndex={startIndex}
+            onLayout={Platform.OS === 'web' ? runWebPagerCorrection : undefined}
             pagingEnabled
             snapToInterval={effectivePageHeight}
             snapToAlignment="start"
