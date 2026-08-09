@@ -600,6 +600,8 @@ export default function AddScreen() {
                 cropH={cropRect?.h ?? null}
                 mode={cropMode}
                 cropFillColor={cropFillColor}
+                naturalWidth={naturalSize.current.width || null}
+                naturalHeight={naturalSize.current.height || null}
               />
             </View>
             {/* Controls row — below the preview, never clips */}

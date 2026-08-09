@@ -66,13 +66,28 @@ interface FocalImageProps {
    * a name/caption overlay. Omit to vertically centre the photo.
    */
   containAlignBottom?: number;
+  /**
+   * Known natural pixel size of the photo. When supplied, skips onLoad /
+   * Image.getSize resolution — required for local blob:/data: URIs (compose
+   * preview) where getSize is unreliable on web and the fallback would render
+   * plain centered cover, ignoring the crop rect. Remote posts omit these.
+   */
+  naturalWidth?: number | null;
+  naturalHeight?: number | null;
 }
 
 // ─── FocalImage ───────────────────────────────────────────────────────────────
 
-export default function FocalImage({ source, style, focusX, focusY, cropX, cropY, cropW, cropH, mode, cropFillColor, containAlignBottom }: FocalImageProps) {
+export default function FocalImage({ source, style, focusX, focusY, cropX, cropY, cropW, cropH, mode, cropFillColor, containAlignBottom, naturalWidth, naturalHeight }: FocalImageProps) {
+  const hasKnownNatural =
+    typeof naturalWidth === 'number' && naturalWidth > 0 &&
+    typeof naturalHeight === 'number' && naturalHeight > 0;
   const [container, setContainer] = useState({ w: 0, h: 0 });
-  const [natural,   setNatural]   = useState({ w: 0, h: 0 });
+  const [naturalState, setNatural] = useState({ w: 0, h: 0 });
+  // Caller-supplied size wins — resolved size is only a fallback.
+  const natural = hasKnownNatural
+    ? { w: naturalWidth as number, h: naturalHeight as number }
+    : naturalState;
   const [retries,   setRetries]   = useState(0);
 
   // Track which URI we last launched a getSize call for to avoid duplicates.
@@ -143,6 +158,7 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
 
   // Fallback: Image.getSize — fires when the load event didn't supply dims.
   useEffect(() => {
+    if (hasKnownNatural) return; // size supplied by caller — nothing to resolve
     const uri = getUriFromSource(effectiveSource);
     if (!uri) return;
 
@@ -169,7 +185,7 @@ export default function FocalImage({ source, style, focusX, focusY, cropX, cropY
         // getSize failed — remain on centered cover-fit fallback; no crash.
       },
     );
-  }, [effectiveSource, natural.w, natural.h]);
+  }, [effectiveSource, natural.w, natural.h, hasKnownNatural]);
 
   // ── Contain mode: whole image + blurred background fill ──────────────────
   const isContain = mode === 'contain';

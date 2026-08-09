@@ -1,0 +1,16 @@
+CONTEXT: After choosing a crop/ratio in Adjust and tapping Done/Continue, the compose flow returns to the pet-selection/caption step — but the photo preview shown on THAT screen does not reflect the crop/framing chosen in Adjust (including the new zoom-out + fill-color capability). This is the same class of WYSIWYG mismatch already fixed elsewhere today (feed, post detail, share card) — this screen is apparently using its own separate preview rendering instead of the shared rect-driven cover logic.
+
+GOAL: Make the pet-selection/caption step's photo preview use the exact same rendering logic as FocalImage (the same rect-driven cover math + crop_fill_color fill already used correctly in feed, post detail, and share cards). The preview shown at this step must exactly match what was just confirmed in Adjust, including zoom-out framing and the sampled fill color when applicable.
+
+DO NOT MODIFY:
+- The Adjust screen itself, or the crop-rect/crop_fill_color data model — this prompt only fixes how this ONE screen renders the preview using data that's already correct.
+- Feed, post detail, or share-card rendering — already correct, untouched.
+- Any other part of the compose flow (pet tagging, caption, Nursery step, posting logic).
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a targeted fix reusing existing, already-correct rendering logic on one additional screen.
+
+ACCEPTANCE TEST (must end in golden path):
+1. In compose, pick a photo, zoom out past the old floor in Adjust so a fill color is needed, tap Done — confirm the pet-selection/caption screen's preview shows the EXACT same framing and fill color just confirmed in Adjust.
+2. Complete the post — confirm feed, post detail, and share card all match this same framing (already working, just confirming no regression).
+3. Test a normal fully-covering crop (no fill needed) — confirm the preview still matches correctly.
+4. Golden path: compose → adjust with zoom-out + fill → confirm preview matches on the next screen → complete post → confirm feed/detail match → sign out. Verified live on pshpsh.net.
