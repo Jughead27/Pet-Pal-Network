@@ -1,0 +1,28 @@
+CONTEXT: Definitive root cause confirmed with exact numbers. The feed post frame is currently positioned by centering it independently on screen: `frame.top = (containerHeight - frameHeight) / 2`. Separately, when a post's chrome (name/caption) needs to sit below the frame, it's positioned at `frame.bottom + 14`, clamped to never go below `containerHeight - bottomOffset - chromeHeight`. These two rules conflict for any centered square/portrait frame shorter than ~288px — since a 1:1 frame is 390px and 4:5 is 488px on a typical viewport, EVERY centered 1:1/4:5 frame guarantees this conflict, causing chrome to overlap the photo (clamp wins over the true 14px-below position).
+
+GOAL: Stop centering the frame independently. When a post's chrome needs to sit below the frame (i.e. the frame is not vertically full-bleed), treat [frame + 14px gap + chrome] as a single unit and position that whole unit anchored against the bottom constraint (bottomOffset), rather than centering the frame alone and then trying to fit chrome into whatever space remains below it.
+
+Specifically:
+1. Compute chrome height (petInfoH) and the required gap (14px) as already established.
+2. Compute the total stack height needed: frameHeight + 14 + chromeHeight.
+3. Anchor this stack so chrome's bottom edge sits at exactly `containerHeight - bottomOffset` (never lower, never needing a clamp override) — meaning frame.top = `containerHeight - bottomOffset - chromeHeight - 14 - frameHeight`.
+4. This will generally rise the frame ABOVE the old centered position for short frames (e.g. 1:1 rises from top=227 to roughly top=176-190 for a 390px frame in the numbers already computed) — that's expected and correct, not a bug.
+5. For frames where chrome stays overlaid ON the photo (vertically full-bleed posts), this change does not apply — keep the existing centering/positioning for those, unchanged.
+6. The old clamp-based fallback logic (from this morning's fix) should no longer be needed for the below-frame case once frames are positioned this way — remove it if it's now dead code, but confirm nothing else depends on it first.
+
+DO NOT MODIFY:
+- Vertically full-bleed post positioning (chrome overlaid on photo) — unchanged.
+- Legacy contain-mode post positioning (FIT_RAIL_LIFT + containAlignBottom) — unchanged, separate path entirely.
+- The action rail's positioning logic — already correctly fixed, must remain correct after this change (rail positioning may need to reference the same new frame.top if it currently depends on the old centered value — check this explicitly).
+- Any crop-rect data model or fill-color/blur logic.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This corrects the frame's own vertical positioning for the below-frame-chrome case — a geometry fix, not a new conditional layered on the existing ones.
+
+ACCEPTANCE TEST (must end in golden path — test the EXACT case from the investigation plus the full matrix again):
+1. The specific post analyzed (1:1 rect, cover mode, fully covered, no fill) — confirm frame now sits higher (non-centered) and chrome sits at its true 14px clearance below the frame's new bottom edge, with ZERO overlap.
+2. A 4:5 post (488px frame, larger than the 1:1 case) — confirm the same stacking logic correctly positions it with no overlap and no tab-bar collision.
+3. A vertically full-bleed Tall post — confirm chrome overlay is completely unchanged.
+4. A legacy contain-mode post — confirm completely unchanged.
+5. A post WITH a zoom-out fill inside its frame — confirm the fill-seam-based positioning still works correctly (this case already worked; confirm no regression from the frame-positioning change).
+6. Action rail — confirm still correctly positioned relative to the frame's new (possibly higher) position, no regression.
+7. Golden path: view the exact post from the investigation → confirm zero overlap → view a 4:5 post → view a full-bleed post → view a legacy post → view a fill post → sign out. Verified live on pshpsh.net.

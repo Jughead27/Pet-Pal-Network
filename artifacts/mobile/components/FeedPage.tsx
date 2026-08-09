@@ -409,8 +409,23 @@ export default function FeedPage({
   const rectAspect = hasFullCropRect && natSize
     ? ((post.cropW as number) * natSize.w) / Math.max((post.cropH as number) * natSize.h, 1e-6)
     : null;
+  // Chrome layout constants — declared before heroFrame because the frame's
+  // vertical anchor depends on them (TDZ: consts read by hooks must precede).
+  const FULL_BLEED_EPS = 2;
+  const CHROME_FILL_GAP = 14;
+  const [petInfoH, setPetInfoH] = useState(120);
+
   // Frame: full page width at the rect's aspect, capped to the page height
-  // (shrinking width proportionally when capped), centered on the page.
+  // (shrinking width proportionally when capped), horizontally centered.
+  // Vertical anchor:
+  //   • Vertically full-bleed frames (fh ≈ page height): centered, unchanged —
+  //     chrome overlays the photo.
+  //   • Shorter frames: the chrome must sit BELOW the frame, so centering the
+  //     frame alone over-constrains the layout (a centered 1:1 frame's bottom
+  //     leaves no room for gap + chrome above the tab bar). Instead, anchor
+  //     the [frame + 14px gap + chrome] stack so the chrome's bottom edge sits
+  //     exactly on the bottomOffset line — the frame rises above center as
+  //     needed. Floored at 0 so very tall frames never push off the top.
   const heroFrame = useMemo(() => {
     if (!rectAspect || pageWidth <= 0 || height <= 0) return null;
     let fw = pageWidth;
@@ -419,14 +434,18 @@ export default function FeedPage({
       fh = height;
       fw = fh * rectAspect;
     }
+    const fullBleed = fh >= height - FULL_BLEED_EPS;
+    const top = fullBleed
+      ? (height - fh) / 2
+      : Math.max(0, height - bottomOffset - petInfoH - CHROME_FILL_GAP - fh);
     return {
       position: 'absolute' as const,
       width:  fw,
       height: fh,
       left:   (pageWidth - fw) / 2,
-      top:    (height - fh) / 2,
+      top,
     };
-  }, [rectAspect, pageWidth, height]);
+  }, [rectAspect, pageWidth, height, bottomOffset, petInfoH]);
 
   // ── Chrome placement for fill posts ───────────────────────────────────────
   // Full-bleed posts keep the fixed `bottom: bottomOffset` overlay (unchanged).
@@ -436,7 +455,6 @@ export default function FeedPage({
   // the photo's actual rendered bottom edge, inside the fill area, with a
   // clear gap — matching how other ratios render (on the photo OR cleanly
   // below it, never straddling the boundary).
-  const [petInfoH, setPetInfoH] = useState(120);
   const fillSeamY = useMemo(() => {
     if (!heroFrame || !hasFullCropRect || !post.cropFillColor) return null;
     // Photo bottom in frame fractions of the rect: (1 − cropY) / cropH.
@@ -450,7 +468,6 @@ export default function FeedPage({
   // fill or no fill) always pushes the chrome below its bottom edge; only a
   // frame that fills the page height top-to-bottom keeps the overlay — and
   // even then, a bottom fill inside it still moves the chrome below the seam.
-  const FULL_BLEED_EPS = 2;
   const chromeSeamY = useMemo(() => {
     if (!heroFrame || !hasFullCropRect) return null;
     const framePhotoBottom = fillSeamY ?? (heroFrame.top + heroFrame.height);
@@ -459,11 +476,11 @@ export default function FeedPage({
     return framePhotoBottom;
   }, [heroFrame, hasFullCropRect, fillSeamY, height]);
 
-  const CHROME_FILL_GAP = 14;
   // Clamp: the chrome's bottom-most allowed position is the bottomOffset line
-  // (insets.bottom + 110) — the tab bar's required clearance. Even when the
-  // frame bottom is very low (tall/narrow frame), the chrome never descends
-  // into the tab-bar / home-indicator zone.
+  // (insets.bottom + 110) — the tab bar's required clearance. With the frame
+  // stack-anchored above, this is a no-op in normal cases; it remains as a
+  // safety net for the degenerate tall-but-not-full-bleed frame whose stack
+  // cannot fit even at top=0 (overlap onto the photo beats tab-bar collision).
   const petInfoPosition = chromeSeamY != null
     ? { top: Math.min(chromeSeamY + CHROME_FILL_GAP, height - bottomOffset - petInfoH) }
     : { bottom: bottomOffset };
