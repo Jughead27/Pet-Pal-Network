@@ -1,0 +1,13 @@
+SCOPE: Investigate — admin "delete account" works correctly on normal/known accounts but silently fails (brief hourglass, no error, no effect) specifically on unrecognized dev-seed-looking accounts in prod.
+
+DO NOT MODIFY anything yet — investigation-only pass. Report findings before proposing a fix.
+
+CONFIRMED: delete-account works fine on familiar test accounts — this is isolated to specific anomalous rows (visible in Invite Management with no invite lineage: 0 joined/pending/used, "founding account"/vague inviter tags), likely leftover dev-era rows copied into prod during initial seeding.
+
+INVESTIGATE:
+1) Identify what's structurally different about a failing account vs. a working one — compare a known-failing row against a known-working row directly: missing fields a normal Clerk-backed account would have, pet-ownership configuration (e.g. sole owner of a pet with no other owner to repoint to), stale foreign-key references from pre-rebuild dev data, or anything else.
+2) Attempt the delete action against a failing account and capture the actual network response — status code and body — not just the client-side symptom of a brief hourglass and nothing happening.
+3) Determine whether the failure is client-side (a guard/validation silently no-oping before the request fires) or server-side (a 4xx/5xx being returned but not surfaced in the UI — same class of bug as the earlier profile-tap SQL-type-mismatch issue, where a generic error masked a real failure).
+4) Check server logs for the actual exception at the moment of a failed delete attempt against one of these accounts.
+
+REPORT BACK: exact failure point and cause, client vs. server side, and precisely what's structurally different about these accounts that the normal delete-account path (which is confirmed working on real accounts) doesn't handle. Do not implement a fix in this pass — the tested delete-account invariant set (no-orphaned-pets, co-owned-pet repoint) is sensitive enough that a fix should follow evidence, not a guess.

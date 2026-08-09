@@ -39,6 +39,8 @@ interface UserQuotaRow {
   nonRevokedCount:   number;
   activeCount:       number;
   usedCount:         number;
+  postCount:         number;
+  commentCount:      number;
 }
 
 interface ManagementData {
@@ -329,6 +331,11 @@ function UserRow({
       <Text style={[styles.stats, { color: colors.mutedForeground }]}>
         {row.usedCount} joined · {row.activeCount} pending · {row.nonRevokedCount}
         {isAdmin ? '' : `/${row.effectiveQuota}`} used
+      </Text>
+
+      {/* Content stats — live counts only (matches admin health-stats convention) */}
+      <Text style={[styles.stats, { color: colors.mutedForeground }]}>
+        {row.postCount} post{row.postCount === 1 ? '' : 's'} · {row.commentCount} comment{row.commentCount === 1 ? '' : 's'}
       </Text>
 
       {/* Quota editor — hidden for admin rows (quota is bypassed server-side) */}

@@ -1093,7 +1093,15 @@ adminRouter.get("/admin/invite-management", async (req, res) => {
       ib.username                                             AS "invitedByUsername",
       COUNT(i.id) FILTER (WHERE i.status IN ('active','used'))::int AS "nonRevokedCount",
       COUNT(i.id) FILTER (WHERE i.status = 'active')::int    AS "activeCount",
-      COUNT(i.id) FILTER (WHERE i.status = 'used')::int      AS "usedCount"
+      COUNT(i.id) FILTER (WHERE i.status = 'used')::int      AS "usedCount",
+      (SELECT COUNT(*)::int FROM posts p
+        WHERE p.posted_by_user_id = u.id
+          AND p.archived_at IS NULL
+          AND p.hidden_by_admin = FALSE)                      AS "postCount",
+      (SELECT COUNT(*)::int FROM comments c
+        WHERE c.user_id = u.id
+          AND c.deleted_at IS NULL
+          AND c.hidden_by_admin = FALSE)                      AS "commentCount"
     FROM users u
     LEFT JOIN users ib ON ib.id = u.invited_by
     LEFT JOIN invites i ON i.inviter_id = u.id
