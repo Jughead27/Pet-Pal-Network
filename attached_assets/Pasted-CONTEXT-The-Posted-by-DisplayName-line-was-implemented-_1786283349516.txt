@@ -1,0 +1,19 @@
+CONTEXT: The "Posted by [DisplayName]" line was implemented in the main feed pager card (visible immediately under the pet name/caption while scrolling the feed). This was a scope deviation — the original request was for this line to appear ONLY on the dedicated full photo view screen (reached via the "[caption] ↗" link), not on the main feed pager card.
+
+GOAL: Move "Posted by [DisplayName]" so it appears ONLY on the dedicated full photo view screen — remove it from the main feed pager card entirely.
+1. Remove the "Posted by [DisplayName]" line from wherever it currently renders in the feed pager card (FeedPage.tsx or equivalent).
+2. Add it to the dedicated full photo view screen instead (the screen reached by tapping the "[caption] ↗" link) — same simple format, name tappable to the poster's profile (or own Profile tab if it's the viewer's own post), exactly as already built, just relocated.
+3. Confirm the tappable-to-profile behavior, own-profile redirect, and blocking behavior all continue to work correctly on the full photo view.
+
+DO NOT MODIFY:
+- The other two entry points (commenter names in comments, owner names on pet profiles) — untouched, already correct.
+- The profile screen itself, report/block consolidation, or any blocking logic — untouched.
+- Any other content on the feed pager card or the full photo view screen beyond relocating this one line.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a relocation of one UI element from one screen to another, reusing the exact same component/logic already built.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Scroll the main feed — confirm "Posted by [DisplayName]" does NOT appear on the pager card.
+2. Tap the "[caption] ↗" link to open the full photo view — confirm "Posted by [DisplayName]" now appears there, tappable to the poster's profile.
+3. Confirm tapping your own name (on your own post) still correctly routes to your own Profile tab.
+4. Golden path: scroll feed (no Posted-by line) → tap into full photo view → confirm Posted-by line present and tappable → sign out. Verified live on pshpsh.net.

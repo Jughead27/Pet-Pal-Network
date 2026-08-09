@@ -1,0 +1,17 @@
+CONTEXT: On a pet's Owners list, tapping "Holly" (a co-owner with a visible, correctly-displayed displayName) leads to "Profile not found" instead of her profile. This is a serious bug: the entire point of consolidating report/block onto the new profile page was to guarantee reachability for App Store/regulatory compliance — if a legitimate, active co-owner's profile can't be reached, that guarantee is broken.
+
+GOAL: INVESTIGATE AND FIX.
+1. Trace exactly what identifier is passed when tapping an owner's name in the pet-Owners list — is it the correct, stable user ID that the /user/[id] profile route expects, or something else (e.g. a stale/wrong field, a different ID type, or a value that doesn't match what's actually in the database for this user)?
+2. Determine whether this is specific to Holly, specific to the Owners-list entry point, or a broader issue also affecting the other two entry points (commenter names in comments, "Posted by" on full photo view) — test tapping James's own name and any other owner in the same list to see if this is universal or isolated.
+3. Report the root cause with specifics (what ID/value was passed, what the profile route actually expected, where the mismatch is).
+4. Fix the identified root cause so that ANY valid user (with or without a displayName set) is reachable via all three entry points without exception, other than the correct, intentional exclusions (blocked users, the viewer's own profile redirecting to their Profile tab).
+
+DO NOT MODIFY: The report/block logic itself, the profile screen's data display, or the blocking mechanism — all confirmed correct separately. This is specifically about why a valid, reachable user is returning "not found."
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Fix the actual identifier/lookup mismatch, not a broader rewrite.
+
+ACCEPTANCE TEST (must end in golden path):
+1. From a pet's Owners list, tap EVERY owner shown (not just one) — confirm each one correctly opens their profile (or redirects to your own Profile tab if it's you).
+2. Confirm this also works correctly from the other two entry points (a comment from that same user, and "Posted by" on one of their posts).
+3. Confirm a genuinely blocked user (if testable) still correctly shows "Profile not found" — that behavior must be preserved, only the false-positive case is being fixed.
+4. Golden path: tap Holly's name from Newt's Owners list → confirm her profile loads correctly with displayName, pets, report/block options → sign out. Verified live on pshpsh.net.

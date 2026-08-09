@@ -262,6 +262,26 @@ export default function PostDetailScreen() {
             </Text>
           ) : null}
 
+          {/* Posted by — tappable to the poster's profile (own posts → Profile tab) */}
+          {!!post.authorId && (
+            <Text style={[styles.postedBy, { color: colors.mutedForeground }]} numberOfLines={1} ellipsizeMode="tail">
+              {'Posted by '}
+              <Text
+                style={[styles.postedByName, { color: colors.foreground }]}
+                suppressHighlighting
+                accessibilityRole="button"
+                accessibilityLabel={`View ${post.authorDisplayName?.trim() || 'this member'}'s profile`}
+                onPress={() =>
+                  post.viewerIsAuthor
+                    ? router.push('/(tabs)/profile')
+                    : router.push(`/user/${post.authorId}`)
+                }
+              >
+                {post.authorDisplayName?.trim() || 'a pshpsh member'}
+              </Text>
+            </Text>
+          )}
+
           {/* Timestamp + report whisper — same row, timestamp left, report right */}
           <View style={styles.timestampRow}>
             <Text style={[styles.timestamp, { color: colors.mutedForeground }]}>
@@ -402,6 +422,15 @@ const styles = StyleSheet.create({
   taggedPetLink: {
     fontSize:     13,
     fontFamily:   'Inter_500Medium',
+  },
+  postedBy: {
+    fontSize:   12,
+    fontFamily: 'Inter_400Regular',
+    marginTop:  8,
+  },
+  postedByName: {
+    fontFamily: 'Inter_600SemiBold',
+    textDecorationLine: 'underline',
   },
   removeTagBtn: {
     justifyContent: 'center',
