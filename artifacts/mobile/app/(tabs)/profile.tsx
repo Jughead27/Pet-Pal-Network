@@ -85,6 +85,8 @@ export default function ProfileScreen() {
 
   // Sign-out confirmation state (inline, no Alert — works identically on all platforms)
   const [confirmSignOut,  setConfirmSignOut]  = useState(false);
+  const [confirmDelete,   setConfirmDelete]   = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
   const [feedbackVisible, setFeedbackVisible] = useState(false);
   const [pendingBlockIds, setPendingBlockIds] = useState<Set<string>>(new Set());
   const addPendingBlock    = (id: string) => setPendingBlockIds((s) => new Set(s).add(id));
@@ -259,6 +261,22 @@ export default function ProfileScreen() {
     // Explicitly push just in case the guard doesn't fire fast enough.
     router.replace('/(auth)/sign-in');
   }, [signOut]);
+
+  /** Self-serve account deletion — tombstones the account server-side, then
+   *  signs out. The session is unusable after the call regardless (the API
+   *  rejects deleted accounts), so sign-out failure isn't fatal. */
+  const handleDeleteAccount = useCallback(async () => {
+    if (deletingAccount) return;
+    setDeletingAccount(true);
+    try {
+      await customFetch('/api/me/delete', { method: 'POST' });
+      await signOut();
+      router.replace('/(auth)/sign-in');
+    } catch {
+      setDeletingAccount(false);
+      setConfirmDelete(false);
+    }
+  }, [deletingAccount, signOut]);
 
   // ── Invite handlers ──────────────────────────────────────────────────────
 
@@ -932,6 +950,61 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         )}
 
+        {/* ── Delete account — quiet destructive whisper with inline confirm ── */}
+        {confirmDelete ? (
+          <View style={styles.signOutConfirmRow}>
+            <Text style={[styles.deleteConfirmTitle, { color: colors.foreground }]}>
+              Delete your account permanently?
+            </Text>
+            <Text style={[styles.deleteConfirmBody, { color: colors.mutedForeground }]}>
+              Your profile is removed right away. Pets only you own are deleted
+              with their posts. Pets you co-own stay with their other owners —
+              your name comes off them, and posts you made there stay without
+              your name. Your comments on other people's posts are removed, and
+              your unused invites are cancelled. You won't be able to sign back
+              in. This can't be undone.
+            </Text>
+            <View style={styles.signOutConfirmBtns}>
+              <TouchableOpacity
+                onPress={() => setConfirmDelete(false)}
+                disabled={deletingAccount}
+                style={[styles.signOutBtn, { borderColor: colors.border }]}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel account deletion"
+              >
+                <Text style={[styles.signOutBtnText, { color: colors.mutedForeground }]}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleDeleteAccount}
+                disabled={deletingAccount}
+                style={[styles.signOutBtn, styles.signOutBtnDestructive, { borderColor: colors.border }]}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel="Confirm account deletion"
+              >
+                <Text style={[styles.signOutBtnText, { color: colors.destructive ?? '#EF4444' }]}>
+                  {deletingAccount ? 'Deleting…' : 'Delete my account'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ) : (
+          <TouchableOpacity
+            onPress={() => setConfirmDelete(true)}
+            activeOpacity={0.7}
+            style={styles.deleteAccountRow}
+            accessibilityRole="button"
+            accessibilityLabel="Delete my account"
+          >
+            <Text style={[styles.deleteAccountText, { color: colors.mutedForeground }]}>
+              Delete my account
+            </Text>
+          </TouchableOpacity>
+        )}
+
       </ScrollView>
 
       {/* Feedback modal — portal visual system */}
@@ -1585,6 +1658,25 @@ const styles = StyleSheet.create({
   signOutConfirmBtns: {
     flexDirection: 'row',
     gap:           10,
+  },
+  // Delete account — whisper row below sign out
+  deleteAccountRow: {
+    paddingVertical: 10,
+    marginBottom:    24,
+  },
+  deleteAccountText: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+    opacity:    0.6,
+  },
+  deleteConfirmTitle: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize:   14,
+  },
+  deleteConfirmBody: {
+    fontFamily: 'Inter_400Regular',
+    fontSize:   13,
+    lineHeight: 19,
   },
   signOutBtn: {
     borderWidth:       StyleSheet.hairlineWidth,

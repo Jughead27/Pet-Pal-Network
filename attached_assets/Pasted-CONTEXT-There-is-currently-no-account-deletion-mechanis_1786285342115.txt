@@ -1,0 +1,20 @@
+CONTEXT: There is currently no account deletion mechanism at all — self-serve or admin-triggered. The Privacy page's "request deletion" is an unbacked promise routed through the feedback form, with nothing actually implementing it. This is the last major gap for GDPR/CCPA compliance and App Store review. Before building the actual deletion flow, we need a precise map of everything that must happen when a user's account is deleted, since this data model now has real complexity (solo pets, co-owned pets, posts, comments, pending invites, co-ownership requests, blocks, reports).
+
+GOAL: INVESTIGATE AND REPORT ONLY — no deletion logic yet. Map out, with specifics from the actual schema, every entity connected to a user account and what SHOULD happen to each when that account is deleted:
+1. Pets the user SOLELY owns (no co-owners) — what happens to the pet and its posts? (Likely: soft-delete the pet and its posts, consistent with the existing soft-delete pattern already used elsewhere in the app.)
+2. Pets the user CO-owns with others — the pet and other owners' access must survive; only this user's ownership record should be removed (same as the existing self-removal "leave as owner" flow, if that can be reused).
+3. Posts the user authored (for a pet they co-own, or solely own) — same as pet handling, likely soft-delete.
+4. Comments the user made on OTHER people's posts — should these be soft-deleted/anonymized, or fully removed? Report options and tradeoffs.
+5. Pending invites the user SENT (unredeemed) — should these be revoked/invalidated?
+6. Pending invites the user RECEIVED but hasn't redeemed — irrelevant once their account doesn't exist; report what naturally happens.
+7. Pending co-ownership requests (sent or received) — should be resolved/cancelled, not left dangling.
+8. Existing blocks involving this user (either direction) — report what should happen; likely fine to leave as historical records or clean up, whichever is safer/simpler.
+9. Existing reports involving this user (as reporter or reported party) — should these be preserved for audit/moderation history, or removed? Report the tradeoff (likely: preserve for audit trail, since reports may be relevant to other users' moderation history too).
+10. The user's own account record itself — Clerk-side deletion call needed too (not just the local database), since Clerk manages authentication separately.
+11. Any other tables/relationships not covered above that reference this user's ID — do a full grep/schema review to make sure nothing is missed (e.g. displayName references, invited_by attribution on other users' records, etc.).
+
+For each item, report: what the schema currently allows/requires, what the existing soft-delete/self-removal patterns already established in the app suggest as the consistent approach, and any open question that needs a product decision before this can be scoped into a build.
+
+DO NOT MODIFY: Nothing — this is a mapping/investigation pass only.
+
+ACCEPTANCE TEST: A complete, schema-grounded map of every entity affected by account deletion, with a recommended approach for each based on existing patterns in the app, and a clearly flagged list of anything that needs a product decision before the actual build can be scoped.

@@ -49,7 +49,12 @@ export const requireClerkAuth: RequestHandler = async (req, res, next) => {
   let role: "member" | "admin" = "member";
   try {
     const [existing] = await db
-      .select({ id: usersTable.id, role: usersTable.role, suspended: usersTable.suspended })
+      .select({
+        id: usersTable.id,
+        role: usersTable.role,
+        suspended: usersTable.suspended,
+        deletedAt: usersTable.deletedAt,
+      })
       .from(usersTable)
       .where(eq(usersTable.id, userId));
 
@@ -81,6 +86,15 @@ export const requireClerkAuth: RequestHandler = async (req, res, next) => {
       logger.info({ userId, username }, "Provisioned new user");
       // New users always start as 'member' (DB default); role stays 'member'.
     } else {
+      // Tombstoned (deleted) accounts are blocked on every authenticated call.
+      // The row is kept on purpose (FKs + moderation history), and its
+      // presence also prevents the provisioning branch above from
+      // resurrecting a fresh row while the Clerk account still exists
+      // during the deletion grace period.
+      if (existing.deletedAt) {
+        res.status(403).json({ error: "account_deleted" });
+        return;
+      }
       // Suspended users are blocked on every authenticated call.
       if (existing.suspended) {
         res.status(403).json({ error: "suspended" });

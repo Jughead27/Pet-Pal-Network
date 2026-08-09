@@ -121,6 +121,25 @@ export default function AdminReportsScreen() {
     }
   }, [pendingIds, refetch, refetchSuspended]);
 
+  // ── Admin account deletion (enforcement) ─────────────────────────────────
+  // Two-tap flow: "delete account" arms the confirm, second tap executes.
+  const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
+
+  const handleDeleteAccount = useCallback(async (reportId: string, targetUserId: string) => {
+    if (pendingIds.has(reportId)) return;
+    setPendingIds((s) => new Set(s).add(reportId));
+    setConfirmingDeleteId(null);
+    try {
+      await customFetch(`/api/admin/users/${targetUserId}/delete`, { method: 'POST' });
+      // Resolve the report view — deletion tombstones the user; the report
+      // itself is preserved server-side, so just refresh the queue.
+      await refetch();
+      await refetchSuspended();
+    } finally {
+      setPendingIds((s) => { const n = new Set(s); n.delete(reportId); return n; });
+    }
+  }, [pendingIds, refetch, refetchSuspended]);
+
   const renderReport = useCallback(({ item }: { item: Report }) => {
     const isPending = pendingIds.has(item.id);
     const preview   = item.targetPreview;
@@ -220,11 +239,47 @@ export default function AdminReportsScreen() {
             >
               <Text style={[styles.actionText, { color: '#EF4444' }]}>suspend owner</Text>
             </TouchableOpacity>
+            {/* Account deletion — enforcement path; needs a resolvable owner */}
+            {item.contentOwnerId && (
+              <>
+                <Text style={[styles.actionSep, { color: colors.border }]}>·</Text>
+                {confirmingDeleteId === item.id ? (
+                  <>
+                    <TouchableOpacity
+                      onPress={() => handleDeleteAccount(item.id, item.contentOwnerId!)}
+                      style={styles.actionBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel="Confirm delete account"
+                    >
+                      <Text style={[styles.actionText, { color: '#EF4444' }]}>confirm delete?</Text>
+                    </TouchableOpacity>
+                    <Text style={[styles.actionSep, { color: colors.border }]}>·</Text>
+                    <TouchableOpacity
+                      onPress={() => setConfirmingDeleteId(null)}
+                      style={styles.actionBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel="Cancel delete account"
+                    >
+                      <Text style={[styles.actionText, { color: colors.mutedForeground }]}>cancel</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => setConfirmingDeleteId(item.id)}
+                    style={styles.actionBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Delete account"
+                  >
+                    <Text style={[styles.actionText, { color: '#EF4444' }]}>delete account</Text>
+                  </TouchableOpacity>
+                )}
+              </>
+            )}
           </View>
         )}
       </View>
     );
-  }, [colors, pendingIds, mutateReport]);
+  }, [colors, pendingIds, mutateReport, confirmingDeleteId, handleDeleteAccount]);
 
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>

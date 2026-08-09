@@ -211,6 +211,8 @@ export interface PostComment {
   authorUsername: string;
   /** Clerk user ID of the comment author — used by clients to determine ownership. */
   authorId: string;
+  /** True when the author's account has been deleted (tombstoned). Clients render "Former pshpsh member" — distinct from the generic fallback used for active users without a display name. */
+  authorDeleted?: boolean;
   createdAt: string;
 }
 
@@ -734,6 +736,10 @@ export type CancelCoOwnershipRequest200 = {
 };
 
 export type VerifyUpload200 = {
+  ok: boolean;
+};
+
+export type DeleteMyAccount200 = {
   ok: boolean;
 };
 

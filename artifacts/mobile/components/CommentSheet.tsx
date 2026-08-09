@@ -70,9 +70,13 @@ function CommentRow({
   // Display name with fallback — never the raw username/userID.
   // authorDisplayName is served by the API but not yet in the generated type
   // (same consumption pattern as the pet owners array).
-  const authorName =
-    (comment as PostComment & { authorDisplayName?: string | null }).authorDisplayName?.trim()
-    || 'a pshpsh member';
+  // Deleted (tombstoned) accounts render a DISTINCT string from the generic
+  // fallback used for active users who simply haven't set a displayName.
+  const authorDeleted = !!comment.authorDeleted;
+  const authorName = authorDeleted
+    ? 'Former pshpsh member'
+    : (comment as PostComment & { authorDisplayName?: string | null }).authorDisplayName?.trim()
+      || 'a pshpsh member';
 
   const initials = authorName
     .split(/[\s._-]+/)
@@ -105,9 +109,10 @@ function CommentRow({
       <View style={styles.commentContent}>
         <Text style={[styles.commentAuthor, { color: colors.foreground }]}>
           <Text
-            onPress={onPressAuthor}
-            accessibilityRole="button"
-            accessibilityLabel={`View ${authorName}'s profile`}
+            // Deleted accounts have no profile to visit — name is not tappable.
+            onPress={authorDeleted ? undefined : onPressAuthor}
+            accessibilityRole={authorDeleted ? undefined : 'button'}
+            accessibilityLabel={authorDeleted ? undefined : `View ${authorName}'s profile`}
             suppressHighlighting
           >
             {authorName}

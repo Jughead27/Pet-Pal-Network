@@ -305,6 +305,9 @@ router.get("/posts/:id/comments", async (req, res) => {
       authorUsername:    usersTable.username,
       authorDisplayName: usersTable.displayName,
       authorId:          commentsTable.userId,
+      // Tombstoned (deleted) account — client renders "Former pshpsh member",
+      // distinct from the generic fallback for users without a displayName.
+      authorDeleted:     sql<boolean>`(users.deleted_at IS NOT NULL)`,
       createdAt:         commentsTable.createdAt,
     })
     .from(commentsTable)

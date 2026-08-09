@@ -46,6 +46,8 @@ import { mediaTokenUrl } from "../lib/r2.js";
 import { writeAudit } from "../lib/writeAudit.js";
 import { purgeSoftDeletedPets } from "../lib/purgePets.js";
 import { purgeDeletedComments } from "../lib/purgeDeletedComments.js";
+import { deleteAccount } from "../lib/deleteAccount.js";
+import { processClerkDeletions } from "../lib/clerkDeletions.js";
 
 const adminRouter = Router();
 
@@ -364,6 +366,42 @@ adminRouter.post("/admin/users/:userId/unsuspend", async (req, res) => {
   }
 
   res.json({ ok: true, userId: targetUserId, suspended: false });
+});
+
+/**
+ * POST /admin/users/:userId/delete
+ *
+ * Admin-triggered account deletion (enforcement cases). Runs the same shared
+ * deleteAccount() routine as the self-serve flow; Clerk hard delete follows
+ * after the grace period via the cron. Admins cannot delete their own account
+ * through this route (use the self-serve flow), and cannot delete other admins.
+ * Audit: user.deleted (written inside deleteAccount's transaction).
+ */
+adminRouter.post("/admin/users/:userId/delete", async (req, res) => {
+  const { userId: targetUserId } = req.params;
+  const { userId: actorId }      = (req as Express.RequestWithAuth).auth!;
+
+  if (targetUserId === actorId) {
+    res.status(400).json({ error: "Use the self-serve flow to delete your own account" });
+    return;
+  }
+
+  const [target] = await db
+    .select({ role: usersTable.role })
+    .from(usersTable)
+    .where(eq(usersTable.id, targetUserId));
+  if (target?.role === "admin") {
+    res.status(403).json({ error: "Cannot delete an admin account" });
+    return;
+  }
+
+  const result = await deleteAccount(targetUserId, actorId, "admin");
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+
+  res.json({ ok: true, userId: targetUserId });
 });
 
 /**
@@ -1011,12 +1049,17 @@ adminRouter.get("/admin/cron/purge", async (req, res) => {
     return;
   }
 
-  const [pets, comments] = await Promise.all([
+  const [pets, comments, clerkDeletions] = await Promise.all([
     purgeSoftDeletedPets(),
     purgeDeletedComments(),
+    processClerkDeletions(),
   ]);
 
-  res.json({ ok: true, purged: { pets: pets.purged, comments: comments.purged } });
+  res.json({
+    ok: true,
+    purged: { pets: pets.purged, comments: comments.purged },
+    clerkDeletions,
+  });
 });
 
 export default adminRouter;

@@ -12,6 +12,7 @@ import { eq, sql, and, ne } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { activePets } from "../lib/petQueries.js";
 import { mediaTokenUrl } from "../lib/r2.js";
+import { deleteAccount } from "../lib/deleteAccount.js";
 
 const router = Router();
 
@@ -142,6 +143,7 @@ router.get("/users/:id/profile", async (req, res) => {
       // EXISTS subquery that binds to blocks.id (uuid) — producing
       // `operator does not exist: text = uuid` at runtime. Qualify the outer
       // column by hand (users.id) instead of interpolating the drizzle column.
+      deletedAt: usersTable.deletedAt,
       blocked: sql<boolean>`EXISTS(
         SELECT 1 FROM blocks b
         WHERE (b.blocker_id = ${userId} AND b.blocked_id = users.id)
@@ -151,7 +153,8 @@ router.get("/users/:id/profile", async (req, res) => {
     .from(usersTable)
     .where(eq(usersTable.id, targetId));
 
-  if (!user || user.blocked) {
+  // Deleted (tombstoned) accounts are indistinguishable from nonexistent ones.
+  if (!user || user.blocked || user.deletedAt) {
     res.status(404).json({ error: "User not found" });
     return;
   }
@@ -393,6 +396,26 @@ router.patch("/me", async (req, res) => {
     logger.error({ err, userId }, "PATCH /me failed");
     res.status(500).json({ error: "Internal server error" });
   }
+});
+
+// ─── POST /me/delete ─────────────────────────────────────────────────────────
+//
+// Self-serve account deletion. Applies every immediate local effect via the
+// shared deleteAccount() routine (tombstone + content handling); the Clerk
+// account is hard-deleted later by the grace-period cron. After this call the
+// user's session becomes unusable (requireClerkAuth rejects deleted accounts),
+// so the client should sign out immediately.
+router.post("/me/delete", async (req, res) => {
+  const { userId } = (req as Express.RequestWithAuth).auth!;
+
+  const result = await deleteAccount(userId, userId, "self");
+  if (!result.ok) {
+    res.status(result.status).json({ error: result.error });
+    return;
+  }
+
+  logger.info({ userId }, "Account deleted (self-serve)");
+  res.json({ ok: true });
 });
 
 export default router;

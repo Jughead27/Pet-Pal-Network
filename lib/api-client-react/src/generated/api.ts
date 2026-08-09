@@ -31,6 +31,7 @@ import type {
   CommentBody,
   CreatePetBody,
   CreatePostBody,
+  DeleteMyAccount200,
   ErrorResponse,
   FeedResponse,
   GetFeedParams,
@@ -2384,6 +2385,78 @@ export const usePatchMe = <TError = ErrorType<ErrorResponse>,
         TContext
       > => {
       return useMutation(getPatchMeMutationOptions(options));
+    }
+
+export const getDeleteMyAccountUrl = () => {
+
+
+
+
+  return `/api/me/delete`
+}
+
+/**
+ * Self-serve account deletion. Immediately tombstones the local account (profile fields nulled, content handled per the deletion policy) and revokes access; the Clerk account is hard-deleted after a grace period by a scheduled job. Irreversible from the client's perspective — the client should sign out immediately after a successful call.
+ * @summary Delete the signed-in user's account
+ */
+export const deleteMyAccount = async ( options?: RequestInit): Promise<DeleteMyAccount200> => {
+
+  return customFetch<DeleteMyAccount200>(getDeleteMyAccountUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteMyAccountMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMyAccount>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMyAccount>>, TError,void, TContext> => {
+
+const mutationKey = ['deleteMyAccount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMyAccount>>, void> = () => {
+
+
+          return  deleteMyAccount(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMyAccountMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMyAccount>>>
+
+    export type DeleteMyAccountMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Delete the signed-in user's account
+ */
+export const useDeleteMyAccount = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMyAccount>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMyAccount>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getDeleteMyAccountMutationOptions(options));
     }
 
 export const getGetMyPetsUrl = () => {

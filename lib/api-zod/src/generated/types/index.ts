@@ -19,6 +19,7 @@ export * from './coOwnershipRequestItem';
 export * from './coOwnershipRequestsResponse';
 export * from './createPetBody';
 export * from './createPostBody';
+export * from './deleteMyAccount200';
 export * from './errorResponse';
 export * from './feedPost';
 export * from './feedResponse';

@@ -780,6 +780,15 @@ export const PatchMeResponse = zod.object({
 
 
 /**
+ * Self-serve account deletion. Immediately tombstones the local account (profile fields nulled, content handled per the deletion policy) and revokes access; the Clerk account is hard-deleted after a grace period by a scheduled job. Irreversible from the client's perspective — the client should sign out immediately after a successful call.
+ * @summary Delete the signed-in user's account
+ */
+export const DeleteMyAccountResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
  * Returns all pets owned by the authenticated user.
  * @summary Get caller's pets
  */
@@ -932,6 +941,7 @@ export const GetPostCommentsResponseItem = zod.object({
   "text": zod.string(),
   "authorUsername": zod.string(),
   "authorId": zod.string().describe('Clerk user ID of the comment author — used by clients to determine ownership.'),
+  "authorDeleted": zod.boolean().optional().describe('True when the author\'s account has been deleted (tombstoned). Clients render \"Former pshpsh member\" — distinct from the generic fallback used for active users without a display name.\n'),
   "createdAt": zod.coerce.date()
 }).describe('A comment on a post')
 export const GetPostCommentsResponse = zod.array(GetPostCommentsResponseItem)
@@ -958,6 +968,7 @@ export const CreateCommentResponse = zod.object({
   "text": zod.string(),
   "authorUsername": zod.string(),
   "authorId": zod.string().describe('Clerk user ID of the comment author — used by clients to determine ownership.'),
+  "authorDeleted": zod.boolean().optional().describe('True when the author\'s account has been deleted (tombstoned). Clients render \"Former pshpsh member\" — distinct from the generic fallback used for active users without a display name.\n'),
   "createdAt": zod.coerce.date()
 }).describe('A comment on a post')
 

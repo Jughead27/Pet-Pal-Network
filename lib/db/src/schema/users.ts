@@ -37,6 +37,12 @@ export const usersTable = pgTable(
     // ToS acceptance — null means never accepted (triggers gate on next load)
     acceptedTosAt:      timestamp("accepted_tos_at"),
     acceptedTosVersion: text("accepted_tos_version"),
+    // Account deletion — tombstone pattern. deletedAt set means the account is
+    // deleted: profile fields are nulled, auth middleware rejects the user,
+    // and the row is kept so FKs and moderation history stay intact.
+    deletedAt:      timestamp("deleted_at"),
+    // Set once the delayed Clerk-side hard delete has completed (grace period).
+    clerkDeletedAt: timestamp("clerk_deleted_at"),
   },
   (t) => ({
     // Case-insensitive unique index — only indexes non-null usernames.

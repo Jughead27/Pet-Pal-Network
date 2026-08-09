@@ -1,0 +1,50 @@
+CONTEXT: There is currently no account deletion mechanism (self-serve or admin). This build implements the full locked plan below — the biggest remaining GDPR/CCPA/App-Store compliance gap.
+
+Key facts from investigation: 5 surfaces INNER JOIN users (comments, pet owners lists, co-ownership request views, blocks list, admin report queue) — hard-deleting the local row would break these and violate ~15 FK constraints (all plain NO ACTION, no cascades). CRITICAL: requireClerkAuth auto-reprovisions a local user row on next login if only the local row is deleted — Clerk-side deletion is mandatory to prevent resurrection.
+
+GOAL: Build a single core deletion routine, triggered from two places (self-serve + admin), that does the following:
+
+1. TOMBSTONE the local `users` row (do NOT hard-delete): null out displayName, username, location_city, about, and all 5 social columns. Add a `deleted_at` timestamp column if one doesn't exist. Keep id, role, created_at intact.
+
+2. Hard-delete the Clerk account via `clerkClient.users.deleteUser`. This must happen as part of the same deletion flow — do this BEFORE or atomically with the local tombstone, so a user can never log back in after their local data is wiped (which would trigger auto-reprovisioning of a fresh row).
+
+3. Solely-owned pets (no other pet_owners row): soft-delete via `deleted_at`, reusing the exact existing pet-deletion pattern.
+
+4. Co-owned pets: for each one, reuse the existing self-removal logic (DELETE /pets/:id/co-owners/me equivalent) but SKIP the "last owner" refusal check — if this user IS the last owner, route that specific pet to step 3 (solo-delete) instead. NEW LOGIC NEEDED: if this user is `pets.owner_id` (the primary pointer) and other co-owners remain, repoint `owner_id` to any surviving co-owner before/as part of removing this user's ownership row.
+
+5. Posts authored by this user on pets that still have surviving owners: KEEP the post, but null `posted_by_user_id` (anonymize attribution — consistent with that field being audit-only and never displayed to end users).
+
+6. Comments this user made on OTHER people's posts: soft-delete via the existing `deleted_at` pattern. Additionally: wherever a soft-deleted comment's author is rendered, if the author's user row has `deleted_at` set (is a tombstoned/deleted account), show "Former pshpsh member" — a DISTINCT string from the existing generic "a pshpsh member" fallback used for active users who simply haven't set a displayName. This requires checking the author's tombstone status, not just falling back on missing displayName.
+
+7. This user's unredeemed SENT invites: set status to `revoked`.
+
+8. Pending co-ownership requests where this user is inviter OR invitee: mark as declined/resolved (reuse existing status transition logic).
+
+9. Blocks involving this user (either direction, blocker_id or blocked_id): hard-delete these rows.
+
+10. Reports involving this user (as reporter or as the reported party): PRESERVE — do not delete or modify. These remain as moderation history for admin review regardless of account status.
+
+11. `invited_by` references on OTHER users' rows pointing to this user: leave as-is, pointing at the tombstone (this field is never displayed).
+
+12. boops, treats, pack_follows, interest_follows, and notifications where this user is the recipient: hard-delete these rows. `notifications.actor_user_id` (nullable, no FK) on notifications belonging to OTHER users: null it out (anonymize, don't delete the notification itself). `post_pets.tagged_by_user_id` (NOT NULL): the tombstone approach means this doesn't need special handling — it will still resolve fine. `quota_requests`, `feedback`, `audit_log`: leave untouched, these are admin/audit history and are tombstone-safe (they already tolerate a user row that has no display info).
+
+13. TRIGGERING: implement two entry points sharing this same core routine — (a) a self-serve "Delete my account" flow reachable from the user's own Profile screen, with a clear confirmation step explaining what happens; (b) an admin-triggered version reachable from the admin panel, for enforcement cases.
+
+14. GRACE PERIOD: when deletion is requested (self-serve or admin), immediately apply the local tombstone (steps 1, 3-12) so the user's content stops appearing right away — but DELAY the Clerk hard-delete (step 2) for 7-14 days. During this window, if technically feasible, allow the user to cancel/undo via signing back in (their Clerk account still exists until the grace period ends) — if building an explicit "cancel deletion" flow is too large for this pass, at minimum ensure the delayed Clerk deletion is implemented as a reliable scheduled job (similar to the existing comment-purge cron pattern) so it doesn't silently fail to complete.
+
+DO NOT MODIFY:
+- Any of the existing soft-delete patterns for pets/posts/comments — reuse them exactly as they work today.
+- The existing self-removal (leave-as-owner) endpoint's core logic — extend/reuse it, don't rewrite it.
+- Report or audit_log data models — these are explicitly preserved, not touched beyond normal read access.
+- Any UI/feature unrelated to account deletion.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a well-scoped but genuinely cross-cutting feature touching many tables — reuse every existing pattern identified above rather than inventing new mechanisms where an existing one already fits.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Create a test account that solely owns one pet, co-owns another pet (with a second test account), has authored posts on both, has commented on someone else's post, has a pending sent invite, and has a pending co-ownership request.
+2. Trigger self-serve deletion — confirm immediate effects: profile shows as gone/tombstoned, solely-owned pet is soft-deleted, co-owned pet retains the OTHER owner with full access, authored posts on the co-owned pet remain visible but with anonymized attribution, the user's comment on someone else's post now shows "Former pshpsh member," the sent invite is revoked, the pending co-ownership request is resolved.
+3. Confirm the deleted user CANNOT log back in immediately after (Clerk account still technically active during grace period, but if a self-serve "cancel" isn't built, confirm this is intentional per the grace-period design) — or if cancel IS built, confirm it correctly restores everything.
+4. After the grace period (or by manually triggering the scheduled job for test purposes), confirm the Clerk account is hard-deleted and can never log in again.
+5. Confirm reports involving this user (create one before deletion, if testable) are still visible in the admin Reports queue after deletion.
+6. Test the admin-triggered version on a second test account — confirm identical behavior via the admin panel.
+7. Golden path: create a test account with the full range of relationships above → self-serve delete → verify all immediate effects → confirm Clerk deletion completes after the grace period → sign out. Verified live on pshpsh.net.
