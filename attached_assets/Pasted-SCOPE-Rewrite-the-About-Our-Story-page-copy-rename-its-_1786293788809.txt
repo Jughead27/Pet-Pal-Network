@@ -1,0 +1,36 @@
+SCOPE: Rewrite the About/Our Story page copy, rename its link label, and add a second entry point to it from the Profile screen.
+
+DO NOT MODIFY: any other screen's copy, the invite-request flow, ToS/Privacy Policy content or their existing links, auth logic.
+
+PRESERVATION CLAUSE: this page must remain reachable WITHOUT signing in — same public/pre-auth route it is today, accessed from the login/portal screen. This delivery adds a second, signed-in entry point on Profile; it must NOT gate the page behind auth. Verify no auth middleware gets added to this route as a side effect of touching the file.
+
+1) COPY REPLACEMENT
+Replace the full body copy of the About/Our Story page with the following (exact text; preserve bold styling on the three closing lines; keep the existing "need a human? email support@pshpsh.net." line as the final element):
+
+it started with two kittens.
+
+a month before the world shut down, we adopted two bonded calicos from a rescue — newt and ripley. i'd had dogs my whole childhood, never cats. they were younger than most orgs like to place. we took them anyway.
+
+four weeks later, everything closed. no office, no plans, nobody but each other — and two kittens who had absolutely no idea what was happening and did not care. they didn't know about lockdowns, or the news, or any of it. they just wanted to be fed, and held, and to sit in a sunny window. it turned out that was exactly what we needed too.
+
+they weren't our first pet. a few years earlier there was finn, a betta who lived on a desk and had, by all accounts, strong opinions about everything — the whole reason this site was almost called fish book. but newt and ripley are the ones who showed us something we didn't expect: that a pet can be the one part of your day that has nothing to do with any of it. no arguments, no headlines, no one performing. just an animal, glad you're home.
+
+that's the whole idea behind pshpsh. the world outside is loud enough already. this is meant to be the quiet room next door — a feed with no politics, no metrics, no one keeping score. just pets, being pets, and the people who love them.
+
+**come in. bring your animal.**
+**curl up, you're home.**
+**follow pets, not people.**
+
+need a human? email support@pshpsh.net.
+
+2) LABEL RENAME
+Rename the link text on the login/portal screen from whatever it currently reads to "Our Story". Leave the underlying route/path unchanged unless renaming it is trivial and low-risk; if you do rename the path, add a redirect from the old path.
+
+3) PROFILE ENTRY POINT
+Add a new "Our Story" link on the Profile screen, in the same whisper-tier register and grouping as the existing ToS/Privacy Policy links (same font size/weight/opacity, same placement pattern). Tapping it navigates to the same public route — do not duplicate the content into a second copy or route.
+
+4) ACCEPTANCE
+- tsc clean both packages.
+- Signed OUT: open the login/portal screen → tap "Our Story" → page loads with new copy, no auth prompt, no redirect to sign-in.
+- Signed IN: open Profile → "Our Story" link appears near ToS/Privacy Policy, matching register → tap it → same page, same content.
+- Golden path: sign in → Home loads → Profile → Our Story renders correctly → back → sign out → login screen → Our Story still reachable without signing in.

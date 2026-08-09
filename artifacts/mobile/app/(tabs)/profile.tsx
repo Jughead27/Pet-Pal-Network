@@ -892,6 +892,17 @@ export default function ProfileScreen() {
             </TouchableOpacity>
             <Text style={[styles.legalDot, { color: colors.mutedForeground }]}> · </Text>
             <TouchableOpacity
+              onPress={() => router.push('/about')}
+              activeOpacity={0.7}
+              accessibilityRole="link"
+              accessibilityLabel="Our Story"
+            >
+              <Text style={[styles.feedbackText, { color: colors.mutedForeground }]}>
+                Our Story
+              </Text>
+            </TouchableOpacity>
+            <Text style={[styles.legalDot, { color: colors.mutedForeground }]}> · </Text>
+            <TouchableOpacity
               onPress={() => Linking.openURL('mailto:support@pshpsh.net')}
               activeOpacity={0.7}
               accessibilityRole="link"
@@ -1065,16 +1076,11 @@ export default function ProfileScreen() {
               );
             })}
             <View style={styles.pickerActions}>
-              <Button
-                variant="quiet"
-                label="Skip"
-                onPress={() => void createAndShareInvite([])}
-                disabled={creatingInvite}
-                style={{ flex: 1 }}
-              />
+              {/* Single state-aware button — label follows the live checkbox
+                  state; always proceeds to the same share-sheet step. */}
               <Button
                 variant="primary"
-                label={creatingInvite ? undefined : selectedCoPetIds.size > 0 ? 'Continue' : 'Just invite'}
+                label={creatingInvite ? undefined : selectedCoPetIds.size > 0 ? 'Invite' : 'No, just invite'}
                 onPress={() => void createAndShareInvite([...selectedCoPetIds])}
                 disabled={creatingInvite}
                 style={{ flex: 1 }}
@@ -1082,6 +1088,25 @@ export default function ProfileScreen() {
                 {creatingInvite && <ActivityIndicator size={14} color={colors.foreground} />}
               </Button>
             </View>
+
+            {/* Cancel whisper — exits without sending ANY invite (distinct
+                from "No, just invite", which still sends one). Register
+                matches the report-flow cancel. */}
+            <TouchableOpacity
+              onPress={() => {
+                if (creatingInvite) return;
+                setPetPickerVisible(false);
+                setSelectedCoPetIds(new Set());
+              }}
+              style={styles.pickerCancelBtn}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel — don't send an invite"
+            >
+              <Text style={[styles.pickerCancelText, { color: colors.mutedForeground }]}>
+                cancel
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -1542,6 +1567,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap:           10,
     marginTop:     4,
+  },
+  // Cancel whisper — matches the report-flow cancel register
+  pickerCancelBtn: {
+    alignSelf:       'center',
+    marginTop:       16,
+    paddingVertical: 4,
+  },
+  pickerCancelText: {
+    fontSize:      12,
+    opacity:       0.4,
+    fontFamily:    'Inter_400Regular',
+    letterSpacing: 0.1,
+    textAlign:     'center',
   },
   // Brief revoke confirmation — shown for 2.5 s then hides
   revokeToast: {

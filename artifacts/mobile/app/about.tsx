@@ -48,31 +48,25 @@ export default function AboutScreen() {
 
         {/* body */}
         <Text style={s.body}>
-          it started with a fish.
+          it started with two kittens.
         </Text>
         <Text style={s.body}>
-          his name was finn — a crowntail betta with fins like torn silk and, according to the one person who knew him, strong opinions about everything. finn lived on a desk. and the person at that desk noticed something: at the end of a long day spent scrolling through arguments, headlines, and people performing their best selves, the only thing on any screen that made him feel better was watching finn drift around being completely, magnificently unbothered.
+          a month before the world shut down, we adopted two bonded calicos from a rescue — newt and ripley. i'd had dogs my whole childhood, never cats. they were younger than most orgs like to place. we took them anyway.
         </Text>
         <Text style={s.body}>
-          finn had no takes. finn was not building a personal brand. finn had never once been right about politics, because finn had never once thought about politics.
+          four weeks later, everything closed. no office, no plans, nobody but each other — and two kittens who had absolutely no idea what was happening and did not care. they didn't know about lockdowns, or the news, or any of it. they just wanted to be fed, and held, and to sit in a sunny window. it turned out that was exactly what we needed too.
         </Text>
         <Text style={s.body}>
-          so he built finn a social network. one user. it was called fish book, and it was, objectively, ridiculous.
+          they weren't our first pet. a few years earlier there was finn, a betta who lived on a desk and had, by all accounts, strong opinions about everything — the whole reason this site was almost called fish book. but newt and ripley are the ones who showed us something we didn't expect: that a pet can be the one part of your day that has nothing to do with any of it. no arguments, no headlines, no one performing. just an animal, glad you're home.
         </Text>
         <Text style={s.body}>
-          but it was also the only feed that ever made him feel the way animals make you feel: completely welcome, entirely off the hook. a pet doesn't care how the day scored you. you walk through the door and you are, immediately and without review, the best thing that has ever happened. no feed has ever loved anyone like that. so the ridiculous little site grew into a real one — built around that feeling, and renamed pshpsh: the sound you make when you're calling a cat over. soft, small, an invitation. that's still what it is.
-        </Text>
-        <Text style={s.body}>
-          pshpsh runs on a few stubborn beliefs. the animals are the subject — humans may appear, but never the focus. followers belong to pets, not people, because your dog earned them and you know it. there are no trending topics, no news, no metrics to win. nothing here is urgent. nothing here is mad at you.
-        </Text>
-        <Text style={s.body}>
-          finn is gone now, the way bettas go — briefly, and completely loved. but this whole place drifts in his wake.
+          that's the whole idea behind pshpsh. the world outside is loud enough already. this is meant to be the quiet room next door — a feed with no politics, no metrics, no one keeping score. just pets, being pets, and the people who love them.
         </Text>
 
         {/* closing three lines */}
         <Text style={s.closing}>come in. bring your animal.</Text>
-        <Text style={s.closing}>follow pets, not people.</Text>
         <Text style={s.closing}>curl up, you're home.</Text>
+        <Text style={s.closing}>follow pets, not people.</Text>
 
         {/* support contact */}
         <Text style={s.body}>
