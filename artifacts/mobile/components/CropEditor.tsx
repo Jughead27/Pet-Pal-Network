@@ -72,6 +72,11 @@ export interface CropEditorProps {
    * Use for compose; avatar stays locked to its targetAspect.
    */
   showAspectPicker?: boolean;
+  /**
+   * Initial mode when reopening the editor. 'contain' (legacy Fit) selects
+   * the Fit chip so the user's previous choice is preserved. Default 'cover'.
+   */
+  initialMode?: 'cover' | 'contain';
   /** Top-bar title string. */
   title?: string;
   /** Leading button icon. 'back' (←) or 'cancel' (×). Default 'cancel'. */
@@ -91,6 +96,10 @@ export interface CropEditorProps {
   onConfirm: (rect: CropRect, mode: 'cover' | 'contain') => void;
   onCancel: () => void;
 }
+
+// Sentinel value for the "Fit" picker chip (legacy contain mode). Never a
+// real aspect ratio — geometry substitutes the photo's natural aspect.
+const FIT_ASPECT = -1;
 
 // ─── Worklet-safe geometry helpers ────────────────────────────────────────────
 // The 'worklet' directive lets these run on the UI thread inside gesture
@@ -182,6 +191,7 @@ export default function CropEditor({
   targetAspect,
   initialRect,
   showAspectPicker = false,
+  initialMode = 'cover',
   title = 'Adjust photo',
   cancelIcon = 'cancel',
   allowZoomOut = false,
@@ -193,22 +203,33 @@ export default function CropEditor({
   const insets = useSafeAreaInsets();
 
   // ── Aspect-ratio picker (compose only) ────────────────────────────────────
-  // Four fixed options in display order: Tall | 1:1 | 4:5 | Original.
+  // Five fixed options in display order: Fit | Tall | 1:1 | 4:5 | Original.
+  // "Fit" is the legacy contain mode — whole photo, no crop rect, no zoom.
+  // FIT_ASPECT is a sentinel; the crop window geometry uses the natural
+  // aspect when it is active (photo exactly fills the window, no gestures).
+  const naturalAspect = naturalWidth / naturalHeight;
   const ratioOptions = useMemo(() => [
+    { label: 'Fit',      value: FIT_ASPECT },
     { label: 'Tall',     value: 9 / 16 },
     { label: '1:1',      value: 1 },
     { label: '4:5',      value: 4 / 5 },
-    { label: 'Original', value: naturalWidth / naturalHeight },
-  ], [naturalWidth, naturalHeight]);
+    { label: 'Original', value: naturalAspect },
+  ], [naturalAspect]);
 
   // Smart default: portrait photos → Tall (9:16); landscape / square → 4:5.
   // "Original" is never a smart default — only an explicit user pick.
+  // Reopening after a Fit confirm (initialMode 'contain') restores Fit.
   const [activeAspect, setActiveAspect] = useState<number>(() => {
     if (!showAspectPicker) return targetAspect;
-    return (naturalWidth / naturalHeight) < 1
+    if (initialMode === 'contain') return FIT_ASPECT;
+    return naturalAspect < 1
       ? 9 / 16    // portrait → Tall
       : 4 / 5;    // landscape / square → 4:5
   });
+  const isFit = showAspectPicker && activeAspect === FIT_ASPECT;
+  // Read inside the mount-once web wheel handler (stale-closure-safe).
+  const isFitRef = useRef(isFit);
+  isFitRef.current = isFit;
 
   // ── Layout ─────────────────────────────────────────────────────────────────
   const TOP_BAR_H    = insets.top + 56;
@@ -220,7 +241,10 @@ export default function CropEditor({
   const availH = screenH - TOP_BAR_H - BOTTOM_BAR_H;
 
   // Crop window: active aspect (picker-selected or locked targetAspect), maximised.
-  const aspect = showAspectPicker ? activeAspect : targetAspect;
+  // Fit uses the natural aspect — the whole photo exactly fills the window.
+  const aspect = showAspectPicker
+    ? (isFit ? naturalAspect : activeAspect)
+    : targetAspect;
   const { cropW, cropH } = useMemo(() => {
     const byW = { cropW: availW, cropH: availW / aspect };
     if (byW.cropH <= availH) return byW;
@@ -236,9 +260,11 @@ export default function CropEditor({
   // the DEFAULT zoom). With allowZoomOut, the floor drops to 1/3 of cover so
   // the photo can shrink inside the frame (fill color shows behind it) but can
   // never become an unusable sliver. Max zoom is unchanged (8× cover).
+  // In Fit mode the scale is locked to cover (which equals contain, since the
+  // window is at the natural aspect) — no zoom or pan, the photo just fits.
   const coverScale = Math.max(cropW / naturalWidth, cropH / naturalHeight);
-  const minScale   = allowZoomOut ? coverScale / 3 : coverScale;
-  const maxScale   = coverScale * 8;
+  const minScale   = isFit ? coverScale : (allowZoomOut ? coverScale / 3 : coverScale);
+  const maxScale   = isFit ? coverScale : coverScale * 8;
 
   // ── Initial state (computed once on mount) ─────────────────────────────────
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -297,13 +323,16 @@ export default function CropEditor({
 
   // ── Aspect change: reset image to fill-and-centre for the new frame ──────
   const handleAspectChange = useCallback((newAspect: number) => {
+    // Fit sentinel → geometry at the natural aspect, zoom locked to cover.
+    const fit = newAspect === FIT_ASPECT;
+    const geomAspect = fit ? naturalWidth / naturalHeight : newAspect;
     // Compute the new crop window geometry (same logic as cropW/cropH useMemo).
-    const byW = { cropW: availW, cropH: availW / newAspect };
-    const newCropW = byW.cropH <= availH ? byW.cropW : availH * newAspect;
+    const byW = { cropW: availW, cropH: availW / geomAspect };
+    const newCropW = byW.cropH <= availH ? byW.cropW : availH * geomAspect;
     const newCropH = byW.cropH <= availH ? byW.cropH : availH;
     const newCover = Math.max(newCropW / naturalWidth, newCropH / naturalHeight);
-    const newMin   = allowZoomOut ? newCover / 3 : newCover;
-    const newMax   = newCover * 8;
+    const newMin   = fit ? newCover : (allowZoomOut ? newCover / 3 : newCover);
+    const newMax   = fit ? newCover : newCover * 8;
 
     // Prime shared values immediately so worklets see correct geometry
     // before the re-render from setActiveAspect completes.
@@ -329,6 +358,7 @@ export default function CropEditor({
 
   // ── Gesture: single-finger pan ─────────────────────────────────────────────
   const panGesture = Gesture.Pan()
+    .enabled(!isFit)   // Fit: whole photo, no pan
     .minPointers(1)
     .maxPointers(1)   // fails when a second finger appears → Pinch takes over
     .onBegin(() => {
@@ -351,6 +381,7 @@ export default function CropEditor({
   // onStart (not onBegin) fires when the pinch is officially recognised with
   // both fingers tracked, giving a valid focalX/focalY midpoint.
   const pinchGesture = Gesture.Pinch()
+    .enabled(!isFit)   // Fit: whole photo, no zoom
     .onStart((e) => {
       savedScale.value   = scale.value;
       savedOffsetX.value = offsetX.value;
@@ -413,6 +444,7 @@ export default function CropEditor({
     // Wheel: scroll-to-zoom on desktop web (writes directly to shared values).
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
+      if (isFitRef.current) return; // Fit: zoom locked
       const s        = scale.value;
       const factor   = Math.exp(-e.deltaY * 0.002);
       const newScale = Math.max(minSV.value, Math.min(maxSV.value, s * factor));
@@ -459,13 +491,18 @@ export default function CropEditor({
 
   // ── Confirm ────────────────────────────────────────────────────────────────
   const handleConfirm = useCallback(() => {
+    if (isFit) {
+      // Legacy Fit / contain: whole photo, no crop rect math needed.
+      onConfirm({ x: 0, y: 0, w: 1, h: 1 }, 'contain');
+      return;
+    }
     const rect = stateToRect(
       scale.value,
       { x: offsetX.value, y: offsetY.value },
       cropW, cropH, naturalWidth, naturalHeight,
     );
     onConfirm(rect, 'cover');
-  }, [onConfirm, cropW, cropH, naturalWidth, naturalHeight, scale, offsetX, offsetY]);
+  }, [isFit, onConfirm, cropW, cropH, naturalWidth, naturalHeight, scale, offsetX, offsetY]);
 
   return (
     <View ref={outerRef} style={styles.root}>
@@ -474,7 +511,7 @@ export default function CropEditor({
       {/* ── Cover canvas: panning/zooming image + crop window ─────────────── */}
       {/* Sampled fill color behind the photo — visible in the crop window
           wherever the zoomed-out photo doesn't cover it (WYSIWYG with feed). */}
-      {allowZoomOut && fillColor && (
+      {allowZoomOut && fillColor && !isFit && (
         <View
           pointerEvents="none"
           style={{

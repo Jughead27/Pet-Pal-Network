@@ -1,0 +1,24 @@
+CONTEXT: Restore "Fit" as a literal fifth option in the ratio picker (Fit | Tall | 1:1 | 4:5 | Original), mapped to the exact legacy rendering that already exists and has been working correctly all day (crop_mode='contain', containAlignBottom positioning, the now-corrected measured-chrome-height rail lift). This is not new rendering logic — it's re-exposing the existing, proven contain-mode path as a user-selectable choice in the current ratio picker UI, since it was removed from the picker this morning during the crop-collapse rebuild but the underlying code was never deleted.
+
+GOAL:
+1. Add "Fit" as a chip in the ratio picker, positioned first in the list (before Tall): Fit | Tall | 1:1 | 4:5 | Original.
+2. Selecting Fit sets crop_mode='contain' for the post being composed — using the exact same contain-mode logic/behavior that already exists and renders correctly (whole photo visible, no cropping, letterboxed as needed, containAlignBottom positioning).
+3. Fit should NOT use the new zoom-out/fill/crop-rect system at all — no crop_rect, no crop_fill_color, no zoom gesture needed. It's the old, simple "show the whole photo" behavior, unconditionally.
+4. Ensure this renders correctly and consistently across all four surfaces (compose Adjust preview, feed, post detail, share card) using the SAME contain-mode rendering path that legacy Aug 1-2 Fit posts already correctly use today (confirmed working via the routing fix and rail-lift fix from earlier today).
+5. Smart default: if it makes sense given existing smart-default logic (e.g. very unusual aspect ratios), Fit can be considered as a candidate default — but this is optional; at minimum it must be manually selectable.
+
+DO NOT MODIFY:
+- The existing Tall/1:1/4:5/Original ratio logic, zoom-out, fill-color, or frame-positioning geometry — all untouched, Fit is fully separate and bypasses that system entirely.
+- The legacy contain-mode rendering code itself (containAlignBottom, the corrected measured-height rail lift) — reuse exactly as-is, don't rewrite it.
+- The routing fix from earlier today (`hasFullCropRect` excluding `crop_mode='contain'`) — this prompt's new Fit posts must correctly route through that same exclusion.
+- The hard invariant clamp on rail positioning — must remain active for Fit posts too (it applies unconditionally after all paths).
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This wires the ratio picker UI to already-existing, already-correct backend logic — no new rendering math.
+
+ACCEPTANCE TEST (must end in golden path):
+1. In compose, confirm "Fit" appears as the first option in the ratio picker.
+2. Select Fit on a photo — confirm the whole photo is visible with no cropping, no zoom gesture available/needed, letterboxed as appropriate.
+3. Post it — confirm it renders identically (whole photo, correct rail position, correct chrome position, rail invariant holds) across feed, post detail, and share card.
+4. Confirm it renders the same way an existing Aug 1-2 legacy Fit post does (side-by-side comparison if possible).
+5. Confirm switching between Fit and the other ratio options in Adjust works cleanly, with no state leakage (e.g. crop_rect from a previous ratio selection doesn't linger when switching to Fit).
+6. Golden path: compose → select Fit → confirm whole photo, no zoom → post → confirm feed/detail/share all correct → sign out. Verified live on pshpsh.net.

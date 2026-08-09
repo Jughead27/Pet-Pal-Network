@@ -283,6 +283,17 @@ export default function AddScreen() {
 
   // ── Refiner callbacks ─────────────────────────────────────────────────────
   const handleRefineConfirm = useCallback((rect: CropRect, mode: 'cover' | 'contain') => {
+    if (mode === 'contain') {
+      // Fit: legacy contain path — no crop rect, no fill, centered focal point.
+      // Clearing the rect guarantees no state leakage from a previous ratio
+      // selection and routes every surface through the legacy contain renderer.
+      setCropRect(null);
+      setCropFocusX(0.5);
+      setCropFocusY(0.5);
+      setCropMode('contain');
+      setRefinerOpen(false);
+      return;
+    }
     setCropRect(rect);
     setCropFocusX(rect.x + rect.w / 2);
     setCropFocusY(rect.y + rect.h / 2);
@@ -394,8 +405,9 @@ export default function AddScreen() {
           cropW:      cropRect?.w ?? null,
           cropH:      cropRect?.h ?? null,
           // Sampled fill color — only meaningful when the rect extends past
-          // the image (zoomed out); harmless otherwise.
-          cropFillColor: effectiveFillColor,
+          // the image (zoomed out); harmless otherwise. Fit (contain) posts
+          // never use the fill system — send null like legacy posts.
+          cropFillColor: cropMode === 'contain' ? null : effectiveFillColor,
           cropFillThumb: needsFill ? effectiveFillThumb : null,
         },
       });
@@ -563,6 +575,7 @@ export default function AddScreen() {
             initialRect={cropRect}
             targetAspect={feedAspect}
             showAspectPicker
+            initialMode={cropMode}
             title="Adjust framing"
             cancelIcon="back"
             allowZoomOut
