@@ -1,0 +1,20 @@
+CONTEXT: In the Sniff screen (app/(tabs)/discovery.tsx), tapping a grid photo currently flips the same screen from grid to a full-screen pager, passing only the tapped post's ARRAY INDEX. The pager FlatList mounts at post 0 (no initialScrollIndex used, despite getItemLayout already being defined) and a one-shot effect afterward imperatively scrollToOffsets to the target index — causing the virtualizer to visibly render through intermediate posts (a "flash-shuffle" through unrelated content) before settling, sometimes on the WRONG post entirely. Three confirmed defects: (1) initialScrollIndex is never used despite the fixed-height getItemLayout making it exact; (2) the "already scrolled" flag is burned before checking page-height readiness, so a failed/no-op scroll has no retry and silently settles on the wrong post; (3) only the index (not the post ID) crosses the grid→pager boundary, so any list reorder between tap and settle (from a live react-query refetch) shifts every index and lands the user on a neighboring post even when the jump itself succeeds.
+
+GOAL: Fix all three defects in one pass, per the investigation's proposed shape:
+1. Pass the tapped post's ID (not array index) when opening the pager.
+2. Mount the pager FlatList directly at the correct post using `initialScrollIndex`, leveraging the existing getItemLayout (no post-mount imperative scroll/teleport needed — this eliminates the flash entirely).
+3. Resolve the actual start index by looking up the passed post ID against the pager's current data at mount time (not by trusting a stale index).
+4. Remove the one-shot "already scrolled" flag pattern that burns before confirming success — if a fallback scroll approach is still needed for any edge case, it must only mark itself complete after a scroll actually succeeds, with retry capability, not silently give up.
+
+DO NOT MODIFY:
+- Any other part of the Sniff screen (grid layout, filters, species chips) — this is scoped to the tap-to-pager transition only.
+- Home's feed pager or any other screen — this bug and its fix are isolated to discovery.tsx.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a targeted fix to the grid-to-pager handoff logic in one file.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Tap a photo in the Sniff grid — confirm the pager opens DIRECTLY on the tapped post with no visible flash/shuffle through other posts.
+2. Tap several different photos at different grid positions (early, middle, late in the list) — confirm each one opens the correct, exact post every time.
+3. Force a list reorder scenario if testable (e.g. boop something to trigger a refetch right before/during the tap) — confirm the correct post still opens despite the reorder.
+4. Confirm normal pager scrolling/swiping between posts after opening still works correctly.
+5. Golden path: open Sniff → tap a photo → confirm instant, correct, flash-free landing on that exact post → swipe to a neighboring post → sign out. Verified live on pshpsh.net.

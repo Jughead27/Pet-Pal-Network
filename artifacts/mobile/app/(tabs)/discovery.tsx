@@ -141,14 +141,16 @@ export default function SniffScreen() {
   }, []);
 
   // ── View-mode state ────────────────────────────────────────────────────────
-  const [viewMode,        setViewMode]        = useState<ViewMode>('grid');
-  const [pagerStartIndex, setPagerStartIndex] = useState(0);
+  const [viewMode,    setViewMode]    = useState<ViewMode>('grid');
+  // The tapped post's ID — not its array index. The index is resolved against
+  // the pager's CURRENT data at render time, so a list reorder between tap
+  // and mount (live react-query refetch) can never land on the wrong post.
+  const [pagerStartId, setPagerStartId] = useState<string | null>(null);
 
   // ── Grid scroll preservation ───────────────────────────────────────────────
-  const gridScrollY      = useRef(0);
-  const gridListRef      = useRef<FlatList<FeedPost>>(null);
-  const pagerListRef     = useRef<FlatList<FeedPost>>(null);
-  const pagerScrolledRef = useRef(false);
+  const gridScrollY  = useRef(0);
+  const gridListRef  = useRef<FlatList<FeedPost>>(null);
+  const pagerListRef = useRef<FlatList<FeedPost>>(null);
 
   // ── Pager sheet state ──────────────────────────────────────────────────────
   const [commentConfig, setCommentConfig] = useState<CommentSheetConfig | null>(null);
@@ -157,9 +159,8 @@ export default function SniffScreen() {
   const closeCommentSheet = useCallback(() => setCommentConfig(null), []);
 
   // ── Open / close pager ────────────────────────────────────────────────────
-  const openPost = useCallback((index: number) => {
-    pagerScrolledRef.current = false;
-    setPagerStartIndex(index);
+  const openPost = useCallback((postId: string) => {
+    setPagerStartId(postId);
     setViewMode('pager');
   }, []);
 
@@ -176,20 +177,9 @@ export default function SniffScreen() {
     });
   }, []);
 
-  // ── Initial pager scroll (rAF deferred — avoids layout-before-paint crash) ─
-  useEffect(() => {
-    if (viewMode !== 'pager') return;
-    if (pagerScrolledRef.current) return;
-    pagerScrolledRef.current = true;
-    if (pagerStartIndex === 0 || effectivePageHeight <= 0) return;
-    requestAnimationFrame(() => {
-      pagerListRef.current?.scrollToOffset({
-        offset:   pagerStartIndex * effectivePageHeight,
-        animated: false,
-      });
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode, pagerStartIndex]);
+  // (No post-mount imperative scroll: the pager FlatList mounts directly on
+  // the tapped post via initialScrollIndex + the fixed-height getItemLayout,
+  // which eliminates the flash-shuffle and the burned one-shot flag entirely.)
 
   // ── Pager item renderer (hoisted + memoised) ──────────────────────────────
   const renderPagerItem = useCallback(
@@ -428,6 +418,14 @@ export default function SniffScreen() {
   if (viewMode === 'pager') {
     const backBtnTop = Platform.OS === 'web' ? 67 + 8 : insets.top + 8;
 
+    // Resolve the tapped post ID against the pager's CURRENT data at render
+    // time — immune to index shifts from refetches between tap and mount.
+    // Falls back to 0 if the post vanished from the list (e.g. filtered out).
+    const startIndex = Math.max(
+      0,
+      posts.findIndex((p) => p.id === pagerStartId),
+    );
+
     return (
       <View style={containerStyle} onLayout={handleContainerLayout}>
         {effectivePageHeight > 0 && (
@@ -438,6 +436,7 @@ export default function SniffScreen() {
             renderItem={renderPagerItem}
             keyExtractor={(item) => item.id}
             getItemLayout={getPagerItemLayout}
+            initialScrollIndex={startIndex}
             pagingEnabled
             snapToInterval={effectivePageHeight}
             snapToAlignment="start"
@@ -522,7 +521,7 @@ export default function SniffScreen() {
   // ── Grid item ─────────────────────────────────────────────────────────────
   const renderGridItem = ({ item, index }: { item: FeedPost; index: number }) => (
     <TouchableOpacity
-      onPress={() => openPost(index)}
+      onPress={() => openPost(item.id)}
       activeOpacity={0.85}
       style={[styles.cell, { width: thumbnailSize, height: thumbnailSize }]}
       accessibilityRole="button"
