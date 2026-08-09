@@ -1,0 +1,11 @@
+CONTEXT: The Sniff-to-pager navigation bug has had two prior fix attempts (app-level ID/getItemLayout fix, then a web-specific verify-and-correct scroll loop) — both confirmed live, neither fully resolved it. NEW PRECISE SYMPTOM from James: the first TWO photos in the Sniff grid correctly navigate to their exact post. Every photo after that does NOT. This is a specific, useful clue — it suggests whatever mechanism is failing works fine within some initial range (likely tied to the pager's initial render window) and breaks specifically for targets beyond it.
+
+GOAL: INVESTIGATE ONLY — find the precise mechanism behind this specific "works for the first ~2, fails after" pattern. Do not attempt a new fix yet.
+1. Determine the pager's actual initial render window on mount (given its windowSize/initialNumToRender config) — does it correspond to roughly the first 2 items? Confirm or rule this out with actual numbers.
+2. For a target index WITHIN that initial window: trace what happens — is the verify-and-correct loop even needed, or does the target already render correctly with no scroll correction required?
+3. For a target index BEYOND that initial window: trace exactly what the verify-and-correct loop computes as the "expected offset" via getItemLayout, and what the ACTUAL scrollTop/content height is at each check within the retry loop. Does the loop's expected offset calculation itself break down for cumulative offsets beyond the initial render window (e.g. because content above hasn't been measured/rendered yet, making getItemLayout's cumulative math return an incorrect value at check time)? Or does the loop correctly compute the right target but fail to actually reach it within its retry budget?
+4. Report definitively: what specifically differs in the mechanism between an index-1 target (works) and an index-5 or index-10 target (fails), with actual computed values at each step.
+
+DO NOT MODIFY: Nothing yet — diagnostic only, given two prior fix attempts that didn't fully resolve this.
+
+ACCEPTANCE TEST: A clear, numbers-backed report identifying exactly why targets beyond the initial render window fail while the first ones succeed, sufficient to write a fix that will work on the first try.

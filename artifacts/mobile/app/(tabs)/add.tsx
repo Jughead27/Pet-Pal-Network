@@ -106,6 +106,8 @@ export default function AddScreen() {
   const [caption,       setCaption]       = useState('');
   const [selectedPetIds, setSelectedPetIds] = useState<Set<string>>(new Set());
   const [petSearchQuery, setPetSearchQuery] = useState('');
+  // "Tag another pet" is secondary — collapsed by default; expands on tap.
+  const [tagExpanded,    setTagExpanded]    = useState(false);
   const [isNursery,      setIsNursery]     = useState(false);
   const [isUploading,   setIsUploading]   = useState(false);
   const [error,         setError]         = useState<string | null>(null);
@@ -311,6 +313,7 @@ export default function AddScreen() {
     setCompressedUri(null);
     setCaption('');
     setIsNursery(false);
+    setTagExpanded(false);
     setCropFocusX(0.5);
     setCropFocusY(0.5);
     setCropRect(null);
@@ -426,6 +429,7 @@ export default function AddScreen() {
       setCropFillColor(null);
       setCropFillThumb(null);
       setPetSearchQuery('');
+      setTagExpanded(false);
       setStep('idle');
       if (pets.length === 1) setSelectedPetIds(new Set([pets[0].id]));
       else setSelectedPetIds(new Set());
@@ -747,19 +751,51 @@ export default function AddScreen() {
             ))}
           </ScrollView>
 
-          {/* Tag another pet — search by name or owner username */}
-          <Text style={[s.label, { color: colors.mutedForeground, marginTop: 16 }]}>Tag another pet</Text>
+          {/* Caption — directly after Your pets; placeholder personalises once pet is chosen */}
+          <Text style={[s.label, { color: colors.mutedForeground, marginTop: 16 }]}>Caption</Text>
           <TextInput
-            style={[s.input, { backgroundColor: colors.secondary, borderColor: colors.border, color: colors.foreground }]}
-            value={petSearchQuery}
-            onChangeText={setPetSearchQuery}
-            placeholder="Search by pet or owner name…"
+            style={[s.input, s.captionInput, { backgroundColor: colors.secondary, borderColor: colors.border, color: colors.foreground }]}
+            value={caption}
+            onChangeText={setCaption}
+            placeholder={captionPlaceholder}
             placeholderTextColor={colors.mutedForeground}
             selectionColor={colors.primary}
-            autoCapitalize="none"
-            returnKeyType="search"
+            multiline
+            returnKeyType="done"
+            blurOnSubmit
+            maxLength={250}
           />
-          {petSearchResults.length > 0 && (
+
+          {/* Tag another pet — secondary: collapsed accordion (matches the
+              socials pattern on profile edit); search reveals on tap only. */}
+          <TouchableOpacity
+            onPress={() => setTagExpanded((v) => !v)}
+            activeOpacity={0.7}
+            style={s.tagToggle}
+            accessibilityRole="button"
+            accessibilityLabel={tagExpanded ? 'Collapse tag another pet' : 'Tag another pet'}
+          >
+            <Text style={[s.tagToggleText, { color: colors.mutedForeground }]}>
+              {tagExpanded ? 'Hide tag another pet' : '+ Tag another pet'}
+            </Text>
+            <Text style={[s.tagToggleCaret, { color: colors.mutedForeground }]}>
+              {tagExpanded ? '↑' : '↓'}
+            </Text>
+          </TouchableOpacity>
+
+          {tagExpanded && (
+            <TextInput
+              style={[s.input, { backgroundColor: colors.secondary, borderColor: colors.border, color: colors.foreground }]}
+              value={petSearchQuery}
+              onChangeText={setPetSearchQuery}
+              placeholder="Search by pet or owner name…"
+              placeholderTextColor={colors.mutedForeground}
+              selectionColor={colors.primary}
+              autoCapitalize="none"
+              returnKeyType="search"
+            />
+          )}
+          {tagExpanded && petSearchResults.length > 0 && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.petScroll}>
               {petSearchResults
                 .filter((r) => !selectedPetIds.has(r.id) && !pets.some(p => p.id === r.id))
@@ -805,21 +841,6 @@ export default function AddScreen() {
                 })}
             </View>
           )}
-
-          {/* Caption — AFTER Pet; placeholder personalises once pet is chosen */}
-          <Text style={[s.label, { color: colors.mutedForeground, marginTop: 20 }]}>Caption</Text>
-          <TextInput
-            style={[s.input, s.captionInput, { backgroundColor: colors.secondary, borderColor: colors.border, color: colors.foreground }]}
-            value={caption}
-            onChangeText={setCaption}
-            placeholder={captionPlaceholder}
-            placeholderTextColor={colors.mutedForeground}
-            selectionColor={colors.primary}
-            multiline
-            returnKeyType="done"
-            blurOnSubmit
-            maxLength={250}
-          />
 
           {/* Nursery toggle */}
           <Pressable
@@ -1155,6 +1176,24 @@ function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
 
     petScroll: {
       flexGrow: 0,
+    },
+
+    // Collapsed "Tag another pet" accordion (matches profile-edit socials)
+    tagToggle: {
+      flexDirection:   'row',
+      alignItems:      'center',
+      justifyContent:  'space-between',
+      marginTop:       20,
+      marginBottom:    4,
+      paddingVertical: 4,
+    },
+    tagToggleText: {
+      fontFamily: 'Inter_400Regular',
+      fontSize:   14,
+    },
+    tagToggleCaret: {
+      fontFamily: 'Inter_400Regular',
+      fontSize:   14,
     },
 
     searchResultChip: {

@@ -1,0 +1,24 @@
+CONTEXT: The New Post compose form currently orders as: Photo → Your pets (chip select) → Tag another pet (always-visible search input) → Caption → Nursery toggle → Post. This pushes primary, frequently-used fields (caption) below a secondary, rarely-used field (tag another pet's search input), and contributes to the form falling below the fold once a photo is selected.
+
+GOAL:
+1. Move Caption to appear directly after "Your pets," before "Tag another pet."
+2. Collapse "Tag another pet" from an always-visible search input into a quiet, secondary-tier link/row (e.g. "+ tag another pet") that expands to reveal the search field only when tapped. Match the existing collapsed/expandable pattern already used elsewhere in the app (e.g. the socials section on profile-edit) for visual consistency.
+3. Final order: Photo preview → Your pets (chips, unchanged) → Caption → collapsed "+ tag another pet" (expandable) → Nursery toggle → Post.
+4. If a pet has already been tagged via the "Tag another pet" search (from a prior interaction in the same session), the section should auto-expand or otherwise make the tagged pet(s) visible — don't hide already-tagged pets behind a collapsed control.
+
+DO NOT MODIFY:
+- The "Your pets" chip selector itself — unchanged, still primary/always visible.
+- The Nursery toggle — unchanged, position relative to Post stays the same (just shifts down due to reordering above it).
+- The actual tag-another-pet search/select functionality — reuse as-is, only its default visibility changes (collapsed vs. always-shown).
+- The photo preview, Adjust/Change photo controls, or any crop-related logic — untouched.
+- The Post button and its validation logic.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. This is a reorder + one collapse/expand behavior change on the New Post form only.
+
+ACCEPTANCE TEST (must end in golden path):
+1. Open New Post, select a photo — confirm the field order is now Photo → Your pets → Caption → collapsed "+ tag another pet" → Nursery → Post.
+2. Confirm "Tag another pet" starts collapsed, with a clear, tappable way to expand it.
+3. Tap to expand — confirm the search field appears and functions exactly as before.
+4. Tag a pet via the expanded search, confirm the tagged pet is visible/represented even if the section is later collapsed or the screen re-renders.
+5. Confirm the form requires noticeably less scrolling to reach Post after selecting a photo, compared to before.
+6. Golden path: compose → select photo → confirm new field order and collapsed tag-pet section → fill caption → post → sign out. Verified live on pshpsh.net.
