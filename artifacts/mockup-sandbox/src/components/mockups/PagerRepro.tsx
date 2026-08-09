@@ -91,40 +91,79 @@ export default function PagerRepro() {
   // each frame (dataRef), not captured once.
   const dataRef = useRef(data);
   dataRef.current = data;
+  // FIXED loop — exact mirror of the new discovery.tsx logic, instrumented,
+  // plus 60 post-done observation frames to catch any snap yank-back.
   const onListLayout = useCallback(() => {
     if (doneRef.current) return;
-    let frames = 0;
-    const MAX_FRAMES = 30;
+    const MAX_TOTAL_FRAMES = 120;
+    const MAX_SETTLE_FRAMES = 30;
+    const STABLE_FRAMES = 12;
+    let totalFrames = 0;
+    let settleFrames = 0;
+    let stableFrames = 0;
+    let observeFrames = 0;
+    let snapNode: HTMLElement | null = null;
+    const restoreSnap = () => {
+      if (snapNode) {
+        snapNode.style.scrollSnapType = "";
+        push(`snap RESTORED (computed=${getComputedStyle(snapNode).scrollSnapType})`);
+        snapNode = null;
+      }
+    };
+    const finish = (why: string) => {
+      doneRef.current = true;
+      restoreSnap();
+      push(`DONE: ${why}`);
+    };
     const tick = () => {
       const node: HTMLElement | null =
         listRef.current?.getScrollableNode?.() ?? null;
-      if (!node) {
-        push(`f${frames}: NO NODE`);
-      } else {
-        const idx = Math.max(
-          0,
-          dataRef.current.findIndex((d) => d.id === `post-${TARGET}`),
-        );
-        const expected = idx * PAGE_H;
+      if (doneRef.current) {
+        if (node && observeFrames % 5 === 0)
+          push(
+            `obs f${observeFrames}: scrollTop=${node.scrollTop} contentH=${node.scrollHeight} itemAt=${Math.round(node.scrollTop / PAGE_H)}`,
+          );
+        observeFrames += 1;
+        if (observeFrames < 60) requestAnimationFrame(tick);
+        return;
+      }
+      if (node) {
+        if (!snapNode) {
+          snapNode = node;
+          node.style.scrollSnapType = "none";
+          push(`snap SUPPRESSED at f${totalFrames}`);
+        }
+        const idx = dataRef.current.findIndex((d) => d.id === `post-${TARGET}`);
         const st = node.scrollTop;
         const ch = node.scrollHeight;
-        if (doneRef.current) {
-          // post-done observation frames
-          push(`f${frames} (post-done): scrollTop=${st} contentH=${ch} itemAt=${Math.round(st / PAGE_H)}`);
-        } else if (Math.abs(st - expected) <= 1) {
-          push(`f${frames}: MATCH scrollTop=${st} contentH=${ch} -> done`);
-          doneRef.current = true;
-        } else {
-          node.scrollTop = expected;
-          const after = node.scrollTop;
-          push(
-            `f${frames}: scrollTop=${st} contentH=${ch} SET->${expected} readback=${after}${Math.abs(after - expected) <= 1 ? " STUCK -> done" : " CLAMPED"}`,
-          );
-          if (Math.abs(after - expected) <= 1) doneRef.current = true;
+        if (idx >= 0) {
+          const expected = idx * PAGE_H;
+          if (Math.abs(st - expected) <= 1) {
+            stableFrames += 1;
+            push(`f${totalFrames}: at ${st}/${ch} stable=${stableFrames}`);
+            if (stableFrames >= STABLE_FRAMES) {
+              finish(`stable at ${st} (idx ${idx})`);
+              requestAnimationFrame(tick);
+              return;
+            }
+          } else {
+            stableFrames = 0;
+            node.scrollTop = expected;
+            push(`f${totalFrames}: scrollTop=${st} contentH=${ch} SET->${expected} readback=${node.scrollTop}`);
+            settleFrames += 1;
+            if (settleFrames >= MAX_SETTLE_FRAMES) {
+              finish("settle cap");
+              requestAnimationFrame(tick);
+              return;
+            }
+          }
+        } else if (totalFrames % 10 === 0) {
+          push(`f${totalFrames}: target ABSENT, watching (scrollTop=${st} contentH=${ch})`);
         }
       }
-      frames += 1;
-      if (frames < MAX_FRAMES + 30) requestAnimationFrame(tick); // keep observing 30 frames past done
+      totalFrames += 1;
+      if (totalFrames < MAX_TOTAL_FRAMES) requestAnimationFrame(tick);
+      else finish("total cap");
     };
     push(`onLayout fired; target=${TARGET}`);
     requestAnimationFrame(tick);

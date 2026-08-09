@@ -161,11 +161,18 @@ export default function SniffScreen() {
   // ── Open / close pager ────────────────────────────────────────────────────
   const openPost = useCallback((postId: string) => {
     setPagerStartId(postId);
-    if (Platform.OS === 'web') webPagerCorrectionDone.current = false;
+    if (Platform.OS === 'web') {
+      webPagerRunToken.current += 1; // invalidate any still-running loop
+      webPagerCorrectionDone.current = false;
+    }
     setViewMode('pager');
   }, []);
 
   const closePost = useCallback(() => {
+    if (Platform.OS === 'web') {
+      webPagerRunToken.current += 1; // stale loop exits + restores snap itself
+      webPagerCorrectionDone.current = true;
+    }
     setCommentConfig(null);
     setViewMode('grid');
     requestAnimationFrame(() => {
@@ -190,6 +197,10 @@ export default function SniffScreen() {
   // case). Refs (not state) so the loop always reads current values without
   // re-renders.
   const webPagerCorrectionDone = useRef(true);
+  // Monotonic run token: each pager open/close bumps it, so a loop from a
+  // previous opening detects it is stale, restores its own snap node, and
+  // exits WITHOUT touching the shared done flag of the newer run.
+  const webPagerRunToken       = useRef(0);
   const pagerStartIdRef        = useRef<string | null>(null);
   pagerStartIdRef.current      = pagerStartId;
   const postsForPagerRef       = useRef<FeedPost[]>([]);
@@ -197,40 +208,83 @@ export default function SniffScreen() {
 
   const runWebPagerCorrection = useCallback(() => {
     if (Platform.OS !== 'web' || webPagerCorrectionDone.current) return;
-    const MAX_FRAMES = 30; // ~0.5s at 60fps — safety net, not an animation
-    let frames = 0;
+    const runToken = webPagerRunToken.current; // this loop belongs to this opening
+    // Bounds: total watch window (covers data arriving late), settle attempts
+    // once the target IS resolvable, and consecutive stable frames required
+    // before restoring scroll-snap (so the mandatory snap can't re-yank while
+    // the virtualizer is still committing cells around the landing offset).
+    const MAX_TOTAL_FRAMES  = 120; // ~2s hard cap
+    const MAX_SETTLE_FRAMES = 30;
+    const STABLE_FRAMES     = 12;  // ~200ms of confirmed-correct position
+    let totalFrames  = 0;
+    let settleFrames = 0;
+    let stableFrames = 0;
+    let snapNode: HTMLElement | null = null;
+    const restoreSnap = () => {
+      if (snapNode) {
+        snapNode.style.scrollSnapType = ''; // back to RNW's mandatory snap
+        snapNode = null;
+      }
+    };
+    const finish = () => {
+      webPagerCorrectionDone.current = true;
+      restoreSnap();
+    };
     const tick = () => {
-      if (webPagerCorrectionDone.current) return;
+      // Stale run (pager closed or reopened since this loop started): restore
+      // OWN snap node and exit without touching the newer run's shared flag.
+      if (webPagerRunToken.current !== runToken) {
+        restoreSnap();
+        return;
+      }
+      if (webPagerCorrectionDone.current) {
+        restoreSnap();
+        return;
+      }
       const list = pagerListRef.current as unknown as {
         getScrollableNode?: () => HTMLElement | null;
       } | null;
       const node  = list?.getScrollableNode?.() ?? null;
       const pageH = pageHeightForPagerRef.current;
       if (node && pageH > 0) {
-        // Re-resolve the index from the post ID each check — stays correct
-        // even if a refetch reorders the list mid-verification.
-        const idx = Math.max(
-          0,
-          postsForPagerRef.current.findIndex(
-            (p) => p.id === pagerStartIdRef.current,
-          ),
-        );
-        const expected = idx * pageH;
-        if (Math.abs(node.scrollTop - expected) <= 1) {
-          webPagerCorrectionDone.current = true; // landed correctly — done
-          return;
+        // Suppress mandatory CSS scroll-snap during the landing window —
+        // otherwise the browser re-snaps a successful correction back to the
+        // nearest already-rendered cell edge (the confirmed yank-back bug).
+        if (!snapNode) {
+          snapNode = node;
+          node.style.scrollSnapType = 'none';
         }
-        node.scrollTop = expected; // browser clamps if content still short —
-        if (Math.abs(node.scrollTop - expected) <= 1) {
-          webPagerCorrectionDone.current = true; // — re-read confirms it stuck
-          return;
+        // NEVER match while the target post is absent from the data — a
+        // findIndex of -1 must keep the loop watching, not falsely match
+        // index 0 (the confirmed false-match bug). Re-resolving each frame
+        // also re-arms the loop when data arrives or reorders.
+        const idx = postsForPagerRef.current.findIndex(
+          (p) => p.id === pagerStartIdRef.current,
+        );
+        if (idx >= 0) {
+          const expected = idx * pageH;
+          if (Math.abs(node.scrollTop - expected) <= 1) {
+            stableFrames += 1;
+            if (stableFrames >= STABLE_FRAMES) {
+              finish(); // held the correct offset long enough — snap restored
+              return;
+            }
+          } else {
+            stableFrames = 0;
+            node.scrollTop = expected; // clamped if content still short
+            settleFrames += 1;
+            if (settleFrames >= MAX_SETTLE_FRAMES) {
+              finish(); // bounded give-up once the target was resolvable
+              return;
+            }
+          }
         }
       }
-      frames += 1;
-      if (frames < MAX_FRAMES) {
+      totalFrames += 1;
+      if (totalFrames < MAX_TOTAL_FRAMES) {
         requestAnimationFrame(tick);
       } else {
-        webPagerCorrectionDone.current = true; // bounded give-up
+        finish(); // hard cap — e.g. target post genuinely gone from the feed
       }
     };
     requestAnimationFrame(tick);

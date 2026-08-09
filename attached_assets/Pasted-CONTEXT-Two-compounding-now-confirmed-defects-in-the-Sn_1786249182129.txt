@@ -1,0 +1,33 @@
+CONTEXT: Two compounding, now-confirmed defects in the Sniff pager's web scroll-correction logic (via instrumented repro with real numbers):
+1. The verify-and-correct loop's "expected offset" check has a false-match bug: if the target post isn't yet resolvable in the data at check time, findIndex returns -1, which the loop treats as index 0 — producing an "expected offset" of 0 that trivially matches the actual scrollTop of 0 at mount. The loop declares success and stops watching, for the WRONG target.
+2. Separately, on web, pagingEnabled compiles to mandatory CSS scroll-snap. If a later correction moves the scroll into a region whose cells aren't yet committed (not a valid snap point), the browser's mandatory snap re-snaps back toward the nearest already-rendered cell edge — silently undoing a correction that briefly succeeded.
+Together these explain why only the first ~2 grid positions (which sit inside the pager's default, always-valid initial render window) work — everything beyond it depends on winning a race between data resolution and the browser's snap behavior, and currently loses.
+
+GOAL:
+
+Part 1 — Fix both defects in Sniff (discovery.tsx):
+1. The verify-and-correct loop must NEVER declare success while the target post ID is absent from the currently available data. If the target isn't found, the loop must keep watching/retrying (re-arming when data changes) rather than falsely matching against index 0.
+2. During the landing/correction window on web, the mandatory scroll-snap behavior must not be able to yank a correction back. This likely means temporarily disabling/relaxing scroll-snap (e.g. removing or downgrading scroll-snap-type from mandatory to none/proximity) until the correction has landed and settled, then restoring normal snap behavior for regular swipe navigation afterward.
+3. Use the existing PagerRepro.tsx sandbox to verify both fixes against the exact scenarios already identified (B: data empty at mount then fills; and the general case of a deep target index) before considering this done.
+
+Part 2 — Investigate Nursery:
+1. Determine whether the Nursery page's post-viewing pager (when tapping a post from the Nursery grid/list) reuses this same discovery.tsx code path, or is implemented separately.
+2. If it reuses the same path: confirm this fix covers it too, no additional work needed.
+3. If it's a SEPARATE implementation: report that clearly so we know a follow-up fix will be needed there once Nursery has enough posts to make the bug visible (do not fix it in this prompt if it requires touching a different file — just confirm/deny and report).
+
+DO NOT MODIFY:
+- Native behavior — untouched, this is web-only.
+- The ID-based handoff, getItemLayout, or any other already-correct app-level logic.
+- Normal swipe/paging behavior once the pager has landed and settled — scroll-snap must return to normal for regular navigation, only suppressed during the initial landing/correction window.
+- Nursery's actual code, unless it turns out to share the exact same file/logic being fixed here (in which case the fix naturally covers it — don't make a separate change to a distinct Nursery-specific file even if one exists).
+
+PRESERVATION CLAUSE: Do not touch unrelated files. Fix both defects in the existing web-only correction logic; keep PagerRepro.tsx for verification, delete only if you confirm the fix and no longer need it.
+
+ACCEPTANCE TEST (must end in golden path):
+1. In PagerRepro.tsx, reproduce scenario B (target data empty at mount, fills later) — confirm the loop does NOT falsely match at frame 0, and instead correctly lands on the target once data resolves.
+2. Reproduce a deep target index (5, 10, etc.) with the real timing characteristics — confirm it lands correctly and is NOT yanked back by scroll-snap.
+3. On the live app (pshpsh.net, web), tap photos across the FULL range of Sniff grid positions (not just the first two) — confirm every single one lands on the correct post with no flash-shuffle, tested multiple times given the timing-dependent nature of this bug.
+4. Confirm normal swipe/paging between posts after landing still works correctly (scroll-snap restored for regular navigation).
+5. Confirm native is completely unaffected.
+6. Report definitively whether Nursery shares this code path or not.
+7. Golden path: open Sniff → tap photos at positions 0, 1, 2, 5, 10+ → confirm every one lands correctly → swipe normally → sign out. Verified live on pshpsh.net, tested multiple times.
