@@ -1,0 +1,11 @@
+CONTEXT: A LEGACY post (created days ago, before today's crop-rect system existed — this photo predates the entire crop/adjust rebuild) is now rendering with its caption pushed completely off the bottom of the screen, unreadable. Every single chrome/rail positioning fix made today explicitly stated that legacy posts and full-bleed posts must remain pixel-identical and unaffected. That guarantee has clearly failed for this post. This is a serious regression on previously-working, previously-solved content — not a new edge case.
+
+GOAL: INVESTIGATE ONLY — no fix yet. We need certainty on exactly what broke and why before any further change is made to this code.
+1. Identify this specific post's actual data: does it have a crop_rect at all, or is it a true legacy post (isContain-based, no crop_rect)? Confirm which rendering path it's supposed to take.
+2. Trace EXACTLY how the "vertically full-bleed" chrome-positioning logic from the most recent fix is being applied to this post. Is the "is this frame vertically full-bleed" check being run against legacy/isContain posts at all? If so, that's likely the bug — the check should only apply to posts with a confirmed crop_rect, and legacy posts should take a completely separate, untouched code path.
+3. Determine specifically why the chrome is being pushed so far down that it goes off-screen entirely, rather than just misplaced. This suggests a height/offset calculation is receiving bad or undefined input for this post (e.g. treating a full-bleed frame as if it's a much taller "available height" than the actual screen, or a NaN/undefined value cascading into a large offset).
+4. Report definitively: is this a case of the new logic incorrectly running against legacy posts, a math error even for posts it's supposed to handle, or something else? Include the specific values being computed for this post so the fix can be verified precisely, not just eyeballed.
+
+DO NOT MODIFY: Nothing yet. This is a diagnostic pass only. Given how many sequential fixes have touched this exact rendering path today, we need a confirmed root cause in writing before the next change, not another guess.
+
+ACCEPTANCE TEST: A clear, specific report identifying exactly why this legacy post's chrome is rendering off-screen, with the actual computed values involved, sufficient to write a fix that will not need a further round.

@@ -1,0 +1,29 @@
+CONTEXT: Two confirmed, independent bugs in FeedPage's chrome/frame routing:
+1. `hasFullCropRect` only checks that x/y/w/h are present — it does not exclude `crop_mode='contain'`. Old Fit-era posts (Aug 1-2) have a crop rect written by the OLD system (the contain window, not a source crop), so they incorrectly take the new rect-frame rendering path instead of their correct legacy contain path (containAlignBottom + FIT_RAIL_LIFT).
+2. Independently, the chrome position clamp's floor (`height − insets.bottom − 8 − petInfoH`) ignores the 110px tab-bar clearance that `bottomOffset` exists to protect — for posts with a very tall/narrow frame, this lets the chrome descend into the tab-bar/home-indicator zone, rendering off-screen.
+
+GOAL:
+
+Part 1 — Fix the routing (root cause of the Aug 1-2 post breaking):
+- Change the check that determines whether a post takes the new rect-frame path: it must require `crop_mode !== 'contain'` (or explicitly `crop_mode === 'cover'`, whichever is more precise given the data model) IN ADDITION to having complete rect fields. `crop_mode='contain'` posts must ALWAYS take the legacy contain rendering path (containAlignBottom + FIT_RAIL_LIFT), unconditionally — their rect data must never be interpreted as a source crop for the new frame-aspect system, regardless of what fields are present.
+- This must be a structural exclusion (checked once, early, before any new-path logic runs for that post) — not an additional condition layered onto the existing chain of checks.
+
+Part 2 — Fix the clamp (protects real rect posts from the same failure mode):
+- Change the chrome position clamp so its floor NEVER exceeds the `bottomOffset` line (`insets.bottom + 110`) — that is the true minimum clearance the tab bar requires. Even for a genuine new-system rect post whose computed frame bottom is very low (very tall/narrow frame), the chrome's bottom-most allowed position is `bottomOffset`, full stop.
+
+DO NOT MODIFY:
+- The action rail's positioning logic — already fixed and confirmed working, untouched by this prompt.
+- The new rect-frame rendering path itself for genuine cover-mode posts — Part 1 only changes ROUTING (which posts enter this path), not the path's own math.
+- FIT_RAIL_LIFT or the containAlignBottom logic for contain-mode posts — reuse as-is, this is the path Aug 1-2 posts should have been on the whole time.
+
+PRESERVATION CLAUSE: Do not touch unrelated files. These are two precise, targeted fixes: a routing condition and a clamp floor.
+
+ACCEPTANCE TEST (must end in golden path — test EVERY post type in one pass, not one at a time):
+1. Legacy Fit/contain post with a rect (e.g. "Sweet angel tooten," Aug 1-2 era) — confirm it now renders EXACTLY as it did before any of today's changes: containAlignBottom positioning, FIT_RAIL_LIFT applied, chrome fully visible and correctly placed, nothing near the tab bar.
+2. True rect-free legacy post (July 25 era) — confirm unaffected, unchanged.
+3. New Tall-ratio post (vertically full-bleed) — confirm chrome overlay unchanged.
+4. New 1:1/4:5 post, fully covered (no zoom-out fill) — confirm chrome sits below the frame with clearance (yesterday's fix, still correct).
+5. New 1:1/4:5 post WITH a zoom-out fill — confirm chrome still correctly below the fill seam.
+6. New post with an unusually tall/narrow confirmed frame (stress-test Part 2's clamp) — confirm chrome never descends into the tab-bar zone, stays at or above bottomOffset.
+7. Action rail — confirm correctly positioned across all of the above, unaffected by this prompt.
+8. Golden path: view each post type above in the feed → confirm every one renders chrome fully visible and correctly placed → sign out. Verified live on pshpsh.net.

@@ -364,7 +364,13 @@ export default function FeedPage({
   // rect's own aspect (rect.w×natW / rect.h×natH) — WYSIWYG with Adjust, the
   // compose preview, and post detail. Legacy posts (no complete rect) keep the
   // full-bleed cover rendering exactly as before.
+  // Structural exclusion: contain-mode ("Fit") posts carry rect fields written
+  // by the OLD Fit system, where the rect described the contain window — NOT a
+  // source crop. Interpreting it as a source crop breaks their frame aspect,
+  // so contain posts ALWAYS take the legacy contain path (containAlignBottom +
+  // FIT_RAIL_LIFT), unconditionally, regardless of which fields are present.
   const hasFullCropRect =
+    post.cropMode !== 'contain' &&
     typeof post.cropX === 'number' && typeof post.cropY === 'number' &&
     typeof post.cropW === 'number' && typeof post.cropH === 'number' &&
     post.cropW > 0 && post.cropH > 0;
@@ -454,11 +460,12 @@ export default function FeedPage({
   }, [heroFrame, hasFullCropRect, fillSeamY, height]);
 
   const CHROME_FILL_GAP = 14;
-  // Clamp so the chrome never runs off the bottom of the page; in the
-  // degenerate case (photo bottom very low) this converges back to roughly
-  // the default position.
+  // Clamp: the chrome's bottom-most allowed position is the bottomOffset line
+  // (insets.bottom + 110) — the tab bar's required clearance. Even when the
+  // frame bottom is very low (tall/narrow frame), the chrome never descends
+  // into the tab-bar / home-indicator zone.
   const petInfoPosition = chromeSeamY != null
-    ? { top: Math.min(chromeSeamY + CHROME_FILL_GAP, height - (insets.bottom + 8) - petInfoH) }
+    ? { top: Math.min(chromeSeamY + CHROME_FILL_GAP, height - bottomOffset - petInfoH) }
     : { bottom: bottomOffset };
 
   // ── Action rail placement ─────────────────────────────────────────────────
