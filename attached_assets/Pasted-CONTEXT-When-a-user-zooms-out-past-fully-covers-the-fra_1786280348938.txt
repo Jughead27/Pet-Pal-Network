@@ -1,0 +1,18 @@
+CONTEXT: When a user zooms out past "fully covers the frame" (triggering a fill), the photo's default vertical position is currently centered — splitting fill roughly evenly between top and bottom. Evidence and design intent both point to biasing the default so fill lands at the BOTTOM instead: the pet-name/caption chrome already sits over the bottom of the frame, so fill positioned there is naturally covered/hidden by that chrome in most cases, while fill left at the top sits fully exposed with nothing to soften it. This is a change to the DEFAULT starting position only — the user must still be able to pan/reposition the photo manually within the frame if they want the fill somewhere else.
+
+GOAL:
+1. When a zoom-out first creates a fill situation, bias the photo's default vertical anchor so it sits toward the TOP of the frame — meaning any resulting empty/fill space defaults to appearing at the BOTTOM of the frame, not centered.
+2. This is a DEFAULT/starting position only — the existing pan/drag gesture in Adjust must remain fully functional, so the user can still reposition the photo anywhere within the frame (including moving fill to the top, sides, or leaving it centered) if they choose to.
+3. This only affects the vertical default when a fill is actually present (rect extends beyond the photo's natural bounds vertically). Horizontal fill positioning (left/right) is unaffected — leave as-is.
+4. Fit-mode posts are entirely unaffected (never have a fill).
+5. The existing edge-softening gradient treatment (FillEdgeSoftener) must continue to apply correctly regardless of where the fill ends up — top, bottom, or user-repositioned.
+
+CRITICAL — WYSIWYG must hold across THREE distinct checkpoints, in this order, and all three must show the IDENTICAL result for a given crop/pan/zoom state:
+(A) The Adjust/crop editor screen itself — what the user sees WHILE positioning the photo, including the new default bottom-anchored fill and any manual repositioning they do.
+(B) The New Post preview screen (after tapping Done in Adjust, before tapping Post) — must exactly match what was shown in Adjust, including the new default anchor.
+(C) The final posted rendering — feed, post detail, and both share-card paths (already unified via shared rect-driven rendering logic) — must exactly match what was shown in both (A) and (B).
+The person posting must be able to trust that whatever they see in Adjust and in the New Post preview is EXACTLY what will appear once posted — no surprises after the fact.
+
+DO NOT MODIFY:
+- The pan/drag gesture mechanics themselves — only the DEFAULT starting position when a fill first occurs.
+- crop_fill_color, crop_fill_thumb sampling, or the FillEdgeSoftener gradient

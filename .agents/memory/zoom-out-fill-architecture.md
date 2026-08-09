@@ -23,3 +23,8 @@ The compose crop editor allows zooming OUT below cover (floor = coverScale/3, ga
 - Static surfaces (FocalImage, ShareCard native, shareCardAction web canvas) layer: solid crop_fill_color first (instant fallback), thumb stretched cover above it, photo on top. CropEditor stays solid-color for gesture perf.
 - Rule: any failure in thumb generation/decoding must degrade to solid color — never blank. Legacy posts have null thumb.
 - Feed hero renders rect posts in a centered rect-aspect frame (letterboxed), NOT full-bleed; pet-info chrome and action rail reposition relative to the photo's rendered bottom edge (fillSeamY) on bottom-fill posts.
+
+## Bottom-fill default anchor (Aug 2026)
+- When zoom-out first creates a vertical fill, CropEditor top-anchors the image (fill lands at bottom, under chrome) via `anchorFillBottom` worklet applied in pinch/wheel/layout-reclamp paths — NOT in pan (pan must actually move the image).
+- `userPannedY` shared value gates it: 0 by default; 1 once a pan effectively moved offsetY while vertical fill existed (compare clamped off.y vs current, epsilon — raw translationY marks false positives when clamp no-ops); init 1 only when initialRect.h > 1 (saved fill position), NOT merely when initialRect exists (auto-frame always passes one); reset on aspect change.
+- WYSIWYG holds automatically: anchor only writes offsetY; stateToRect → rect → FocalImage/preview/share all derive from the same rect.

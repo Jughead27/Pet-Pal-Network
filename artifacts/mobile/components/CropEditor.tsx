@@ -136,6 +136,28 @@ const clampOffset = (
   return { x: clamp(ox, -maxX, maxX), y: clamp(oy, -maxY, maxY) };
 };
 
+/**
+ * Default vertical anchor when zoom-out creates a fill: bias the image to the
+ * TOP of the frame so the empty/fill band lands at the BOTTOM (where the
+ * pet-name/caption chrome naturally covers it). Applies ONLY while the user
+ * has not manually panned vertically since the fill appeared — once they pan,
+ * their offset wins (clamped as usual). Horizontal is never touched.
+ */
+const anchorFillBottom = (
+  oy: number,
+  scale: number,
+  cropH: number,
+  nh: number,
+  userPannedY: boolean,
+): number => {
+  'worklet';
+  if (userPannedY) return oy;
+  const displayH = scale * nh;
+  if (displayH >= cropH) return oy; // no vertical fill — leave as-is
+  // Image top flush with frame top → offsetY = (displayH − cropH) / 2.
+  return (displayH - cropH) / 2;
+};
+
 // ─── JS-thread-only geometry helpers ─────────────────────────────────────────
 
 /** Convert (scale, offset) → CropRect in natural-image fractions. */
@@ -290,6 +312,17 @@ export default function CropEditor({
   const pinchFocalX = useSharedValue(0);
   const pinchFocalY = useSharedValue(0);
 
+  // 1 once the user has deliberately panned vertically while a vertical fill
+  // was present — from then on their position wins over the bottom-fill
+  // default anchor. Starts at 1 only when the incoming rect ITSELF has a
+  // vertical fill (h > 1 → a saved zoom-out position worth respecting); a
+  // plain cover/auto-frame rect (h ≤ 1) is not evidence of user intent, so
+  // the first zoom-out still gets the bottom-fill default. Resets on aspect
+  // change (fresh frame, fresh default).
+  const userPannedY = useSharedValue(
+    initialRect && initialRect.w > 0 && initialRect.h > 1.0001 ? 1 : 0,
+  );
+
   // Layout constants that worklets need to read.
   // Written from the JS thread in useEffect; read on the UI thread in worklets.
   const cropWV  = useSharedValue(cropW);
@@ -315,7 +348,7 @@ export default function CropEditor({
     const off = clampOffset(offsetX.value, offsetY.value, s, cropW, cropH, naturalWidth, naturalHeight);
     scale.value   = s;
     offsetX.value = off.x;
-    offsetY.value = off.y;
+    offsetY.value = anchorFillBottom(off.y, s, cropH, naturalHeight, userPannedY.value === 1);
     // scale/offsetX/offsetY are stable shared-value references, not reactive deps.
     // naturalWidth/naturalHeight are static props.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -348,6 +381,7 @@ export default function CropEditor({
     savedScale.value   = newCover;
     savedOffsetX.value = 0;
     savedOffsetY.value = 0;
+    userPannedY.value  = 0; // fresh frame → bottom-fill default applies again
 
     setActiveAspect(newAspect);
   }, [
@@ -373,6 +407,17 @@ export default function CropEditor({
         cropWV.value, cropHV.value,
         nwV.value, nhV.value,
       );
+      // Deliberate vertical pan while a vertical fill exists → the user's
+      // position wins over the bottom-fill default from here on. Only marked
+      // when the clamped offset ACTUALLY moved vertically — a drag the clamp
+      // turned into a no-op (e.g. pushing further up while already
+      // top-anchored) is not evidence of intent.
+      if (
+        scale.value * nhV.value < cropHV.value &&
+        Math.abs(off.y - offsetY.value) > 0.5
+      ) {
+        userPannedY.value = 1;
+      }
       offsetX.value = off.x;
       offsetY.value = off.y;
     });
@@ -413,7 +458,8 @@ export default function CropEditor({
       const off = clampOffset(newOx, newOy, newScale, cropWV.value, cropHV.value, nw, nh);
       scale.value   = newScale;
       offsetX.value = off.x;
-      offsetY.value = off.y;
+      // Default anchor: while un-panned, a vertical fill sits at the bottom.
+      offsetY.value = anchorFillBottom(off.y, newScale, cropHV.value, nh, userPannedY.value === 1);
     });
 
   // Simultaneous: both gestures are registered; they are naturally exclusive
@@ -466,7 +512,8 @@ export default function CropEditor({
       );
       scale.value   = newScale;
       offsetX.value = off.x;
-      offsetY.value = off.y;
+      // Default anchor: while un-panned, a vertical fill sits at the bottom.
+      offsetY.value = anchorFillBottom(off.y, newScale, cropHV.value, nh, userPannedY.value === 1);
     };
 
     // gesturestart / gesturechange: non-standard Safari events that fire for
