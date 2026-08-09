@@ -1,0 +1,21 @@
+SCOPE: Add a curiosity-gap link to the invite landing page, pointing to the existing "Our Story" page.
+
+DO NOT MODIFY: the invite acceptance/redemption logic, the "join pshpsh" CTA behavior, the "already a member? sign in" link's behavior, the invite-expiry/single-use messaging, the "Our Story" page/route itself.
+
+PRESERVATION CLAUSE: every other element on this screen renders and functions identically — this is an additive single line.
+
+1) PLACEMENT
+- Insert a new link between the existing "this invite is just for you — it can only be used once." line and the "already a member? sign in" link, in that order top to bottom.
+
+2) COPY + STYLING
+- Text: "wondering what this is? our story" — all lowercase, no trailing punctuation, matching house style.
+- Styling tier: secondary bold-text-link (per the existing locked hierarchy: primary=hairline button, secondary=bold text link, tertiary/whisper=muted) — one visual step up from the muted whisper-tier fine print above it and the "already a member?" link below it, so it's noticeable without competing with the "join pshpsh" button.
+
+3) NAVIGATION (explicit — do not use a redirect/replace)
+- Tapping the link must PUSH to the Our Story route, preserving the invite page (with its specific invite code intact in the URL) on the navigation stack beneath it — not replace/redirect away from it.
+- Confirm the back button/gesture from Our Story returns the user to the exact same invite link they came from, code still valid and intact, not a generic sign-in or invite-request screen.
+- Confirm merely viewing Our Story via this path does NOT consume, mark-used, or otherwise affect the invite's single-use status — only actually completing "join pshpsh" should do that.
+
+4) ACCEPTANCE
+- tsc clean both packages.
+- Dev/live check: open an invite link → confirm the new link appears correctly positioned and styled at the secondary/bold tier → tap it → Our Story page loads with correct content → tap back → lands back on the SAME invite page, same code, invite still shows as valid/unused → "join pshpsh" and "already a member? sign in" still function unchanged. Identical on web/iOS/Android.

@@ -137,6 +137,17 @@ export default function InviteLandingScreen() {
 
         <Text style={styles.singleUseNote}>this invite is just for you — it can only be used once.</Text>
 
+        {/* Curiosity-gap link — secondary bold-text-link tier. PUSH (not
+            replace) so back returns to this exact invite URL, code intact. */}
+        <Pressable
+          onPress={() => router.push('/about')}
+          style={styles.storyBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Read our story"
+        >
+          <Text style={styles.storyTxt}>wondering what this is? our story</Text>
+        </Pressable>
+
         {/* Already have an account */}
         <Pressable
           onPress={() => router.push('/(auth)/sign-in')}
@@ -224,6 +235,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Inter_700Bold',
     fontSize:   17,
     color:      FG,
+  },
+  // Secondary tier — bold text link: one step up from the muted whispers,
+  // never competing with the hairline primary button.
+  storyBtn: {
+    paddingVertical: 10,
+    alignItems:      'center',
+  },
+  storyTxt: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize:   13,
+    color:      FG,
+    opacity:    0.9,
   },
   secondaryBtn: {
     paddingVertical: 12,
