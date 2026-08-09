@@ -232,6 +232,37 @@ async function main() {
   await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS crop_fill_color text`);
   await pool.query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS crop_fill_thumb text`);
 
+  // ── Spotlight — additive table + singleton seed (idempotent) ─────────────
+  await pool.query(`DO $$ BEGIN
+    CREATE TYPE spotlight_mode AS ENUM ('auto', 'manual');
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$`);
+  await pool.query(`CREATE TABLE IF NOT EXISTS spotlight_state (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    mode spotlight_mode NOT NULL DEFAULT 'auto',
+    pinned_pet_id uuid CONSTRAINT spotlight_state_pinned_pet_id_pets_id_fk
+      REFERENCES pets(id) ON DELETE SET NULL,
+    set_by_admin_id text CONSTRAINT spotlight_state_set_by_admin_id_users_id_fk
+      REFERENCES users(id) ON DELETE SET NULL,
+    set_at timestamp,
+    updated_at timestamp NOT NULL DEFAULT now()
+  )`);
+  // Align FK constraint names with the drizzle schema on DBs where the table
+  // was created before the names above were explicit (default `_fkey` names).
+  // Without this, publishing sees a perpetual rename diff vs. production.
+  await pool.query(`DO $$ BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'spotlight_state_pinned_pet_id_fkey') THEN
+      ALTER TABLE spotlight_state RENAME CONSTRAINT spotlight_state_pinned_pet_id_fkey TO spotlight_state_pinned_pet_id_pets_id_fk;
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'spotlight_state_set_by_admin_id_fkey') THEN
+      ALTER TABLE spotlight_state RENAME CONSTRAINT spotlight_state_set_by_admin_id_fkey TO spotlight_state_set_by_admin_id_users_id_fk;
+    END IF;
+  END $$`);
+  await pool.query(`INSERT INTO spotlight_state (mode)
+    SELECT 'auto' WHERE NOT EXISTS (SELECT 1 FROM spotlight_state)`);
+  await pool.query(`INSERT INTO config (key, value)
+    VALUES ('spotlight_window_days', '7')
+    ON CONFLICT (key) DO NOTHING`);
+
   // ── Species / breeds — one-time setup, skip when already present ─────────
   // On every deploy after the first, the species table is already populated
   // and every INSERT below would be an ON CONFLICT DO NOTHING no-op.  The

@@ -58,6 +58,8 @@ export * from './searchPets200';
 export * from './searchPetsParams';
 export * from './speciesItem';
 export * from './speciesListResponse';
+export * from './spotlightPet';
+export * from './spotlightResponse';
 export * from './taggedPet';
 export * from './treatResult';
 export * from './verifyUpload200';

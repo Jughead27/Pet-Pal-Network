@@ -18,4 +18,5 @@ export * from "./pet-owners";
 export * from "./co-ownership-requests";
 export * from "./quota-requests";
 export * from "./post-pets";
+export * from "./spotlight";
 export * from "./notifications";

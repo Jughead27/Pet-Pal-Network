@@ -9,6 +9,7 @@ import {
   configTable,
   packFollowsTable,
   postPetsTable,
+  breedsTable,
 } from "@workspace/db";
 import { and, eq, gte, desc, sql, isNull } from "drizzle-orm";
 import { activePets } from "../lib/petQueries.js";
@@ -36,6 +37,34 @@ router.get("/feed", async (req, res) => {
     ? req.query.speciesId
     : undefined;
   const sortPopular = req.query.sort === "popular";
+  // Spotlight tap-through — only this pet's posts (primary pet or tagged).
+  const petId = typeof req.query.petId === "string" && req.query.petId.length > 0
+    ? req.query.petId
+    : undefined;
+  // Breed narrow — catalogue breed UUID; only valid alongside speciesId.
+  const breedId = typeof req.query.breedId === "string" && req.query.breedId.length > 0
+    ? req.query.breedId
+    : undefined;
+
+  // Validate breed belongs to the selected species (never trust the client
+  // pairing — breed implies species, but confirm server-side).
+  if (breedId) {
+    if (!speciesId) {
+      res.status(400).json({ error: "breedId requires speciesId" });
+      return;
+    }
+    const [breedRow] = await db
+      .select({ id: breedsTable.id })
+      .from(breedsTable)
+      .where(and(
+        sql`${breedsTable.id}::text = ${breedId}`,
+        sql`${breedsTable.speciesId}::text = ${speciesId}`,
+      ));
+    if (!breedRow) {
+      res.status(400).json({ error: "Breed does not belong to the selected species" });
+      return;
+    }
+  }
 
   const popularOrderBy = [
     desc(sql<number>`(
@@ -127,6 +156,16 @@ router.get("/feed", async (req, res) => {
       activePets,
       nurseryOnly ? eq(postsTable.isNursery, true) : undefined,
       speciesId   ? eq(petsTable.speciesId, speciesId)  : undefined,
+      breedId     ? sql`${petsTable.breedId}::text = ${breedId}` : undefined,
+      // Pet filter — primary pet OR tagged via post_pets (canonical source).
+      petId ? sql`(
+        ${postsTable.petId}::text = ${petId}
+        or exists(
+          select 1 from post_pets ppf
+          where ppf.post_id = ${postsTable.id}
+            and ppf.pet_id::text = ${petId}
+        )
+      )` : undefined,
       notBlockedPostOwner(userId),
       notHiddenByAdminPost(),
     ))

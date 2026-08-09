@@ -20,9 +20,10 @@ export * from "./generated/api";
 ```
 export * from "./generated/api";
 export * from "./generated/api.schemas";
-export { setBaseUrl, setAuthTokenGetter } from "./custom-fetch";
+export { setBaseUrl, setAuthTokenGetter, getBaseUrl, customFetch } from "./custom-fetch";
 export type { AuthTokenGetter } from "./custom-fetch";
 ```
+(Safest: `git checkout lib/api-client-react/src/index.ts` after codegen instead of retyping — the canonical form has grown exports over time.)
 
 The `./generated/types` barrel is intentionally excluded from api-zod: Zod schemas in `api.ts` already infer TS types, and the separate TypeScript interfaces in `types/` create value-level name clashes for request-body schemas (e.g. `CreatePetBody`, `CreatePostBody`, `PresignUploadBody`).
 

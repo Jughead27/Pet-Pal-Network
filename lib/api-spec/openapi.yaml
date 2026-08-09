@@ -58,6 +58,22 @@ paths:
           schema:
             type: string
           description: When set, returns only posts from pets of this species (by catalogue species UUID). Combinable with nursery. Omit for all species.
+        - name: breedId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Narrow further to a catalogue breed UUID. Requires speciesId; the
+            server validates the breed belongs to that species (400 if not).
+        - name: petId
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Return only this pet's posts (primary pet or tagged via post_pets).
+            Used by the Spotlight banner tap-through filter.
         - name: sort
           in: query
           required: false
@@ -78,6 +94,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/FeedResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /spotlight:
+    get:
+      operationId: getSpotlight
+      tags: [spotlight]
+      summary: Get the current Spotlight pet
+      description: >
+        The featured pet shown in the Sniff banner. mode='manual' returns the
+        admin-pinned pet; otherwise the pet with the most treats received over
+        the configured window. Payload never includes treat counts or rank —
+        selection criteria are intentionally invisible. pet is null when no
+        pin is set and no pet received treats in the window (no banner).
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SpotlightResponse"
         "401":
           description: Unauthorized
           content:
@@ -1844,6 +1887,34 @@ components:
         - xTwitter
         - tiktok
         - pets
+
+    SpotlightPet:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        species:
+          type: string
+        coverPhotoUrl:
+          type: string
+          nullable: true
+      required:
+        - id
+        - name
+        - species
+        - coverPhotoUrl
+
+    SpotlightResponse:
+      type: object
+      properties:
+        pet:
+          allOf:
+            - $ref: "#/components/schemas/SpotlightPet"
+          nullable: true
+      required:
+        - pet
 
     FeedResponse:
       type: object

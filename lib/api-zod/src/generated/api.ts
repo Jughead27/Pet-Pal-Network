@@ -24,6 +24,8 @@ export const HealthCheckResponse = zod.object({
 export const GetFeedQueryParams = zod.object({
   "nursery": zod.coerce.boolean().optional().describe('When true, returns only nursery (is_nursery=true) posts. Omit or false for the full feed.'),
   "speciesId": zod.coerce.string().optional().describe('When set, returns only posts from pets of this species (by catalogue species UUID). Combinable with nursery. Omit for all species.'),
+  "breedId": zod.coerce.string().optional().describe('Narrow further to a catalogue breed UUID. Requires speciesId; the server validates the breed belongs to that species (400 if not).\n'),
+  "petId": zod.coerce.string().optional().describe('Return only this pet\'s posts (primary pet or tagged via post_pets). Used by the Spotlight banner tap-through filter.\n'),
   "sort": zod.enum(['fresh', 'popular']).optional().describe('Sort order for the feed. \"fresh\" (default) returns posts newest-first (current behaviour — Home and Nursery always use this default). \"popular\" orders by a 7-day engagement score (boops_7d + 3 × treats_7d), descending, tiebroken by created_at desc so zero-score posts still read newest-first. Combinable with speciesId and nursery; archived exclusion unchanged.\n')
 })
 
@@ -75,6 +77,20 @@ export const GetFeedResponse = zod.object({
   "treatsRemainingToday": zod.number()
 }).describe('Viewer-specific state returned with the feed')
 }).describe('Feed response wrapping posts and viewer state')
+
+
+/**
+ * The featured pet shown in the Sniff banner. mode='manual' returns the admin-pinned pet; otherwise the pet with the most treats received over the configured window. Payload never includes treat counts or rank — selection criteria are intentionally invisible. pet is null when no pin is set and no pet received treats in the window (no banner).
+ * @summary Get the current Spotlight pet
+ */
+export const GetSpotlightResponse = zod.object({
+  "pet": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "species": zod.string(),
+  "coverPhotoUrl": zod.string().nullable()
+}).nullable()
+})
 
 
 /**

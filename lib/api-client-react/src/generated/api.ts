@@ -57,6 +57,7 @@ import type {
   SearchPets200,
   SearchPetsParams,
   SpeciesListResponse,
+  SpotlightResponse,
   TreatResult,
   VerifyUpload200,
   VerifyUploadBody
@@ -240,6 +241,84 @@ export function useGetFeed<TData = Awaited<ReturnType<typeof getFeed>>, TError =
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetFeedQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetSpotlightUrl = () => {
+
+
+
+
+  return `/api/spotlight`
+}
+
+/**
+ * The featured pet shown in the Sniff banner. mode='manual' returns the admin-pinned pet; otherwise the pet with the most treats received over the configured window. Payload never includes treat counts or rank — selection criteria are intentionally invisible. pet is null when no pin is set and no pet received treats in the window (no banner).
+ * @summary Get the current Spotlight pet
+ */
+export const getSpotlight = async ( options?: RequestInit): Promise<SpotlightResponse> => {
+
+  return customFetch<SpotlightResponse>(getGetSpotlightUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSpotlightQueryKey = () => {
+    return [
+    `/api/spotlight`
+    ] as const;
+    }
+
+
+export const getGetSpotlightQueryOptions = <TData = Awaited<ReturnType<typeof getSpotlight>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSpotlight>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSpotlightQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSpotlight>>> = ({ signal }) => getSpotlight({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSpotlight>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSpotlightQueryResult = NonNullable<Awaited<ReturnType<typeof getSpotlight>>>
+export type GetSpotlightQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get the current Spotlight pet
+ */
+
+export function useGetSpotlight<TData = Awaited<ReturnType<typeof getSpotlight>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSpotlight>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSpotlightQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -20,6 +20,7 @@ import quotaRequestsRouter from "./quota-requests";
 import notificationsRouter from "./notifications";
 import { requireClerkAuth } from "../middlewares/requireClerkAuth";
 import invitesRouter from "./invites";
+import spotlightRouter from "./spotlight";
 
 const router: IRouter = Router();
 
@@ -36,6 +37,7 @@ router.use(requireClerkAuth);
 
 // ─── Protected routes ─────────────────────────────────────────────────────────
 router.use(feedRouter);    // GET /feed
+router.use(spotlightRouter); // GET /spotlight — featured pet for Sniff banner
 router.use(petsRouter);    // GET /pets/:id  POST /pets  GET /me/pets
 router.use(postsRouter);   // GET /posts/:id/comments  POST /posts/:id/{boops,treats,comments}
 router.use(uploadsRouter); // POST /uploads/presign

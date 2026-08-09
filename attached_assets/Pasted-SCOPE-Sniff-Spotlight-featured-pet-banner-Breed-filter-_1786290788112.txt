@@ -1,0 +1,38 @@
+SCOPE: Sniff Spotlight (featured pet banner) + Breed filter.
+
+DO NOT MODIFY: Home feed, post detail, boop/treat/comment logic, existing admin reports/hide/suspend/invite screens, existing Sniff species-chip or Fresh|Popular sort logic (extend, don't rewrite), photo/crop pipeline, auth.
+
+PRESERVATION CLAUSE: every existing Sniff behavior (species chips, Fresh|Popular sort, grid rendering, masthead) must work identically when no Spotlight pin is set and no breed is selected. This is additive only.
+
+1) SCHEMA
+- Add config value spotlight_window_days (int, default 7) — follow the existing config-table pattern already used for invite_default_quota.
+- Add spotlight_state table: id (pk), mode enum('auto','manual') default 'auto', pinned_pet_id (nullable FK pets, null when mode='auto'), set_by_admin_id (nullable FK users), set_at (timestamp), updated_at. Singleton row, seeded on migration with mode='auto'.
+
+2) SPOTLIGHT RESOLUTION (server-side helper, used by GET /api/spotlight)
+- If spotlight_state.mode === 'manual': return pinned_pet_id's pet summary.
+- Else: sum treats received per pet over the last spotlight_window_days, pick the single highest (ties: most-recent-treat-first, or any stable tiebreak), return that pet's summary.
+- Response payload: pet id, name, species, cover photo URL only. NEVER include treat count or rank — this is an invisible selection criterion, not a public leaderboard.
+- If there are zero eligible pets (no treats in window, no pin), return null — Sniff renders with no banner, no error state.
+
+3) API — PUBLIC
+- GET /api/spotlight — returns current Spotlight pet per the resolution logic above, or null.
+- Extend the existing Sniff/discovery listing endpoint with optional query params: petId (returns only that pet's posts — used for the Spotlight tap-through filter) and breed (existing species filter, add breed as a further narrow). Confirm species+breed combine correctly (breed implies species already, but don't assume — validate breed belongs to the selected species server-side, 400 if not).
+
+4) API — ADMIN (mirror the existing admin-gated, audit-logged pattern from suspend/hide)
+- POST /api/admin/spotlight/pin — body { petId }. Sets mode='manual', pinned_pet_id, set_by_admin_id, set_at=now. Audit action spotlight.pin, metadata { petId }. 404 if pet doesn't exist.
+- POST /api/admin/spotlight/clear — reverts mode='auto', pinned_pet_id=null. Audit action spotlight.clear.
+- PATCH /api/admin/spotlight/config — body { windowDays }. Validates positive integer, reasonable upper bound (e.g. ≤90). Updates config. Audit action spotlight.config_update, metadata { windowDays }.
+
+5) MOBILE — SNIFF SCREEN
+- New SpotlightBanner component, placed BELOW the species chip row and ABOVE the Fresh|Popular sort row. Small featured-pet banner: pet photo + name, subtle "spotlight" label (typographic, matches existing register — never "winner" or "top pet"). Renders nothing if GET /api/spotlight returns null.
+- Tap banner → sets local filter state to that pet's id, re-fetches the grid via the petId param, grid now shows only that pet's posts. Banner itself updates to an active/filtered state (e.g. "Viewing <name> · clear") — tapping that clears the filter and returns to the normal All/Cat/Fish + Fresh|Popular grid. This filter is fully independent of species/breed selection — engaging it should reset those, since it's browsing one pet, not a category.
+- Breed chip: appears in the filter row only when a species chip other than "All" is selected (progressive disclosure — do not show for "All"). Tapping opens a single-select bottom sheet listing breeds for that species (reuse existing breed data source from admin Breed Suggestions / seeded breeds table). Selecting a breed narrows the grid via the breed param; a way to clear it back to species-only.
+- No pill/capsule styling — match existing design system (typographic states, muted↔bold, no new visual language introduced).
+
+6) MOBILE — ADMIN HUB
+- New Spotlight screen under /admin: shows current state (auto — showing <pet name> vs. manually pinned — <pet name>), a pet search/select control to pin any pet, a "clear override / return to auto" action (only shown when mode='manual'), and a number input to edit spotlight_window_days with save. Same two-tap-confirm pattern as other admin mutations where destructive-ish (pin/clear at least gets a single confirm, given it changes what all users see).
+
+7) TYPECHECK + ACCEPTANCE
+- tsc clean both packages.
+- Dev evidence: seed treat data across ≥2 pets, confirm auto-resolution picks the correct one; admin pins a different pet, confirm GET /api/spotlight reflects the pin immediately; admin clears, confirm it reverts to auto; window-days edit changes the resolution window (verify with a treat outside the new window dropping out).
+- GOLDEN PATH: open Sniff → Spotlight banner renders correct pet → tap banner → grid filters to that pet's posts only → tap clear → grid returns to normal → select a species chip → Breed chip appears → select a breed → grid narrows correctly → clear breed → species filter still holds. Identical on web/iOS/Android.

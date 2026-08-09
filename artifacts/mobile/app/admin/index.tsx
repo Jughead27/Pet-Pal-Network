@@ -51,6 +51,11 @@ const SECTIONS = [
     description: 'Member feedback submissions — mark reviewed when actioned.',
   },
   {
+    route:       '/admin/spotlight' as const,
+    label:       'Spotlight',
+    description: 'Featured pet on Sniff — pin a pet or manage the auto window.',
+  },
+  {
     route:       '/admin/invite-management' as const,
     label:       'Invite Management',
     description: 'Per-user quota overrides and invited-by lineage.',

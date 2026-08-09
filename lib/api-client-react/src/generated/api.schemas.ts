@@ -126,6 +126,17 @@ export interface PublicProfile {
   pets: PublicProfilePet[];
 }
 
+export interface SpotlightPet {
+  id: string;
+  name: string;
+  species: string;
+  coverPhotoUrl: string | null;
+}
+
+export interface SpotlightResponse {
+  pet: SpotlightPet | null;
+}
+
 /**
  * Feed response wrapping posts and viewer state
  */
@@ -717,6 +728,14 @@ nursery?: boolean;
  * When set, returns only posts from pets of this species (by catalogue species UUID). Combinable with nursery. Omit for all species.
  */
 speciesId?: string;
+/**
+ * Narrow further to a catalogue breed UUID. Requires speciesId; the server validates the breed belongs to that species (400 if not).
+ */
+breedId?: string;
+/**
+ * Return only this pet's posts (primary pet or tagged via post_pets). Used by the Spotlight banner tap-through filter.
+ */
+petId?: string;
 /**
  * Sort order for the feed. "fresh" (default) returns posts newest-first (current behaviour — Home and Nursery always use this default). "popular" orders by a 7-day engagement score (boops_7d + 3 × treats_7d), descending, tiebroken by created_at desc so zero-score posts still read newest-first. Combinable with speciesId and nursery; archived exclusion unchanged.
  */

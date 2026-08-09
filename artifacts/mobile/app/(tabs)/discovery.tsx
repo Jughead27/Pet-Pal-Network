@@ -52,7 +52,11 @@ import FocalImage from '@/components/FocalImage';
 import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
 import CommentSheet from '@/components/CommentSheet';
 import SectionMasthead from '@/components/SectionMasthead';
+import SpotlightBanner, { type SpotlightPetRef } from '@/components/SpotlightBanner';
 import { Dog } from 'phosphor-react-native';
+import { Modal } from 'react-native';
+import { useQuery } from '@tanstack/react-query';
+import { getGetSpeciesByIdBreedsQueryOptions } from '@workspace/api-client-react';
 
 // ─── Layout constants ──────────────────────────────────────────────────────────
 
@@ -92,6 +96,13 @@ export default function SniffScreen() {
   // ── Species filter (null = "All") ─────────────────────────────────────────
   const [activeSpeciesId, setActiveSpeciesId] = useState<string | null>(null);
 
+  // ── Breed filter — progressive disclosure, only when a species is selected ─
+  const [activeBreed, setActiveBreed]       = useState<{ id: string; name: string } | null>(null);
+  const [breedSheetOpen, setBreedSheetOpen] = useState(false);
+
+  // ── Spotlight pet filter — independent of species/breed (browsing one pet) ─
+  const [petFilter, setPetFilter] = useState<SpotlightPetRef | null>(null);
+
   // ── Sort (Fresh = default, matches API default; Popular = engagement score) ─
   // Fresh passes no sort param so the cache key matches the default feed used
   // by Home — no duplicate network round-trip. Popular uses a distinct key.
@@ -105,10 +116,23 @@ export default function SniffScreen() {
 
   const { data: filteredData, isLoading: filteredLoading, isError: filteredError } =
     useGetFeed(
-      activeSpeciesId
-        ? { ...baseParams, speciesId: activeSpeciesId }
-        : baseParams,
+      petFilter
+        ? { ...baseParams, petId: petFilter.id }
+        : activeSpeciesId
+          ? {
+              ...baseParams,
+              speciesId: activeSpeciesId,
+              ...(activeBreed ? { breedId: activeBreed.id } : {}),
+            }
+          : baseParams,
     );
+
+  // Breeds for the selected species — drives the breed picker sheet.
+  const { data: breedsData } = useQuery({
+    ...getGetSpeciesByIdBreedsQueryOptions(activeSpeciesId ?? ''),
+    enabled: !!activeSpeciesId,
+  });
+  const breedOptions = breedsData?.breeds ?? [];
 
   // Posts shown in the grid — always the filtered+sorted result.
   const posts: FeedPost[] = filteredData?.posts ?? [];
@@ -353,6 +377,10 @@ export default function SniffScreen() {
     const unsubscribe = navigation.addListener('blur', () => {
       closePost();
       setSort(GetFeedSort.fresh);
+      setActiveSpeciesId(null);
+      setActiveBreed(null);
+      setPetFilter(null);
+      setBreedSheetOpen(false);
     });
     return unsubscribe;
   }, [navigation, closePost]);
@@ -366,6 +394,9 @@ export default function SniffScreen() {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return (navigation as any).addListener('tabPress', () => {
       setActiveSpeciesId(null);
+      setActiveBreed(null);
+      setPetFilter(null);
+      setBreedSheetOpen(false);
       setSort(GetFeedSort.fresh);
       gridScrollY.current = 0;
       closePost();
@@ -392,8 +423,8 @@ export default function SniffScreen() {
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
   // ── Loading / error ───────────────────────────────────────────────────────
-  const isLoading = allLoading || (!!activeSpeciesId && filteredLoading);
-  const isError   = allError   || (!!activeSpeciesId && filteredError);
+  const isLoading = allLoading || ((!!activeSpeciesId || !!petFilter || !!activeBreed) && filteredLoading);
+  const isError   = allError   || ((!!activeSpeciesId || !!petFilter || !!activeBreed) && filteredError);
 
   // ── Chip-row height (always reserves CHIP_HEIGHT for the sort toggle) ──────
   // Previously conditional on chips.length > 0 — now always topInset + CHIP_HEIGHT
@@ -425,7 +456,7 @@ export default function SniffScreen() {
           >
             {/* "All" chip */}
             <Pressable
-              onPress={() => { setActiveSpeciesId(null); gridScrollY.current = 0; }}
+              onPress={() => { setActiveSpeciesId(null); setActiveBreed(null); setPetFilter(null); gridScrollY.current = 0; }}
               style={styles.chipPressable}
               accessibilityRole="button"
               accessibilityLabel="Show all species"
@@ -446,7 +477,7 @@ export default function SniffScreen() {
             {chips.map((chip) => (
               <Pressable
                 key={chip.id}
-                onPress={() => { setActiveSpeciesId(chip.id); gridScrollY.current = 0; }}
+                onPress={() => { setActiveSpeciesId(chip.id); setActiveBreed(null); setPetFilter(null); gridScrollY.current = 0; }}
                 style={styles.chipPressable}
                 accessibilityRole="button"
                 accessibilityLabel={`Filter by ${chip.name}`}
@@ -464,6 +495,27 @@ export default function SniffScreen() {
                 </Text>
               </Pressable>
             ))}
+
+            {/* Breed narrow — progressive disclosure, only when a species is selected */}
+            {activeSpeciesId !== null && breedOptions.length > 0 && (
+              <Pressable
+                onPress={() => setBreedSheetOpen(true)}
+                style={styles.chipPressable}
+                accessibilityRole="button"
+                accessibilityLabel={activeBreed ? `Breed: ${activeBreed.name}. Change breed` : 'Filter by breed'}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    activeBreed
+                      ? [styles.chipTextActive,   { color: colors.foreground }]
+                      : [styles.chipTextInactive, { color: colors.mutedForeground }],
+                  ]}
+                >
+                  {activeBreed ? activeBreed.name : 'Breed ↓'}
+                </Text>
+              </Pressable>
+            )}
           </ScrollView>
         ) : (
           // No chips yet — placeholder keeps the band height consistent
@@ -519,6 +571,24 @@ export default function SniffScreen() {
           </Pressable>
         </View>
       </View>
+
+      {/* Spotlight banner — featured pet / active pet-filter state */}
+      <SpotlightBanner
+        colors={colors}
+        activePetFilter={petFilter}
+        onEngage={(pet) => {
+          // Browsing one pet — independent of category filters, so reset them.
+          setActiveSpeciesId(null);
+          setActiveBreed(null);
+          setBreedSheetOpen(false);
+          setPetFilter(pet);
+          gridScrollY.current = 0;
+        }}
+        onClear={() => {
+          setPetFilter(null);
+          gridScrollY.current = 0;
+        }}
+      />
     </View>
   );
 
@@ -632,6 +702,29 @@ export default function SniffScreen() {
     );
   }
 
+  // Empty: pet-filtered (Spotlight tap-through) result has no posts
+  if (posts.length === 0 && petFilter !== null) {
+    return (
+      <View style={containerStyle}>
+        {sniffHeader}
+        <View style={[styles.fill, styles.centered]}>
+          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>
+            No posts from {petFilter.name} yet
+          </Text>
+          <Pressable
+            onPress={() => setPetFilter(null)}
+            accessibilityRole="button"
+            accessibilityLabel="Show all posts"
+          >
+            <Text style={[styles.showAllLink, { color: colors.primary }]}>
+              Show all
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   // Empty: species-filtered result has no posts — offer "Show all"
   if (posts.length === 0 && activeSpeciesId !== null) {
     const chipName = chips.find((c) => c.id === activeSpeciesId)?.name ?? 'this species';
@@ -674,9 +767,74 @@ export default function SniffScreen() {
     </TouchableOpacity>
   );
 
+  // ── Breed picker — single-select bottom sheet (typographic list) ──────────
+  const breedSheet = (
+    <Modal
+      visible={breedSheetOpen}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setBreedSheetOpen(false)}
+    >
+      <Pressable
+        style={styles.sheetBackdrop}
+        onPress={() => setBreedSheetOpen(false)}
+        accessibilityLabel="Close breed picker"
+      >
+        <Pressable
+          style={[styles.sheetBody, { backgroundColor: colors.background, borderColor: colors.border, paddingBottom: insets.bottom + 20 }]}
+          onPress={(e) => e.stopPropagation()}
+        >
+          <Text style={[styles.sheetTitle, { color: colors.mutedForeground }]}>Breed</Text>
+          <ScrollView style={styles.sheetScroll} showsVerticalScrollIndicator={false}>
+            <Pressable
+              onPress={() => { setActiveBreed(null); setBreedSheetOpen(false); gridScrollY.current = 0; }}
+              style={styles.sheetRow}
+              accessibilityRole="button"
+              accessibilityLabel="All breeds"
+              accessibilityState={{ selected: activeBreed === null }}
+            >
+              <Text
+                style={[
+                  styles.sheetRowText,
+                  activeBreed === null
+                    ? [styles.chipTextActive,   { color: colors.foreground }]
+                    : [styles.chipTextInactive, { color: colors.mutedForeground }],
+                ]}
+              >
+                All breeds
+              </Text>
+            </Pressable>
+            {breedOptions.map((b) => (
+              <Pressable
+                key={b.id}
+                onPress={() => { setActiveBreed({ id: b.id, name: b.name }); setBreedSheetOpen(false); gridScrollY.current = 0; }}
+                style={styles.sheetRow}
+                accessibilityRole="button"
+                accessibilityLabel={`Filter by ${b.name}`}
+                accessibilityState={{ selected: activeBreed?.id === b.id }}
+              >
+                <Text
+                  style={[
+                    styles.sheetRowText,
+                    activeBreed?.id === b.id
+                      ? [styles.chipTextActive,   { color: colors.foreground }]
+                      : [styles.chipTextInactive, { color: colors.mutedForeground }],
+                  ]}
+                >
+                  {b.name}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+
   return (
     <View style={containerStyle} onLayout={handleContainerLayout}>
       {sniffHeader}
+      {breedSheet}
       <FlatList
         key="sniff-grid"
         ref={gridListRef}
@@ -812,6 +970,38 @@ const styles = StyleSheet.create({
     fontFamily:    'Inter_600SemiBold',
     fontSize:      15,
     letterSpacing: -0.1,
+  },
+
+  // ── Breed picker sheet ─────────────────────────────────────────────────────
+  sheetBackdrop: {
+    flex:            1,
+    justifyContent:  'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  sheetBody: {
+    borderTopLeftRadius:  16,
+    borderTopRightRadius: 16,
+    borderWidth:          StyleSheet.hairlineWidth,
+    paddingTop:           18,
+    paddingHorizontal:    20,
+    maxHeight:            '70%',
+  },
+  sheetTitle: {
+    fontFamily:    'Inter_400Regular',
+    fontSize:      12,
+    letterSpacing: 0.6,
+    textTransform: 'lowercase',
+    marginBottom:  8,
+  },
+  sheetScroll: {
+    flexGrow: 0,
+  },
+  sheetRow: {
+    paddingVertical: 10,
+  },
+  sheetRowText: {
+    fontSize:      15,
+    letterSpacing: -0.2,
   },
 
   // ── Pager back button ──────────────────────────────────────────────────────
