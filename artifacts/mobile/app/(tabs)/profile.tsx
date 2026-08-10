@@ -369,6 +369,13 @@ export default function ProfileScreen() {
   const pendingInvites   = (inviteData?.invites ?? []).filter((i) => i.status === 'active');
   const friendsWhoJoined = inviteData?.friendsWhoJoined ?? [];
 
+  // Collapse/show-more for the two invite sections — 3-row default,
+  // mirroring the My Pets show-all/show-less pattern.
+  const [pendingExpanded, setPendingExpanded] = useState(false);
+  const [friendsExpanded, setFriendsExpanded] = useState(false);
+  const visiblePendingInvites = pendingExpanded ? pendingInvites : pendingInvites.slice(0, 3);
+  const visibleFriends        = friendsExpanded ? friendsWhoJoined : friendsWhoJoined.slice(0, 3);
+
   // Owner header visibility helpers
   const hasDisplayName  = Boolean(meData?.displayName);
   const hasCity         = Boolean(meData?.locationCity);
@@ -782,7 +789,7 @@ export default function ProfileScreen() {
               Pending
             </Text>
             <View style={styles.listGap}>
-              {pendingInvites.map((invite) => (
+              {visiblePendingInvites.map((invite) => (
                 <View
                   key={invite.id}
                   style={[styles.followRow, { borderColor: colors.border, backgroundColor: colors.card }]}
@@ -809,6 +816,20 @@ export default function ProfileScreen() {
                 </View>
               ))}
             </View>
+            {pendingInvites.length > 3 && (
+              <TouchableOpacity
+                onPress={() => setPendingExpanded((v) => !v)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={pendingExpanded ? 'Collapse pending invites' : 'Show all pending invites'}
+                activeOpacity={0.7}
+                style={{ marginTop: 8 }}
+              >
+                <Text style={[styles.sectionToggleText, { color: colors.mutedForeground }]}>
+                  {pendingExpanded ? 'show less ↑' : `show all (${pendingInvites.length}) ↓`}
+                </Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
 
@@ -819,7 +840,7 @@ export default function ProfileScreen() {
               Friends who joined
             </Text>
             <View style={styles.listGap}>
-              {friendsWhoJoined.map((friend) => (
+              {visibleFriends.map((friend) => (
                 <View
                   key={friend.userId}
                   style={[styles.followRow, { borderColor: colors.border, backgroundColor: colors.card }]}
@@ -848,6 +869,20 @@ export default function ProfileScreen() {
                 </View>
               ))}
             </View>
+            {friendsWhoJoined.length > 3 && (
+              <TouchableOpacity
+                onPress={() => setFriendsExpanded((v) => !v)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel={friendsExpanded ? 'Collapse friends who joined' : 'Show all friends who joined'}
+                activeOpacity={0.7}
+                style={{ marginTop: 8 }}
+              >
+                <Text style={[styles.sectionToggleText, { color: colors.mutedForeground }]}>
+                  {friendsExpanded ? 'show less ↑' : `show all (${friendsWhoJoined.length}) ↓`}
+                </Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
 
