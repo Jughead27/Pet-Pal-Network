@@ -55,7 +55,19 @@ import {
   customFetch,
 } from '@workspace/api-client-react';
 import type { Pet, PackedPetItem, FollowedSpeciesItem, FollowedBreedItem, MeProfile } from '@workspace/api-client-react';
+import { formatPostAge } from '@/utils/formatPostAge';
 import { useFollowsContext } from '@/context/FollowsContext';
+
+/**
+ * "sent …" line for a pending invite tile. Reuses the app-wide relative
+ * timestamp convention (formatPostAge): relative under 7 days ("sent 3d ago"),
+ * absolute lowercase date after ("sent jun 12").
+ */
+function formatInviteSent(createdAt: string): string {
+  const age = formatPostAge(createdAt);
+  if (age === 'now') return 'sent just now';
+  return /^\d/.test(age) ? `sent ${age} ago` : `sent ${age}`;
+}
 import { usePackContext } from '@/context/PackContext';
 
 export default function ProfileScreen() {
@@ -800,6 +812,9 @@ export default function ProfileScreen() {
                       <Text style={[styles.petName, { color: colors.foreground }]}>pending</Text>
                       <Text style={[styles.petSubtitle, { color: colors.mutedForeground }]}>
                         {invite.code}
+                      </Text>
+                      <Text style={[styles.petSubtitle, { color: colors.mutedForeground }]}>
+                        {formatInviteSent(invite.createdAt)}
                       </Text>
                     </View>
                   </View>
