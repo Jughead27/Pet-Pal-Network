@@ -168,6 +168,10 @@ export default function ProfileScreen() {
   // My Pets: all shown by default, collapsible. My Pack: 3 most recent shown
   // by default, expandable.
   const [myPetsCollapsed, setMyPetsCollapsed] = useState(false);
+  // Collapse/show-more for the two invite sections — declared here with the
+  // other hooks (NOT below the early returns — rules of hooks).
+  const [pendingExpanded, setPendingExpanded] = useState(false);
+  const [friendsExpanded, setFriendsExpanded] = useState(false);
   const [packExpanded,    setPackExpanded]    = useState(false);
   const [selectedCoPetIds,  setSelectedCoPetIds]  = useState<Set<string>>(new Set());
 
@@ -369,10 +373,7 @@ export default function ProfileScreen() {
   const pendingInvites   = (inviteData?.invites ?? []).filter((i) => i.status === 'active');
   const friendsWhoJoined = inviteData?.friendsWhoJoined ?? [];
 
-  // Collapse/show-more for the two invite sections — 3-row default,
-  // mirroring the My Pets show-all/show-less pattern.
-  const [pendingExpanded, setPendingExpanded] = useState(false);
-  const [friendsExpanded, setFriendsExpanded] = useState(false);
+  // 3-row default, mirroring the My Pets show-all/show-less pattern.
   const visiblePendingInvites = pendingExpanded ? pendingInvites : pendingInvites.slice(0, 3);
   const visibleFriends        = friendsExpanded ? friendsWhoJoined : friendsWhoJoined.slice(0, 3);
 

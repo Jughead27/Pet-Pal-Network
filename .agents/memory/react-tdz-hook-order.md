@@ -16,3 +16,8 @@ In a React function component, every `const` variable must be declared **before*
 `pet/[id].tsx` — `editTagExclude` at line 231 referenced `selectedPost`, which was declared at line 573. Fix: moved `selectedPost` to line 232, using `pet?.posts ?? []` (optional chaining) so it is safe even when `pet` is still loading. Removed the duplicate declaration that had been at line 573.
 
 The symptom was Expo Router's error boundary showing "Something went wrong / Please reload the app to continue" for **every** navigation to the pet profile screen, regardless of data state.
+
+## Variant: hooks declared below early returns
+Same "something went wrong" symptom, different mechanism. Adding `useState` next to the *data derivation* it feeds — instead of next to the other hooks — placed it below `if (loading) return …` early returns. Hook count then changes on the loading→loaded transition → React throws "Rendered more hooks than during the previous render" on every load, for every user. TypeScript does not catch this either.
+
+**How to apply:** in large screens with early returns, all new hooks go in the hook block at the top of the component; only derived (non-hook) values may live below the returns.
