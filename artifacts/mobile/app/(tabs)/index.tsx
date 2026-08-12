@@ -197,33 +197,56 @@ export default function HomeScreen() {
   // as the keyboard resize; same correction: compute which post the user was
   // on from the PRE-change height, then arm the existing verify-and-correct
   // loop to re-anchor to that post at the new height.
+  // Debounced (180ms): on mobile web the URL-bar collapse/expand animates over
+  // several frames, so windowHeight ticks through multiple intermediate values
+  // in quick succession. Firing a correction loop per tick made overlapping
+  // loops fight the user's momentum scroll (rapid-scroll bug). We wait until
+  // windowHeight has been stable for 180ms before running the existing
+  // re-anchor logic — the timer is cleared and restarted on every change.
+  // prevWebHeightRef is only advanced when the settled body runs, so the
+  // scrollTop→index math still divides by the true pre-transition height.
   const prevWebHeightRef = useRef(windowHeight);
+  const webHeightSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (Platform.OS !== 'web') return;
-    const prevH = prevWebHeightRef.current;
-    if (windowHeight === prevH) return;
-    prevWebHeightRef.current = windowHeight;
-    // Comment sheet open → keyboard-driven resize; handled by the existing
-    // restore-on-close path. Don't fight it.
-    if (commentSheetPostIdRef.current) return;
-    // A restore already in flight re-reads pageHeightForRestoreRef each frame,
-    // so it adapts to the new height on its own.
-    if (!webRestoreDone.current) return;
-    const node = (flatListRef.current as unknown as {
-      getScrollableNode?: () => HTMLElement | null;
-    } | null)?.getScrollableNode?.() ?? null;
-    if (!node || prevH <= 0) return;
-    const list = postsForRestoreRef.current;
-    if (list.length === 0) return;
-    // scrollTop is still in pre-change pixels at this point — divide by the
-    // OLD height to recover the post the user was actually viewing.
-    const idx = Math.min(Math.max(Math.round(node.scrollTop / prevH), 0), list.length - 1);
-    const target = list[idx];
-    if (!target) return;
-    restoreTargetIdRef.current = target.id;
-    webRestoreToken.current += 1; // invalidate any stale loop
-    webRestoreDone.current = false;
-    runWebFeedRestore();
+    if (webHeightSettleTimerRef.current !== null) {
+      clearTimeout(webHeightSettleTimerRef.current);
+      webHeightSettleTimerRef.current = null;
+    }
+    if (windowHeight === prevWebHeightRef.current) return;
+    webHeightSettleTimerRef.current = setTimeout(() => {
+      webHeightSettleTimerRef.current = null;
+      const prevH = prevWebHeightRef.current;
+      if (windowHeight === prevH) return;
+      prevWebHeightRef.current = windowHeight;
+      // Comment sheet open → keyboard-driven resize; handled by the existing
+      // restore-on-close path. Don't fight it.
+      if (commentSheetPostIdRef.current) return;
+      // A restore already in flight re-reads pageHeightForRestoreRef each frame,
+      // so it adapts to the new height on its own.
+      if (!webRestoreDone.current) return;
+      const node = (flatListRef.current as unknown as {
+        getScrollableNode?: () => HTMLElement | null;
+      } | null)?.getScrollableNode?.() ?? null;
+      if (!node || prevH <= 0) return;
+      const list = postsForRestoreRef.current;
+      if (list.length === 0) return;
+      // scrollTop is divided by the OLD (pre-transition) height to recover the
+      // post the user was actually viewing.
+      const idx = Math.min(Math.max(Math.round(node.scrollTop / prevH), 0), list.length - 1);
+      const target = list[idx];
+      if (!target) return;
+      restoreTargetIdRef.current = target.id;
+      webRestoreToken.current += 1; // invalidate any stale loop
+      webRestoreDone.current = false;
+      runWebFeedRestore();
+    }, 180);
+    return () => {
+      if (webHeightSettleTimerRef.current !== null) {
+        clearTimeout(webHeightSettleTimerRef.current);
+        webHeightSettleTimerRef.current = null;
+      }
+    };
   }, [windowHeight, runWebFeedRestore]);
 
   // ── Tab-press scroll-to-top ───────────────────────────────────────────────
@@ -348,7 +371,10 @@ export default function HomeScreen() {
           windowSize={3}
           maxToRenderPerBatch={2}
           initialNumToRender={1}
-          removeClippedSubviews
+          // removeClippedSubviews has known RNW glitches: it can unmount
+          // visible items during rapid scroll-position changes (blank/black
+          // frames). Keep it on native only.
+          removeClippedSubviews={Platform.OS !== 'web'}
         />
       )}
 

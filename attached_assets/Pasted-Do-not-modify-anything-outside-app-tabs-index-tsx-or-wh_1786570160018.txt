@@ -1,0 +1,34 @@
+Do not modify anything outside app/(tabs)/index.tsx (or wherever the Home feed screen component lives — the one containing the FlatList with pagingEnabled and the windowHeight re-anchoring useEffect). This is a narrow, two-part fix. Preserve all existing behavior not explicitly described below — do not refactor, rename, or reorganize anything else in this file.
+
+CHANGE 1 — Debounce the web viewport-height re-anchor effect.
+
+Currently this effect fires on every change to windowHeight:
+
+  const prevWebHeightRef = useRef(windowHeight);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const prevH = prevWebHeightRef.current;
+    if (windowHeight === prevH) return;
+    prevWebHeightRef.current = windowHeight;
+    ...
+  }, [windowHeight, runWebFeedRestore]);
+
+On mobile browsers, the URL bar collapsing/expanding animates over several frames, so windowHeight ticks through multiple intermediate values in quick succession — each tick currently starts a new correction loop, and these loops can overlap and fight the user's own momentum scroll (this is the suspected cause of the "feed rapid-scrolls out of control" bug).
+
+Fix: debounce so the re-anchor logic only runs once windowHeight has been stable for 180ms (i.e. wait 180ms after the last change before treating it as "settled" and running the existing logic). Use a ref-based timeout (setTimeout/clearTimeout), not a state-based debounce, to avoid extra re-renders. The 180ms timer should be cleared and restarted on every windowHeight change. Keep every existing check inside the effect body (comment-sheet-open bail, in-flight-restore bail, etc.) exactly as-is — only change WHEN the effect body runs, not what it does. Clear the pending timeout in the effect's cleanup function.
+
+CHANGE 2 — Disable removeClippedSubviews on web only.
+
+Currently the FlatList has:
+
+  removeClippedSubviews
+
+as a bare prop (always on, all platforms). removeClippedSubviews has known rendering glitches on React Native Web (can unmount visible items during rapid/erratic scroll position changes, causing a blank/black frame) — this is suspected as the cause of the "occasional black screen while scrolling" reports.
+
+Fix: make it platform-conditional — keep it enabled on native (iOS/Android), disable it on web:
+
+  removeClippedSubviews={Platform.OS !== 'web'}
+
+Do not change windowSize, maxToRenderPerBatch, or initialNumToRender — leave those exactly as they are.
+
+ACCEPTANCE TEST: After deploying, on mobile web (iOS Safari and Android Chrome), scroll the Home feed in a way that triggers the URL bar to collapse and expand mid-scroll (a normal fast scroll usually does this). Confirm: (1) the feed does not jump/rapid-scroll during or after the URL bar transition, (2) no blank/black frames appear during scrolling, (3) the existing comment-sheet-open/close restore behavior still works correctly (open a comment sheet, close it, confirm it lands back on the exact same post), (4) native app behavior (iOS/Android app, not web) is completely unchanged.
