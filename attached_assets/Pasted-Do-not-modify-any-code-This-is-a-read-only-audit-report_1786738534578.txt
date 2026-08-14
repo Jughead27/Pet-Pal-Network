@@ -1,0 +1,30 @@
+Do not modify any code. This is a read-only audit — report findings only, apply zero fixes.
+
+Perform a full codebase audit of this project across four categories. For each category, list findings ranked by severity (Critical / High / Medium / Low), with a short description of each issue, the file/location it's in, and why it matters. Do not fix anything — just report.
+
+1. SECURITY
+- Authentication/authorization gaps (missing auth checks on endpoints, improper permission checks, insecure session handling)
+- Injection risk (SQL injection, XSS, unsanitized user input anywhere it reaches a query, template, or shell command)
+- Secrets handling (hardcoded API keys/credentials, secrets committed to source, secrets logged or exposed in error messages/responses)
+- Data over-exposure (API endpoints returning more fields than the client needs, especially sensitive ones like emails, internal IDs, or other users' private data)
+- Rate limiting (missing rate limits on auth endpoints, invite endpoints, or anything abuse-prone)
+
+2. EFFICIENCY / PERFORMANCE
+- N+1 query patterns (loops that trigger a DB query per iteration instead of a single batched query)
+- Missing database indexes on columns used in WHERE/JOIN/ORDER BY clauses
+- Over-fetching (queries pulling full rows/objects when only a few fields are used)
+- Bundle size issues (large unused dependencies, missing code-splitting, duplicate libraries)
+
+3. BEST PRACTICES
+- Inconsistent patterns (the same problem solved differently in different files — e.g. mixed error-handling styles, inconsistent state management)
+- Dead code (unused functions, components, imports, or entire files no longer referenced)
+- Type-safety gaps (any usage of `any`, missing type coverage on function boundaries, unsafe type assertions/casts)
+
+4. CLEANLINESS
+- Duplicated logic (the same logic implemented more than once instead of shared/extracted)
+- Stale comments (comments that no longer match the code they describe, or reference removed features)
+- File organization (files in the wrong directory, inconsistent naming conventions, oversized files that should be split)
+
+OUTPUT FORMAT: For each category, a markdown section with a table or list of findings. Each finding needs: severity, file path, one-sentence description, and one-sentence rationale for why it matters. At the end, add a "Summary" section with a total count of findings per severity level across all four categories.
+
+Do not make any code changes. Do not attempt to fix anything you find. This is a report-only audit.
