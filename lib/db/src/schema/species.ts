@@ -11,6 +11,7 @@ export const speciesTable = pgTable(
   },
   (table) => [
     uniqueIndex("species_name_uidx").on(table.name),
+    index("species_sort_order_idx").on(table.sortOrder),
   ],
 );
 

@@ -22,6 +22,7 @@ export const blocksTable = pgTable(
   (t) => [
     unique("blocks_blocker_blocked_uniq").on(t.blockerId, t.blockedId),
     index("blocks_blocker_id_idx").on(t.blockerId),
+    index("blocks_blocker_id_created_at_idx").on(t.blockerId, t.createdAt),
     index("blocks_blocked_id_idx").on(t.blockedId),
   ],
 );

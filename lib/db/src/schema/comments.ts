@@ -26,6 +26,7 @@ export const commentsTable = pgTable(
   },
   (table) => [
     index("comments_post_id_idx").on(table.postId),
+    index("comments_post_id_created_at_idx").on(table.postId, table.createdAt),
     index("comments_user_id_idx").on(table.userId),
   ],
 );

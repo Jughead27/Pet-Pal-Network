@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, index } from "drizzle-orm/pg-core";
 import { usersTable } from "./users";
 
 // ─── audit_log ────────────────────────────────────────────────────────────────
@@ -21,16 +21,22 @@ import { usersTable } from "./users";
 // metadata is a free jsonb bag for supporting context — report id, reason,
 // breed name, pet count, etc.  Shape is per-action; no schema enforced here.
 
-export const auditLogTable = pgTable("audit_log", {
-  id:         uuid("id").primaryKey().defaultRandom(),
-  actorId:    text("actor_id")
-                .notNull()
-                .references(() => usersTable.id),
-  action:     text("action").notNull(),
-  targetType: text("target_type"),
-  targetId:   text("target_id"),
-  metadata:   jsonb("metadata"),
-  createdAt:  timestamp("created_at").defaultNow().notNull(),
-});
+export const auditLogTable = pgTable(
+  "audit_log",
+  {
+    id:         uuid("id").primaryKey().defaultRandom(),
+    actorId:    text("actor_id")
+                  .notNull()
+                  .references(() => usersTable.id),
+    action:     text("action").notNull(),
+    targetType: text("target_type"),
+    targetId:   text("target_id"),
+    metadata:   jsonb("metadata"),
+    createdAt:  timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    index("audit_log_created_at_idx").on(table.createdAt),
+  ],
+);
 
 export type AuditLog = typeof auditLogTable.$inferSelect;

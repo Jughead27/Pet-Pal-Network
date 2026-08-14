@@ -44,6 +44,7 @@ export const postsTable = pgTable(
   },
   (table) => [
     index("posts_pet_id_idx").on(table.petId),
+    index("posts_pet_id_created_at_idx").on(table.petId, table.createdAt),
   ],
 );
 

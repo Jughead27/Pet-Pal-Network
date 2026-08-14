@@ -1,0 +1,16 @@
+Do not modify any file outside the database schema/migration files (wherever indexes are defined/added in this project's schema setup — likely lib/db/src/schema/ and a corresponding migration file). Do not touch any route files, any query logic, or any client/mobile code. This is a schema-only change.
+
+CONTEXT: Several tables are queried and sorted by created_at (often in combination with another filter column) but lack an index matching that access pattern, forcing Postgres to scan and sort on every request rather than using an index. This will degrade as data volume grows. Add the following composite indexes:
+
+1. posts table: add an index on (pet_id, created_at) — currently only pet_id is indexed alone, but queries filter by pet_id AND sort by created_at.
+2. notifications table: add an index on (user_id, created_at) — currently only user_id is indexed alone.
+3. comments table: add an index on (post_id, created_at) — currently only post_id-related lookups exist without created_at in the composite.
+4. blocks table: add an index on (blocker_id, created_at) — currently only blocker_id is indexed alone.
+5. audit_log table: add an index on (created_at) — currently has no index on this column at all, despite being sorted/paginated by it in the admin audit-log listing.
+6. species table: add an index on (sort_order) — currently unindexed despite being the sort key for the species picker list.
+
+For each, follow whatever indexing convention/syntax is already established elsewhere in this schema (check existing index definitions in the same schema files for the pattern to match — naming convention, migration style, etc.). Generate the appropriate migration file(s) using the project's existing migration tooling/flow — do not hand-write raw SQL unless that's how existing indexes in this codebase were added.
+
+Do NOT modify any existing column definitions, table structures, or non-index schema elements. Do NOT touch any query code in the route files — these queries will automatically benefit from the new indexes without any code changes, since the indexes just give Postgres a faster path to the same results.
+
+ACCEPTANCE TEST: After migration runs successfully, (1) the app functions completely normally — feed loads, pet profiles load, notifications work, comments load, admin audit log loads, species/breed picker works — with zero behavior change, since this is a pure performance optimization. (2) Confirm the migration applied without errors in the deploy logs.
