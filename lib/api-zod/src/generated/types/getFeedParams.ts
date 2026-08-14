@@ -28,4 +28,14 @@ petId?: string;
  * Sort order for the feed. "fresh" (default) returns posts newest-first (current behaviour — Home and Nursery always use this default). "popular" orders by a 7-day engagement score (boops_7d + 3 × treats_7d), descending, tiebroken by created_at desc so zero-score posts still read newest-first. Combinable with speciesId and nursery; archived exclusion unchanged.
  */
 sort?: GetFeedSort;
+/**
+ * Page size (default 20, max 50).
+ * @minimum 1
+ * @maximum 50
+ */
+limit?: number;
+/**
+ * Opaque pagination cursor from a previous response's nextCursor. Omit for the first page. Must be used with the same filter/sort params as the request that produced it.
+ */
+cursor?: string;
 };

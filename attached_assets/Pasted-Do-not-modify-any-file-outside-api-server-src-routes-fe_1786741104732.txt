@@ -1,0 +1,26 @@
+Do not modify any file outside: api-server/src/routes/feed.ts, the mobile Home feed screen (app/(tabs)/index.tsx), the mobile Sniff/discovery screen (app/(tabs)/discovery.tsx), the mobile Nursery screen (app/(tabs)/nursery.tsx), the shared feed data-fetching hook(s) used by all three, and wherever schema indexes are defined (for the new indexes below). Do not touch pet post-history or admin listings — those are separate, later work.
+
+CONTEXT: The /feed endpoint (api-server/src/routes/feed.ts) powers Home, Sniff, AND Nursery — all three are filtered/sorted views of the same query (Home = default, Sniff = species/breed/sort filters, Nursery = isNursery filter + optional species). It currently has no LIMIT and fetches every eligible post on every request, with a heavy per-row select (3 left-joined aggregate counts for boops/treats/comments, plus correlated subqueries for author name, pack membership, ownership, and tagged-pets json_agg). Nursery additionally issues TWO concurrent unbounded requests when a species filter is active (one unfiltered call to derive species chips, one filtered call for the grid) — this should be addressed in the same pass.
+
+PART 1 — SCHEMA: add these indexes (follow the existing index() convention already used in this schema):
+1. pets.breed_id — used by Sniff's breed filter, currently unindexed.
+2. posts.created_at — a standalone index on this column alone (not the existing (pet_id, created_at) composite), needed for Fresh sort (Sniff) and newest-first ordering (Nursery), neither of which filter by pet_id.
+3. boops: composite (post_id, created_at).
+4. treats: composite (post_id, created_at).
+   Both needed for Sniff's Popular sort 7-day window aggregation.
+5. posts.is_nursery — currently unindexed boolean used by the Nursery filter. Consider a composite (is_nursery, created_at) given Nursery also needs the same createdAt-ordering support as #2 — use judgment on whether a single composite serves both needs better than two separate indexes, matching whatever this schema's existing index conventions suggest.
+
+PART 2 — API (feed.ts):
+1. Add a page size (default ~20) and an optional cursor parameter to the feed endpoint.
+2. Use cursor-based pagination — for Fresh/chronological/Nursery's default order, key the cursor on (created_at, post id). For Sniff's Popular sort (score-based), key the cursor on (popularity score, post id) or whatever stable tiebreak makes sense given the existing score logic at lines 69-82 — investigate before implementing, since score-based cursoring is less standard than timestamp-based.
+3. Preserve ALL existing filter logic (species, breed, Spotlight, isNursery) and the existing heavy per-row select — only add the LIMIT and cursor-based bound on top. Do not change what's eligible or how it's joined/aggregated, only how many rows come back per request.
+4. Return the page plus a nextCursor (null/absent when no more results).
+
+PART 3 — MOBILE (three screens):
+1. Update the shared feed data-fetching hook(s) to support pagination — check for an existing infinite-query/paginated pattern already used elsewhere in this codebase (React Query) and follow that exact convention.
+2. Home feed (index.tsx): wire the FlatList's onEndReached to fetch the next page. Preserve ALL existing behavior exactly as-is — scroll-snap paging, viewport-height re-anchoring, comment-sheet restore, tab-press-scroll-to-top, post-success-scroll-to-top. Pagination must be purely additive on top of the existing FlatList data source; do not touch the existing fragile scroll logic.
+3. Sniff (discovery.tsx): wire its list's onEndReached to fetch the next page, respecting whatever filter/sort state (species, breed, Spotlight, Fresh/Popular) is currently active — changing a filter or sort should reset pagination back to page 1, not append onto stale results.
+4. Nursery (nursery.tsx): wire its grid's onEndReached to fetch the next page for the filtered/grid call (lines 94-97). For the unfiltered species-chip-derivation call (line 89), evaluate whether it actually needs full pagination or whether a small fixed limit is sufficient — this call exists only to enumerate which species have nursery posts, not to display a scrollable list, so it likely doesn't need the same treatment as the other two. Use judgment and note your reasoning.
+5. Handle "loading next page" gracefully in all relevant screens (a small loading indicator at the list's end) without disrupting already-loaded content.
+
+ACCEPTANCE TEST: (1) Home feed: loads normally, scrolling smoothly loads more posts with no jump/flash, all existing feed behaviors work exactly as before, no regression of the rapid-scroll/black-screen fixes already shipped. (2) Sniff: loads normally, scrolling loads more posts, changing species/breed filter or Fresh/Popular sort correctly resets to a fresh first page. (3) Nursery: loads normally, scrolling the grid loads more posts, species chip selection still works correctly. (4) All three screens behave normally with very few posts (no broken "load more" UI when there's nothing left to load). (5) Confirm new indexes exist post-migration and app behavior is otherwise unchanged.

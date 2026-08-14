@@ -45,7 +45,9 @@ import { useColumnWidth } from '@/hooks/useColumnWidth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { GetFeedSort, useGetFeed, useGetSpotlight } from '@workspace/api-client-react';
+import { GetFeedSort, useGetFeed, useGetFeedInfinite, useGetSpotlight, getGetFeedQueryKey } from '@workspace/api-client-react';
+import type { FeedResponse } from '@workspace/api-client-react';
+import type { InfiniteData } from '@tanstack/react-query';
 import type { FeedPost } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import FocalImage from '@/components/FocalImage';
@@ -111,21 +113,41 @@ export default function SniffScreen() {
   const baseParams = sortParam ? { sort: sortParam } : {};
 
   // ── Feed data — unfiltered (for chips) + optionally filtered/sorted ────────
+  // Chip derivation only needs to enumerate which species appear among recent
+  // posts — a single max-size page (50) is a good proxy and avoids paginating
+  // a list that is never displayed.
   const { data: allData, isLoading: allLoading, isError: allError } =
-    useGetFeed(baseParams);
+    useGetFeed({ ...baseParams, limit: 50 });
 
-  const { data: filteredData, isLoading: filteredLoading, isError: filteredError } =
-    useGetFeed(
-      petFilter
-        ? { ...baseParams, petId: petFilter.id }
-        : activeSpeciesId
-          ? {
-              ...baseParams,
-              speciesId: activeSpeciesId,
-              ...(activeBreed ? { breedId: activeBreed.id } : {}),
-            }
-          : baseParams,
-    );
+  // Grid/pager posts — cursor-paginated. The params live inside the queryKey,
+  // so changing species/breed/sort/pet filter automatically starts from a
+  // fresh first page (never appends onto stale results). The '/api/feed'
+  // prefix stays FIRST in the key so existing invalidateQueries(
+  // getGetFeedQueryKey()) calls elsewhere still prefix-match.
+  const filteredParams = petFilter
+    ? { ...baseParams, petId: petFilter.id }
+    : activeSpeciesId
+      ? {
+          ...baseParams,
+          speciesId: activeSpeciesId,
+          ...(activeBreed ? { breedId: activeBreed.id } : {}),
+        }
+      : baseParams;
+
+  const {
+    data: filteredData, isLoading: filteredLoading, isError: filteredError,
+    fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useGetFeedInfinite<InfiniteData<FeedResponse>>(filteredParams, {
+    query: {
+      queryKey: [...getGetFeedQueryKey(filteredParams), 'infinite'],
+      initialPageParam: undefined,
+      getNextPageParam: (last: FeedResponse) => last.nextCursor ?? undefined,
+    } as never,
+  });
+
+  const loadNextPage = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Breeds for the selected species — drives the breed picker sheet.
   const { data: breedsData } = useQuery({
@@ -141,8 +163,11 @@ export default function SniffScreen() {
   const spotlightVisible  = petFilter !== null || (spotlightData?.pet ?? null) !== null;
   const subRowHasContent  = breedChipVisible || spotlightVisible;
 
-  // Posts shown in the grid — always the filtered+sorted result.
-  const posts: FeedPost[] = filteredData?.posts ?? [];
+  // Posts shown in the grid — always the filtered+sorted result (all pages).
+  const posts: FeedPost[] = useMemo(
+    () => filteredData?.pages.flatMap((p) => p.posts) ?? [],
+    [filteredData],
+  );
 
   // Chips derived from the UNFILTERED results (any sort — same post set).
   // Only species with a catalogue speciesId get a chip.
@@ -677,6 +702,9 @@ export default function SniffScreen() {
             maxToRenderPerBatch={2}
             initialNumToRender={1}
             removeClippedSubviews
+            // Pagination — prefetch ahead; no footer cell in the snap pager.
+            onEndReached={loadNextPage}
+            onEndReachedThreshold={2}
           />
         )}
 
@@ -873,6 +901,16 @@ export default function SniffScreen() {
             ? { paddingBottom: 84 }
             : { paddingBottom: insets.bottom + 80 }
         }
+        // Pagination — append next page as the user nears the grid's end.
+        onEndReached={loadNextPage}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.pageFooter}>
+              <ActivityIndicator color={colors.primary} size="small" />
+            </View>
+          ) : null
+        }
       />
     </View>
   );
@@ -884,6 +922,7 @@ const styles = StyleSheet.create({
   fill:     { flex: 1 },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   errorText: { fontSize: 14, textAlign: 'center' },
+  pageFooter: { paddingVertical: 16, alignItems: 'center' },
 
   // ── Header bar — solid opaque wrapper in normal flex flow above the grid ───
   // No position:absolute; the FlatList is a sibling below this, so grid content

@@ -45,6 +45,10 @@ export const postsTable = pgTable(
   (table) => [
     index("posts_pet_id_idx").on(table.petId),
     index("posts_pet_id_created_at_idx").on(table.petId, table.createdAt),
+    // Global newest-first ordering (Fresh sort on Sniff, feed default).
+    index("posts_created_at_idx").on(table.createdAt),
+    // Nursery filter + newest-first ordering in one index.
+    index("posts_is_nursery_created_at_idx").on(table.isNursery, table.createdAt),
   ],
 );
 

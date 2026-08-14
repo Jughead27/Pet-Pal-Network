@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import {
+  useInfiniteQuery,
   useMutation,
   useQuery
 } from '@tanstack/react-query';
@@ -13,6 +14,8 @@ import type {
   MutationFunction,
   QueryFunction,
   QueryKey,
+  UseInfiniteQueryOptions,
+  UseInfiniteQueryResult,
   UseMutationOptions,
   UseMutationResult,
   UseQueryOptions,
@@ -202,11 +205,60 @@ export const getFeed = async (params?: GetFeedParams, options?: RequestInit): Pr
 
 
 
+export const getGetFeedInfiniteQueryKey = (params?: GetFeedParams,) => {
+    return [
+    'infinite', `/api/feed`, ...(params ? [params] : [])
+    ] as const;
+    }
+
 export const getGetFeedQueryKey = (params?: GetFeedParams,) => {
     return [
     `/api/feed`, ...(params ? [params] : [])
     ] as const;
     }
+
+
+export const getGetFeedInfiniteQueryOptions = <TData = Awaited<ReturnType<typeof getFeed>>, TError = ErrorType<ErrorResponse>>(params?: GetFeedParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFeedInfiniteQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeed>>> = ({ signal, pageParam }) => getFeed({...params, 'cursor': (pageParam as string | undefined) ?? params?.['cursor']}, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseInfiniteQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFeedInfiniteQueryResult = NonNullable<Awaited<ReturnType<typeof getFeed>>>
+export type GetFeedInfiniteQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get feed
+ */
+
+export function useGetFeedInfinite<TData = Awaited<ReturnType<typeof getFeed>>, TError = ErrorType<ErrorResponse>>(
+ params?: GetFeedParams, options?: { query?:UseInfiniteQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFeedInfiniteQueryOptions(params,options)
+
+  const query = useInfiniteQuery(queryOptions) as  UseInfiniteQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
 
 
 export const getGetFeedQueryOptions = <TData = Awaited<ReturnType<typeof getFeed>>, TError = ErrorType<ErrorResponse>>(params?: GetFeedParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeed>>, TError, TData>, request?: SecondParameter<typeof customFetch>}

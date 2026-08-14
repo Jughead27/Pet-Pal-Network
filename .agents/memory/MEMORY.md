@@ -35,4 +35,5 @@
 - [Spotlight Architecture](spotlight-architecture.md) — singleton state table, auto/manual resolution, invisible treat criterion, breed filter, mutually-exclusive admin confirms.
 - [RN-web pager viewport-height instability](rnw-pager-viewport-height.md) — URL-bar collapse resizes windowHeight-sized cells mid-scroll; re-anchor via verify-and-correct loop.
 - [Animated style pointerEvents race](animated-style-pointerevents-race.md) — never put pointerEvents in an animated style array on web; outer box-none prop + inner toggling View wrapper.
+- [Feed cursor pagination](feed-pagination.md) — keyset cursor on /feed; to_char microsecond cursor rule; infinite queryKey must keep '/api/feed' prefix first.
 - [Zoom-out + Fill Architecture](zoom-out-fill-architecture.md) — rect fractions may exceed [0,1]; canonical compose-time avg color in crop_fill_color; allowZoomOut gate; web canvas full-image draw trick.

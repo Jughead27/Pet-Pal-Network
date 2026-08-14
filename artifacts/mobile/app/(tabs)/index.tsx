@@ -13,7 +13,7 @@
  * each FeedPage instance and needs no lifted state.
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -26,7 +26,9 @@ import {
 } from 'react-native';
 import { useNavigation } from 'expo-router';
 import { useColors } from '@/hooks/useColors';
-import { useGetFeed, getGetFeedQueryKey } from '@workspace/api-client-react';
+import { useGetFeedInfinite, getGetFeedQueryKey } from '@workspace/api-client-react';
+import type { FeedResponse } from '@workspace/api-client-react';
+import type { InfiniteData } from '@tanstack/react-query';
 import { getPostSuccessSignalTime, clearPostSuccessSignal } from '@/utils/feedScrollSignal';
 import type { FeedPost } from '@workspace/api-client-react';
 import FeedPage, { type CommentSheetConfig } from '@/components/FeedPage';
@@ -41,10 +43,32 @@ export default function HomeScreen() {
   // can replace the posts array mid-scroll (prepends shift every index while
   // pixel scrollTop stays put → visual jump). Deliberate invalidations from
   // add/edit/pet screens still mark this query stale and refetch as before.
-  const { data, dataUpdatedAt, isLoading, isError } = useGetFeed(undefined, {
-    query: { queryKey: getGetFeedQueryKey(), refetchOnWindowFocus: false },
+  // Cursor pagination via useGetFeedInfinite. The queryKey keeps the
+  // '/api/feed' prefix FIRST so every existing invalidateQueries(
+  // getGetFeedQueryKey()) call elsewhere still prefix-matches this cache entry.
+  const {
+    data, dataUpdatedAt, isLoading, isError,
+    fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useGetFeedInfinite<InfiniteData<FeedResponse>>(undefined, {
+    query: {
+      queryKey: [...getGetFeedQueryKey(), 'infinite'],
+      refetchOnWindowFocus: false,
+      initialPageParam: undefined,
+      getNextPageParam: (last: FeedResponse) => last.nextCursor ?? undefined,
+    } as never,
   });
-  const posts = data?.posts ?? [];
+  const posts = useMemo(
+    () => data?.pages.flatMap((p) => p.posts) ?? [],
+    [data],
+  );
+
+  // Fetch the next page well before the user reaches the last full-screen
+  // page. No footer cell here: the pager snaps to full-page intervals, and a
+  // short footer would break snap alignment — prefetching ahead means the
+  // end is normally never seen.
+  const handleEndReached = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // ── Window dimensions — used as the web fallback for page height ──────────
   // On web, the flex:1 chain inside Expo Router's Tabs shell never resolves to
@@ -375,6 +399,9 @@ export default function HomeScreen() {
           // visible items during rapid scroll-position changes (blank/black
           // frames). Keep it on native only.
           removeClippedSubviews={Platform.OS !== 'web'}
+          // Pagination — purely additive: appends to the data array only.
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={2}
         />
       )}
 

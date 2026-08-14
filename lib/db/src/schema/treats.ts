@@ -18,6 +18,8 @@ export const treatsTable = pgTable(
   },
   (table) => [
     index("treats_post_id_idx").on(table.postId),
+    // Popular-sort 7-day window aggregation per post.
+    index("treats_post_id_created_at_idx").on(table.postId, table.createdAt),
     index("treats_user_id_idx").on(table.userId),
     // Composite index for daily-cap queries:
     // COUNT treats WHERE user_id = ? AND created_at >= <start of day>

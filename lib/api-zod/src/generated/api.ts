@@ -21,12 +21,18 @@ export const HealthCheckResponse = zod.object({
  * Returns recency-ordered posts with pet info, reaction counts, and viewer state
  * @summary Get feed
  */
+export const getFeedQueryLimitMax = 50;
+
+
+
 export const GetFeedQueryParams = zod.object({
   "nursery": zod.coerce.boolean().optional().describe('When true, returns only nursery (is_nursery=true) posts. Omit or false for the full feed.'),
   "speciesId": zod.coerce.string().optional().describe('When set, returns only posts from pets of this species (by catalogue species UUID). Combinable with nursery. Omit for all species.'),
   "breedId": zod.coerce.string().optional().describe('Narrow further to a catalogue breed UUID. Requires speciesId; the server validates the breed belongs to that species (400 if not).\n'),
   "petId": zod.coerce.string().optional().describe('Return only this pet\'s posts (primary pet or tagged via post_pets). Used by the Spotlight banner tap-through filter.\n'),
-  "sort": zod.enum(['fresh', 'popular']).optional().describe('Sort order for the feed. \"fresh\" (default) returns posts newest-first (current behaviour — Home and Nursery always use this default). \"popular\" orders by a 7-day engagement score (boops_7d + 3 × treats_7d), descending, tiebroken by created_at desc so zero-score posts still read newest-first. Combinable with speciesId and nursery; archived exclusion unchanged.\n')
+  "sort": zod.enum(['fresh', 'popular']).optional().describe('Sort order for the feed. \"fresh\" (default) returns posts newest-first (current behaviour — Home and Nursery always use this default). \"popular\" orders by a 7-day engagement score (boops_7d + 3 × treats_7d), descending, tiebroken by created_at desc so zero-score posts still read newest-first. Combinable with speciesId and nursery; archived exclusion unchanged.\n'),
+  "limit": zod.coerce.number().min(1).max(getFeedQueryLimitMax).optional().describe('Page size (default 20, max 50).'),
+  "cursor": zod.coerce.string().optional().describe('Opaque pagination cursor from a previous response\'s nextCursor. Omit for the first page. Must be used with the same filter\/sort params as the request that produced it.\n')
 })
 
 export const GetFeedResponse = zod.object({
@@ -75,7 +81,8 @@ export const GetFeedResponse = zod.object({
 }).describe('A post in the feed with reaction counts and viewer state')),
   "viewer": zod.object({
   "treatsRemainingToday": zod.number()
-}).describe('Viewer-specific state returned with the feed')
+}).describe('Viewer-specific state returned with the feed'),
+  "nextCursor": zod.string().nullable().describe('Cursor for the next page; null when there are no more results.')
 }).describe('Feed response wrapping posts and viewer state')
 
 

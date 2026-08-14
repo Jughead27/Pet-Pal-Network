@@ -37,6 +37,16 @@ export default defineConfig({
           path: path.resolve(apiClientReactSrc, "custom-fetch.ts"),
           name: "customFetch",
         },
+        operations: {
+          // Feed is cursor-paginated: also generate useGetFeedInfinite, with
+          // the `cursor` query param fed from React Query's pageParam.
+          getFeed: {
+            query: {
+              useInfinite: true,
+              useInfiniteQueryParam: "cursor",
+            },
+          },
+        },
       },
     },
   },

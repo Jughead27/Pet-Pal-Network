@@ -87,6 +87,23 @@ paths:
             (boops_7d + 3 × treats_7d), descending, tiebroken by created_at desc
             so zero-score posts still read newest-first.
             Combinable with speciesId and nursery; archived exclusion unchanged.
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+          description: Page size (default 20, max 50).
+        - name: cursor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Opaque pagination cursor from a previous response's nextCursor.
+            Omit for the first page. Must be used with the same filter/sort
+            params as the request that produced it.
       responses:
         "200":
           description: OK
@@ -1926,9 +1943,14 @@ components:
             $ref: "#/components/schemas/FeedPost"
         viewer:
           $ref: "#/components/schemas/ViewerInfo"
+        nextCursor:
+          type: string
+          nullable: true
+          description: Cursor for the next page; null when there are no more results.
       required:
         - posts
         - viewer
+        - nextCursor
 
     PetProfile:
       type: object

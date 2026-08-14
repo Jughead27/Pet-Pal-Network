@@ -42,7 +42,9 @@ import { useColumnWidth } from '@/hooks/useColumnWidth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { useGetFeed } from '@workspace/api-client-react';
+import { useGetFeed, useGetFeedInfinite, getGetFeedQueryKey } from '@workspace/api-client-react';
+import type { FeedResponse } from '@workspace/api-client-react';
+import type { InfiniteData } from '@tanstack/react-query';
 import type { FeedPost } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
 import FocalImage from '@/components/FocalImage';
@@ -86,17 +88,38 @@ export default function NurseryScreen() {
   //   allData  — unfiltered nursery posts, used to derive species chips.
   //   filteredData — same params + optional speciesId, drives the grid.
   // When activeSpeciesId is null both queries share the same cache key.
-  const { data: allData, isLoading, isError } = useGetFeed({ nursery: true });
+  // Chip derivation only needs to know WHICH species appear among nursery
+  // posts, not the whole list — a single max-size page (50) is a good proxy
+  // and avoids paginating a query that never renders as a scrollable list.
+  const { data: allData, isLoading, isError } = useGetFeed({ nursery: true, limit: 50 });
+
+  // Grid/pager posts — cursor-paginated. Params live inside the queryKey, so
+  // toggling a species chip starts from a fresh first page. '/api/feed' stays
+  // FIRST in the key so existing invalidateQueries(getGetFeedQueryKey(...))
+  // calls elsewhere still prefix-match this cache entry.
+  const filteredParams = activeSpeciesId
+    ? { nursery: true, speciesId: activeSpeciesId }
+    : { nursery: true };
   const {
     data: filteredData,
     isLoading: filteredLoading,
     isError: filteredError,
-  } = useGetFeed(
-    activeSpeciesId
-      ? { nursery: true, speciesId: activeSpeciesId }
-      : { nursery: true },
+    fetchNextPage, hasNextPage, isFetchingNextPage,
+  } = useGetFeedInfinite<InfiniteData<FeedResponse>>(filteredParams, {
+    query: {
+      queryKey: [...getGetFeedQueryKey(filteredParams), 'infinite'],
+      initialPageParam: undefined,
+      getNextPageParam: (last: FeedResponse) => last.nextCursor ?? undefined,
+    } as never,
+  });
+  const posts = useMemo(
+    () => filteredData?.pages.flatMap((p) => p.posts) ?? [],
+    [filteredData],
   );
-  const posts = filteredData?.posts ?? [];
+
+  const loadNextPage = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // ── Species chips — derived from the unfiltered result ────────────────────
   const chips: SpeciesChip[] = useMemo(() => {
@@ -561,6 +584,9 @@ export default function NurseryScreen() {
             maxToRenderPerBatch={2}
             initialNumToRender={1}
             removeClippedSubviews
+            // Pagination — prefetch ahead; no footer cell in the snap pager.
+            onEndReached={loadNextPage}
+            onEndReachedThreshold={2}
           />
         )}
 
@@ -634,6 +660,16 @@ export default function NurseryScreen() {
             ? { paddingBottom: 84 }
             : { paddingBottom: insets.bottom + 80 }
         }
+        // Pagination — append next page as the user nears the grid's end.
+        onEndReached={loadNextPage}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={
+          isFetchingNextPage ? (
+            <View style={styles.pageFooter}>
+              <ActivityIndicator color={colors.primary} size="small" />
+            </View>
+          ) : null
+        }
       />
     </View>
   );
@@ -645,6 +681,7 @@ const styles = StyleSheet.create({
   fill:    { flex: 1 },
   centered: { alignItems: 'center', justifyContent: 'center' },
   errorText: { fontSize: 14, textAlign: 'center', fontFamily: 'Inter_400Regular' },
+  pageFooter: { paddingVertical: 16, alignItems: 'center' },
 
   // ── Header bar — solid opaque wrapper in normal flex flow above the grid ───
   headerBar: {

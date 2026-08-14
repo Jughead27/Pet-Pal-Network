@@ -14,4 +14,6 @@ import type { ViewerInfo } from './viewerInfo';
 export interface FeedResponse {
   posts: FeedPost[];
   viewer: ViewerInfo;
+  /** Cursor for the next page; null when there are no more results. */
+  nextCursor: string | null;
 }

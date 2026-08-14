@@ -42,6 +42,7 @@ export const petsTable = pgTable(
   (table) => [
     index("pets_owner_id_idx").on(table.ownerId),
     index("pets_species_id_idx").on(table.speciesId),
+    index("pets_breed_id_idx").on(table.breedId),
   ],
 );
 

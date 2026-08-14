@@ -20,6 +20,8 @@ export const boopsTable = pgTable(
   },
   (table) => [
     index("boops_post_id_idx").on(table.postId),
+    // Popular-sort 7-day window aggregation per post.
+    index("boops_post_id_created_at_idx").on(table.postId, table.createdAt),
     index("boops_user_id_idx").on(table.userId),
   ],
 );

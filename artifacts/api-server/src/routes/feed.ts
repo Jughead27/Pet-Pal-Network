@@ -18,6 +18,33 @@ import { notBlockedPostOwner, notHiddenByAdminPost } from "../lib/excludeBlocked
 
 const router: IRouter = Router();
 
+// ── Cursor-based pagination ───────────────────────────────────────────────────
+// Opaque base64url-encoded JSON. Fresh/chronological pages key on
+// (created_at, id); Popular pages key on (score, created_at, id) since the
+// 7-day engagement score is the primary sort key there. id is the final
+// tiebreak in both, making the ordering total and the cursor stable.
+
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE     = 50;
+
+type FeedCursor = { s?: number; t: string; id: string };
+
+function encodeCursor(c: FeedCursor): string {
+  return Buffer.from(JSON.stringify(c)).toString("base64url");
+}
+
+function decodeCursor(raw: string): FeedCursor | null {
+  try {
+    const parsed = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    if (typeof parsed !== "object" || parsed === null) return null;
+    if (typeof parsed.t !== "string" || typeof parsed.id !== "string") return null;
+    if (parsed.s !== undefined && typeof parsed.s !== "number") return null;
+    return parsed as FeedCursor;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * GET /feed
  *
@@ -46,6 +73,24 @@ router.get("/feed", async (req, res) => {
     ? req.query.breedId
     : undefined;
 
+  // Pagination params — page size (default 20, max 50) + opaque cursor.
+  const limitParsed = parseInt(String(req.query.limit ?? ""), 10);
+  const pageSize = Number.isFinite(limitParsed) && limitParsed > 0
+    ? Math.min(limitParsed, MAX_PAGE_SIZE)
+    : DEFAULT_PAGE_SIZE;
+  const cursorRaw = typeof req.query.cursor === "string" && req.query.cursor.length > 0
+    ? req.query.cursor
+    : undefined;
+  const cursor = cursorRaw ? decodeCursor(cursorRaw) : undefined;
+  if (cursorRaw && !cursor) {
+    res.status(400).json({ error: "Invalid cursor" });
+    return;
+  }
+  if (cursor && sortPopular && typeof cursor.s !== "number") {
+    res.status(400).json({ error: "Invalid cursor" });
+    return;
+  }
+
   // Validate breed belongs to the selected species (never trust the client
   // pairing — breed implies species, but confirm server-side).
   if (breedId) {
@@ -66,20 +111,39 @@ router.get("/feed", async (req, res) => {
     }
   }
 
+  // 7-day engagement score — shared by the Popular ORDER BY, the Popular
+  // cursor predicate, and the per-row select used to build nextCursor.
+  const popularScore = sql<number>`(
+    select coalesce(count(*), 0)
+    from boops b7
+    where b7.post_id = ${postsTable.id}
+      and b7.created_at >= now() - interval '7 days'
+  ) + 3 * (
+    select coalesce(count(*), 0)
+    from treats t7
+    where t7.post_id = ${postsTable.id}
+      and t7.created_at >= now() - interval '7 days'
+  )`;
+
+  // id is the final tiebreak in both orders so the sort is total — required
+  // for the row-comparison cursor to never skip or duplicate posts within a
+  // static dataset. Popular pages accept live-ranking drift: a score change
+  // between page fetches can duplicate or omit a post across pages, which is
+  // the standard tradeoff for cursoring a live score without a snapshot.
   const popularOrderBy = [
-    desc(sql<number>`(
-      select coalesce(count(*), 0)
-      from boops b7
-      where b7.post_id = ${postsTable.id}
-        and b7.created_at >= now() - interval '7 days'
-    ) + 3 * (
-      select coalesce(count(*), 0)
-      from treats t7
-      where t7.post_id = ${postsTable.id}
-        and t7.created_at >= now() - interval '7 days'
-    )`),
+    desc(popularScore),
     desc(postsTable.createdAt),
+    desc(postsTable.id),
   ] as const;
+
+  // Keyset predicate: rows strictly after the cursor position in sort order.
+  const cursorWhere = cursor
+    ? sortPopular
+      ? sql`(${popularScore}, ${postsTable.createdAt}, ${postsTable.id})
+            < (${cursor.s}::int, ${cursor.t}::timestamp, ${cursor.id}::uuid)`
+      : sql`(${postsTable.createdAt}, ${postsTable.id})
+            < (${cursor.t}::timestamp, ${cursor.id}::uuid)`
+    : undefined;
 
   const rows = await db
     .select({
@@ -145,6 +209,13 @@ router.get("/feed", async (req, res) => {
         JOIN pets pe_t ON pe_t.id = pp.pet_id
         WHERE pp.post_id = ${postsTable.id}
       ), '[]'::json)`,
+      // Lossless microsecond-precision created_at text for the cursor —
+      // Date.toISOString() only keeps milliseconds, which can skip rows
+      // sharing the same millisecond at a page boundary.
+      createdAtCursor: sql<string>`to_char(${postsTable.createdAt}, 'YYYY-MM-DD HH24:MI:SS.US')`,
+      // Popular sort only: score echoed per-row to build nextCursor. Skipped
+      // on the fresh path so its two correlated subqueries aren't paid there.
+      ...(sortPopular ? { popularScore } : {}),
     })
     .from(postsTable)
     .innerJoin(petsTable,    eq(petsTable.id,    postsTable.petId))
@@ -168,9 +239,24 @@ router.get("/feed", async (req, res) => {
       )` : undefined,
       notBlockedPostOwner(userId),
       notHiddenByAdminPost(),
+      cursorWhere,
     ))
     .groupBy(postsTable.id, petsTable.id)
-    .orderBy(...(sortPopular ? popularOrderBy : [desc(postsTable.createdAt)]));
+    .orderBy(...(sortPopular ? popularOrderBy : [desc(postsTable.createdAt), desc(postsTable.id)]))
+    .limit(pageSize + 1); // +1 row = "has more" probe; trimmed before response
+
+  const hasMore  = rows.length > pageSize;
+  const pageRows = hasMore ? rows.slice(0, pageSize) : rows;
+  const lastRow  = pageRows[pageRows.length - 1];
+  const nextCursor = hasMore && lastRow
+    ? encodeCursor({
+        ...(sortPopular
+          ? { s: Number((lastRow as unknown as { popularScore: number }).popularScore) }
+          : {}),
+        t:  lastRow.createdAtCursor,
+        id: lastRow.id,
+      })
+    : null;
 
   const [limitRow] = await db
     .select()
@@ -186,7 +272,7 @@ router.get("/feed", async (req, res) => {
     .where(and(eq(treatsTable.userId, userId), gte(treatsTable.createdAt, today)));
   const treatsRemainingToday = Math.max(0, dailyLimit - (countRow?.todayTreats ?? 0));
 
-  const posts = rows.map((r) => ({
+  const posts = pageRows.map((r) => ({
     id:          r.id,
     caption:     r.caption ?? null,
     mediaKey:    r.mediaKey,
@@ -233,7 +319,7 @@ router.get("/feed", async (req, res) => {
     })(),
   }));
 
-  res.json({ posts, viewer: { treatsRemainingToday } });
+  res.json({ posts, viewer: { treatsRemainingToday }, nextCursor });
 });
 
 export default router;
