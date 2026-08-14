@@ -25,6 +25,7 @@ import { ArrowLeft } from 'phosphor-react-native';
 import { useColors } from '@/hooks/useColors';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { customFetch } from '@workspace/api-client-react';
+import { formatAge } from '@/utils/formatAge';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -43,16 +44,6 @@ interface FeedbackPage {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function formatAge(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 60)   return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24)    return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
-}
 
 const PAGE = 20;
 
