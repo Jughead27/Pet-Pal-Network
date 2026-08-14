@@ -1,0 +1,20 @@
+Do not modify any file outside api-server/src/routes/uploads.ts. This is a narrow, scoped security fix — do not refactor unrelated code in this file.
+
+CONTEXT: Currently, presigned upload keys (for posts/ and avatars/) are not bound to the requesting user, and /uploads/verify accepts any caller-supplied key under either prefix without checking that the key belongs to the authenticated user. This allows a user to verify/act on media keys that belong to other users if they know or guess the key.
+
+FIX — implement all of the following in uploads.ts:
+
+1. KEY GENERATION: When generating a presigned upload URL/key (wherever this currently happens in the file), embed the authenticated user's ID in the key path itself, e.g.:
+   - posts/{userId}/{uuid}.{ext}
+   - avatars/{userId}/{uuid}.{ext}
+   Use req.auth.userId (or however the authenticated user ID is accessed elsewhere in this file/middleware) — never a client-supplied user ID.
+
+2. VERIFY ENDPOINT OWNERSHIP CHECK: In the /uploads/verify handler, before proceeding with verification, parse the userId segment out of the caller-supplied key and compare it against req.auth.userId. If they don't match, return 403 Forbidden with a generic error message (do not leak whether the key exists or belongs to someone else — just "You do not have permission to verify this upload." or similar). Apply this check to keys under both posts/ and avatars/ prefixes.
+
+3. RATE LIMITING: Add a basic per-user rate limit to both the presigned-upload-URL endpoint and the /uploads/verify endpoint (reuse whatever rate-limiting middleware/pattern is already used elsewhere in this codebase for other endpoints — check other route files for the existing pattern rather than introducing a new rate-limiting approach). A reasonable limit: something in the range of 20-30 requests per minute per user — adjust to match whatever pattern/limits are already established elsewhere in the codebase if a convention exists.
+
+4. BACKWARD COMPATIBILITY: Any existing media keys already in R2 that do NOT have a userId embedded (pre-fix uploads) must continue to work for verification — do not break existing posts/avatars. Only enforce the ownership check on newly-generated keys going forward. If you need a way to distinguish old-format vs new-format keys, use the presence/absence of the userId path segment as the signal.
+
+ACCEPTANCE TEST: (1) A user can still successfully request a presigned upload, upload an image, and verify it as normal — full golden path unaffected. (2) A user cannot successfully call /uploads/verify with a key belonging to a different user's userId segment — should return 403. (3) Existing pre-fix posts/avatars (keys without a userId segment) still load and function normally. (4) Rapid repeated requests to either endpoint are rate-limited per the pattern above.
+
+Do not modify any other route file, any schema, or any client/mobile code — this is server-side only, scoped to uploads.ts.

@@ -11,6 +11,29 @@ const EXT: Record<string, string> = {
   "image/webp": "webp",
 };
 
+// ── Per-user rate limiting ────────────────────────────────────────────────────
+// Same in-memory map pattern used by reports.ts (per-user) and invites.ts
+// (per-IP): 30 requests per minute per user, resets on server restart.
+// Applied to presign, presign-avatar, and verify.
+const uploadLimiter = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const entry = uploadLimiter.get(userId);
+  if (!entry || now > entry.resetAt) {
+    uploadLimiter.set(userId, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 30) return false;
+  entry.count += 1;
+  return true;
+}
+
+/** Authenticated user id from the auth middleware (never client-supplied). */
+function authedUserId(req: Express.Request): string {
+  return (req as Express.RequestWithAuth).auth!.userId;
+}
+
 /**
  * POST /uploads/presign
  *
@@ -22,6 +45,12 @@ const EXT: Record<string, string> = {
  *   - sizeBytes ≤ 10 MB
  */
 router.post("/uploads/presign", async (req, res) => {
+  const userId = authedUserId(req);
+  if (!checkRateLimit(userId)) {
+    res.status(429).json({ error: "too many requests. try again later." });
+    return;
+  }
+
   const parsed = PresignUploadBody.safeParse(req.body);
   if (!parsed.success) {
     const message = parsed.error.issues[0]?.message ?? "Invalid request";
@@ -31,7 +60,9 @@ router.post("/uploads/presign", async (req, res) => {
 
   const { contentType, sizeBytes } = parsed.data;
   const ext      = EXT[contentType]!;
-  const mediaKey = `posts/${randomUUID()}.${ext}`;
+  // Key is bound to the authenticated user: posts/{userId}/{uuid}.{ext}.
+  // /uploads/verify enforces that the userId segment matches the caller.
+  const mediaKey = `posts/${userId}/${randomUUID()}.${ext}`;
 
   const uploadUrl = await presignPut(mediaKey, contentType, sizeBytes);
   res.json({ uploadUrl, mediaKey });
@@ -47,6 +78,12 @@ router.post("/uploads/presign", async (req, res) => {
  * Same validation as /uploads/presign.
  */
 router.post("/uploads/presign-avatar", async (req, res) => {
+  const userId = authedUserId(req);
+  if (!checkRateLimit(userId)) {
+    res.status(429).json({ error: "too many requests. try again later." });
+    return;
+  }
+
   const parsed = PresignUploadBody.safeParse(req.body);
   if (!parsed.success) {
     const message = parsed.error.issues[0]?.message ?? "Invalid request";
@@ -56,7 +93,8 @@ router.post("/uploads/presign-avatar", async (req, res) => {
 
   const { contentType, sizeBytes } = parsed.data;
   const ext      = EXT[contentType]!;
-  const mediaKey = `avatars/${randomUUID()}.${ext}`;
+  // Key is bound to the authenticated user: avatars/{userId}/{uuid}.{ext}.
+  const mediaKey = `avatars/${userId}/${randomUUID()}.${ext}`;
 
   const uploadUrl = await presignPut(mediaKey, contentType, sizeBytes);
   res.json({ uploadUrl, mediaKey });
@@ -96,11 +134,29 @@ const VALID_KEY_PREFIX = /^(posts|avatars)\//;
  * bypassable; this check runs server-side on the real bytes.
  */
 router.post("/uploads/verify", async (req, res) => {
+  const userId = authedUserId(req);
+  if (!checkRateLimit(userId)) {
+    res.status(429).json({ error: "too many requests. try again later." });
+    return;
+  }
+
   const body = req.body as Record<string, unknown>;
   const mediaKey = body.mediaKey;
 
   if (typeof mediaKey !== "string" || !VALID_KEY_PREFIX.test(mediaKey)) {
     res.status(400).json({ error: "mediaKey must be a string starting with posts/ or avatars/" });
+    return;
+  }
+
+  // ── Ownership check ─────────────────────────────────────────────────────
+  // New-format keys embed the owner: {prefix}/{userId}/{uuid}.{ext} (3
+  // segments). The userId segment must match the caller. Legacy pre-fix keys
+  // ({prefix}/{uuid}.{ext} — 2 segments) carry no owner and are exempt so
+  // existing posts/avatars keep working. Generic 403 — never reveal whether
+  // the key exists or whom it belongs to.
+  const segments = mediaKey.split("/");
+  if (segments.length >= 3 && segments[1] !== userId) {
+    res.status(403).json({ error: "You do not have permission to verify this upload." });
     return;
   }
 
