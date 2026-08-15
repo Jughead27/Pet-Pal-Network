@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useGetMe, getGetMeQueryKey, customFetch } from '@workspace/api-client-react';
 import { pendingInviteStorage } from '@/utils/pendingInviteStorage';
 import { pendingDisplayNameStorage } from '@/utils/pendingDisplayNameStorage';
+import { pendingAgeAffirmStorage } from '@/utils/pendingAgeAffirmStorage';
 
 // Accounts created on/after this date must have a display name (collected at
 // signup). Older accounts are exempt — no retroactive prompt.
@@ -47,6 +48,15 @@ export default function TabLayout() {
   // clears immediately without waiting for a /me refetch.
   const [tosAccepted, setTosAccepted] = useState(false);
   const [tosAccepting, setTosAccepting] = useState(false);
+
+  // Age gate local state — mirrors the ToS gate pattern.
+  // pendingAgeChecked: signup persists the 13+ affirmation to storage; we
+  // apply it silently (POST /api/age/affirm) before deciding whether to show
+  // the retroactive gate, so brand-new accounts never see it.
+  const [pendingAgeChecked, setPendingAgeChecked] = useState(false);
+  const [ageBoxChecked, setAgeBoxChecked]         = useState(false);
+  const [ageAffirming, setAgeAffirming]           = useState(false);
+  const [ageAffirmed, setAgeAffirmed]             = useState(false);
 
   // Co-ownership confirm — shown after invite redemption when the inviter
   // pre-selected pets to share with the new user.
@@ -118,6 +128,52 @@ export default function TabLayout() {
         // PATCH failed — leave storage; the gate form is the fallback.
       } finally {
         setPendingNameChecked(true);
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSignedIn, meData?.id, clerkUser?.id]);
+
+  // Apply a 13+ age affirmation persisted by the signup form, so brand-new
+  // accounts never see the retroactive age gate. Guards mirror the display-
+  // name flow: an email-bearing affirmation only applies to an account with
+  // that exact email; an email-less one (Google OAuth — email unknown
+  // pre-round-trip) only applies to an account created in the last 15 min.
+  useEffect(() => {
+    if (!isSignedIn) {
+      setPendingAgeChecked(false);
+      setAgeBoxChecked(false);
+      setAgeAffirmed(false);
+      return;
+    }
+    if (!meData || !clerkUser) return;
+    const meWithAge = meData as typeof meData & { ageAffirmedAt?: string | null };
+    (async () => {
+      try {
+        const saved = await pendingAgeAffirmStorage.get();
+        if (saved) {
+          if (meWithAge.ageAffirmedAt == null) {
+            const emailMatches = saved.email !== '' && (clerkUser.emailAddresses?.some(
+              (e) => e.emailAddress.toLowerCase() === saved.email.trim().toLowerCase(),
+            ) ?? false);
+            // Email-less (OAuth) marker: expires 15 min after it was checked,
+            // and only applies to an account created AFTER the checkbox was
+            // checked (small clock-skew slack) — never an unrelated account.
+            const justCreated = saved.email === '' &&
+              Date.now() - saved.savedAt < 15 * 60 * 1000 &&
+              Date.parse(meData.createdAt) >= saved.savedAt - 60 * 1000;
+            if (emailMatches || justCreated) {
+              await customFetch('/api/age/affirm', { method: 'POST' });
+              setAgeAffirmed(true);
+              qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
+            }
+          }
+          // Consumed or stale — clear either way.
+          await pendingAgeAffirmStorage.clear();
+        }
+      } catch {
+        // POST failed — leave storage; the gate is the fallback.
+      } finally {
+        setPendingAgeChecked(true);
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -345,6 +401,97 @@ export default function TabLayout() {
             onPress={() => signOut()}
             hitSlop={8}
           >
+            <Text style={gt.signOutTxt}>sign out</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    );
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
+  // ─── Age affirmation gate (13+) ──────────────────────────────────────────
+  // Retroactive COPPA gate for accounts predating the signup age checkbox.
+  // Shown when age_affirmed_at is null AND no pending signup affirmation was
+  // silently applied (pendingAgeChecked waits for that attempt to finish so
+  // new signups don't see a flash of the gate). No skip/dismiss path — only
+  // confirm, or sign out (matching the ToS gate: never trapped).
+  const meAge = meData as (typeof meData & { ageAffirmedAt?: string | null }) | undefined;
+  const ageGateNeeded = !!meAge && !ageAffirmed && meAge.ageAffirmedAt == null;
+
+  // Fail closed: while the pending-affirmation check is still running for an
+  // unaffirmed account, show a blank screen instead of the tabs — never let
+  // an unaffirmed user into the app, and never flash the gate at new signups.
+  if (ageGateNeeded && !pendingAgeChecked) {
+    return <View style={gt.root} />;
+  }
+
+  if (ageGateNeeded) {
+    const pt = safeAreaInsets.top + (Platform.OS === 'web' ? 24 : 48);
+    const pb = safeAreaInsets.bottom + 40;
+
+    const handleAffirm = async () => {
+      if (!ageBoxChecked) return;
+      setAgeAffirming(true);
+      try {
+        await customFetch('/api/age/affirm', { method: 'POST' });
+        setAgeAffirmed(true);
+        qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
+      } catch {
+        // retry is safe — endpoint is idempotent
+      } finally {
+        setAgeAffirming(false);
+      }
+    };
+
+    return (
+      <ScrollView
+        style={gt.root}
+        contentContainerStyle={[gt.scroll, { paddingTop: pt, paddingBottom: pb }]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={gt.col}>
+          {/* wordmark */}
+          <Text style={gt.wordmark}>pshpsh</Text>
+
+          {/* body — exact required copy */}
+          <Text style={gt.body}>
+            Dear pshpsh member, As we prepare pshpsh for a wider public launch, we are required to confirm that all users meet the minimum age requirements established by applicable law. Please confirm that you are 13 years of age or older to continue using the app.
+          </Text>
+
+          {/* checkbox */}
+          <Pressable
+            style={gt.ageCheckRow}
+            onPress={() => setAgeBoxChecked((v) => !v)}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: ageBoxChecked }}
+            accessibilityLabel="I confirm that I am 13 years of age or older."
+            hitSlop={6}
+          >
+            <View style={[gt.ageCheckbox, ageBoxChecked && gt.ageCheckboxChecked]}>
+              {ageBoxChecked && <Text style={gt.ageCheckboxMark}>✓</Text>}
+            </View>
+            <Text style={gt.ageCheckText}>
+              I confirm that I am 13 years of age or older.
+            </Text>
+          </Pressable>
+
+          {/* confirm and continue — disabled until checked */}
+          <Pressable
+            style={({ pressed }) => [
+              gt.agreeBtn,
+              pressed && gt.dimmed,
+              (!ageBoxChecked || ageAffirming) && gt.disabled,
+            ]}
+            onPress={handleAffirm}
+            disabled={!ageBoxChecked || ageAffirming}
+          >
+            {ageAffirming
+              ? <ActivityIndicator color={TOS_FG} size="small" />
+              : <Text style={gt.agreeTxt}>Confirm and Continue</Text>}
+          </Pressable>
+
+          {/* sign-out escape hatch — not a skip; the app stays gated */}
+          <Pressable style={gt.signOutBtn} onPress={() => signOut()} hitSlop={8}>
             <Text style={gt.signOutTxt}>sign out</Text>
           </Pressable>
         </View>
@@ -641,6 +788,38 @@ const gt = StyleSheet.create({
 
   dimmed:   { opacity: 0.65 },
   disabled: { opacity: 0.35 },
+
+  // Age gate checkbox row (mirrors the signup consent checkbox pattern)
+  ageCheckRow: {
+    flexDirection: 'row',
+    alignItems:    'center',
+    marginTop:     8,
+    marginBottom:  32,
+  },
+  ageCheckbox: {
+    width:        20,
+    height:       20,
+    borderWidth:  1,
+    borderColor:  TOS_MUTED,
+    alignItems:   'center',
+    justifyContent: 'center',
+    marginRight:  12,
+  },
+  ageCheckboxChecked: {
+    borderColor: TOS_FG,
+  },
+  ageCheckboxMark: {
+    fontSize: 13,
+    color:    TOS_FG,
+    lineHeight: 15,
+  },
+  ageCheckText: {
+    flex:       1,
+    fontFamily: 'Inter_400Regular',
+    fontSize:   14,
+    color:      TOS_FG,
+    lineHeight: 21,
+  },
 
   // Display-name gate
   nameInput: {

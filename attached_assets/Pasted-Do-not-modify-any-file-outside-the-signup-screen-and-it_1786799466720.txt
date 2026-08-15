@@ -1,0 +1,25 @@
+Do not modify any file outside: the signup screen and its consent block, a new age-gate screen (following the exact pattern of the existing ToS re-acceptance gate — find and replicate that pattern, do not build a new one from scratch), the user/pets schema (for a new column), the relevant API route(s) that check gate status on app load, and the Terms of Service content file/screen. Do not touch any other screen, flow, or content.
+
+CONTEXT: pshpsh currently has no age gate at signup, and 25 existing test users predate this. COPPA applies to any operator, regardless of size, the moment they knowingly collect data from a user under 13 — self-affirmation (not ID verification) is the accepted standard (Instagram/TikTok both use 13). This needs: (1) a new signup checkbox, (2) a retroactive gate for existing users reusing the exact pattern already built for ToS re-acceptance, (3) an update to the Terms of Service text reflecting this requirement.
+
+PART 1 — SCHEMA:
+Add a new column age_affirmed_at (timestamp, nullable) to the users table. Existing rows should have this as null (no backfill/assumption). Follow this project's existing migration convention (drizzle-kit push, per prior work tonight).
+
+PART 2 — NEW SIGNUPS:
+In the signup flow's consent block (the same block that already contains ToS/Privacy acceptance and the "animals only" content-rule checkbox), add a new checkbox with this exact copy:
+"I confirm that I am 13 years of age or older."
+This must be checked (alongside the existing required checkboxes) before signup can proceed — follow the same required/disabled-until-checked pattern already used for the other consent checkboxes in this block. On successful account creation, set age_affirmed_at to the current timestamp.
+
+PART 3 — RETROACTIVE GATE FOR EXISTING USERS:
+Find and replicate the EXACT existing pattern used for ToS re-acceptance (accepted_tos_at + version-bump forcing re-acceptance on next app open, blocking app usage until resolved). Build the equivalent for age_affirmed_at: on app open, if the current user's age_affirmed_at is null, show a blocking gate screen (matching the ToS gate's visual/interaction pattern — likely reusing the same component/screen structure) with this exact copy:
+
+Body: "Dear pshpsh member, As we prepare pshpsh for a wider public launch, we are required to confirm that all users meet the minimum age requirements established by applicable law. Please confirm that you are 13 years of age or older to continue using the app."
+Checkbox: "I confirm that I am 13 years of age or older."
+Button: "Confirm and Continue" — disabled until the checkbox is checked, no skip/dismiss path.
+
+On confirmation, set age_affirmed_at to the current timestamp and allow the user through to the app, exactly matching how the ToS gate resolves.
+
+PART 4 — TERMS OF SERVICE TEXT:
+Find the existing Terms of Service content (wherever it's rendered — likely a dedicated screen or content file, given the app already has a working ToS/Privacy navigation flow). Add a clause stating that use of pshpsh requires the user to be at least 13 years of age, consistent with the checkbox language above. Match the existing ToS document's tone, section structure, and formatting conventions — insert it in a logically appropriate section (e.g. near eligibility/account requirements if such a section exists) rather than appending it awkwardly at the end. Report back exactly where you added it and the surrounding context so it can be reviewed.
+
+ACCEPTANCE TEST: (1) New signup: the age checkbox appears in the consent block, is required (signup blocked until checked, same as existing checkboxes), and successful signup sets age_affirmed_at. (2) Existing user (any of the 25 test users, or simulate one with age_affirmed_at null): on next app open, the blocking gate appears with the exact copy above, cannot be dismissed/skipped, and confirming it sets age_affirmed_at and allows normal app use afterward — and does NOT reappear on subsequent opens. (3) A user who has already confirmed (age_affirmed_at set) sees no gate and normal app behavior. (4) The ToS document now includes the age-eligibility clause, formatted consistently with the rest of the document — report the exact wording and location added. (5) tsc clean.

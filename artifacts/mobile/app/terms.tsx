@@ -55,6 +55,9 @@ export default function TermsScreen() {
           pshpsh is an early, invite-only test. by using it, you agree to be decent: post content about animals, treat other members with kindness, and follow the community guidelines.
         </Text>
         <Text style={s.body}>
+          pshpsh is for people aged 13 and older. by creating an account or using the app, you confirm that you are at least 13 years of age.
+        </Text>
+        <Text style={s.body}>
           we're still building. things may break, change, or disappear. content you post may be removed at our discretion, and accounts that harm the community or its animals may be suspended.
         </Text>
         <Text style={s.body}>

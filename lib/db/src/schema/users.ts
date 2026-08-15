@@ -34,6 +34,9 @@ export const usersTable = pgTable(
     inviteQuota: integer("invite_quota"),
     // Permanent attribution — who invited this user (null = founding account)
     invitedBy:   text("invited_by").references((): AnyPgColumn => usersTable.id),
+    // Age affirmation (COPPA) — null means never affirmed 13+ (triggers the
+    // blocking age gate on next app open). Set at signup for new accounts.
+    ageAffirmedAt: timestamp("age_affirmed_at"),
     // ToS acceptance — null means never accepted (triggers gate on next load)
     acceptedTosAt:      timestamp("accepted_tos_at"),
     acceptedTosVersion: text("accepted_tos_version"),

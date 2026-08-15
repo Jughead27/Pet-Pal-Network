@@ -10,7 +10,7 @@
 
 import { Router, type IRouter } from "express";
 import { db, usersTable, configTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { writeAudit } from "../lib/writeAudit.js";
 import { logger } from "../lib/logger.js";
 
@@ -54,6 +54,42 @@ router.post("/tos/accept", async (req, res) => {
 
   logger.info({ userId, version: currentVersion }, "ToS accepted");
   res.json({ ok: true, version: currentVersion });
+});
+
+/**
+ * Age affirmation endpoint (COPPA self-affirmation, 13+).
+ *
+ *   POST /age/affirm
+ *
+ * Records age_affirmed_at = now() alongside a writeAudit('age.affirmed') row.
+ * Idempotent: if already affirmed, returns ok without rewriting the timestamp.
+ */
+router.post("/age/affirm", async (req, res) => {
+  const { userId } = (req as Express.RequestWithAuth).auth!;
+
+  // Atomic conditional update — concurrency-safe idempotency. Only the
+  // request that actually flips null → now() writes the audit row.
+  let updated = false;
+  await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(usersTable)
+      .set({ ageAffirmedAt: new Date() })
+      .where(and(eq(usersTable.id, userId), isNull(usersTable.ageAffirmedAt)))
+      .returning({ id: usersTable.id });
+
+    if (rows.length > 0) {
+      updated = true;
+      await writeAudit(tx, userId, "age.affirmed", "user", userId, {});
+    }
+  });
+
+  if (!updated) {
+    res.json({ ok: true, alreadyAffirmed: true });
+    return;
+  }
+
+  logger.info({ userId }, "Age affirmed (13+)");
+  res.json({ ok: true });
 });
 
 export default router;

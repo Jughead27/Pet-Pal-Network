@@ -21,6 +21,7 @@ import { getBaseUrl } from '@workspace/api-client-react';
 import Button from '@/components/Button';
 import { pendingInviteStorage } from '@/utils/pendingInviteStorage';
 import { pendingDisplayNameStorage } from '@/utils/pendingDisplayNameStorage';
+import { pendingAgeAffirmStorage } from '@/utils/pendingAgeAffirmStorage';
 
 // Required for OAuth redirect to complete inside Expo Go.
 WebBrowser.maybeCompleteAuthSession();
@@ -72,6 +73,7 @@ export default function SignUpScreen() {
   // ── ToS/Privacy consent — required before any signup path (email or OAuth)
   const [tosAgreed, setTosAgreed] = useState(false);
   const [animalsAgreed, setAnimalsAgreed] = useState(false);
+  const [ageAgreed, setAgeAgreed] = useState(false);
 
   // ── Load invite code on mount ─────────────────────────────────────────────
   // Priority: URL param (from /invite/[code]) > SecureStore (from previous landing page visit)
@@ -113,6 +115,10 @@ export default function SignUpScreen() {
       setError('please agree to keep it about the animals first.');
       return;
     }
+    if (!ageAgreed) {
+      setError('please confirm that you are 13 years of age or older first.');
+      return;
+    }
     const name = displayName.trim();
     if (!name) {
       setError('please tell us what to call you.');
@@ -124,6 +130,10 @@ export default function SignUpScreen() {
       // Persist so it survives the verification step; the tabs layout applies
       // it to the account (PATCH /api/me) right after the session activates.
       await pendingDisplayNameStorage.set({ name, email: email.trim() });
+      // Persist the 13+ affirmation the same way — the tabs layout POSTs
+      // /api/age/affirm right after the session activates, so the new account
+      // never sees the retroactive age gate.
+      await pendingAgeAffirmStorage.set({ email: email.trim(), savedAt: Date.now() });
       await signUp!.create({
         emailAddress: email.trim(),
         password,
@@ -135,7 +145,7 @@ export default function SignUpScreen() {
     } finally {
       setLoading(false);
     }
-  }, [isLoaded, signUp, email, password, displayName, tosAgreed, animalsAgreed]);
+  }, [isLoaded, signUp, email, password, displayName, tosAgreed, animalsAgreed, ageAgreed]);
 
   // ── Step 2: Verify email OTP ──────────────────────────────────────────────
   const handleVerify = useCallback(async () => {
@@ -166,6 +176,11 @@ export default function SignUpScreen() {
       if (inviteCode) {
         await pendingInviteStorage.set(inviteCode);
       }
+
+      // Persist the 13+ affirmation so it survives the OAuth round-trip.
+      // The email is unknown pre-OAuth, so store '' — the tabs layout only
+      // applies an email-less affirmation to a just-created account.
+      await pendingAgeAffirmStorage.set({ email: '', savedAt: Date.now() });
 
       const result = await startSSOFlow({
         strategy: 'oauth_google',
@@ -531,6 +546,23 @@ export default function SignUpScreen() {
             </Text>
           </Pressable>
 
+          {/* ── Age affirmation (13+) — same gate pattern as ToS ── */}
+          <Pressable
+            style={s.consentRow}
+            onPress={() => { setAgeAgreed((v) => !v); setError(null); }}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: ageAgreed }}
+            accessibilityLabel="I confirm that I am 13 years of age or older."
+            hitSlop={6}
+          >
+            <View style={[s.checkbox, ageAgreed && s.checkboxChecked]}>
+              {ageAgreed && <Text style={s.checkboxMark}>✓</Text>}
+            </View>
+            <Text style={s.consentText}>
+              I confirm that I am 13 years of age or older.
+            </Text>
+          </Pressable>
+
           {error ? <Text style={s.errorText}>{error}</Text> : null}
 
           {/* ── Primary action — shared hairline-outline CTA ── */}
@@ -538,7 +570,7 @@ export default function SignUpScreen() {
             variant="primary"
             fullWidth
             onPress={handleSignUp}
-            disabled={loading || !email || !displayName.trim() || password.length < 8 || !tosAgreed || !animalsAgreed}
+            disabled={loading || !email || !displayName.trim() || password.length < 8 || !tosAgreed || !animalsAgreed || !ageAgreed}
             style={s.createBtn}
           >
             {loading
@@ -548,7 +580,7 @@ export default function SignUpScreen() {
 
           {/* ── Google SSO — also gated on consent ── */}
           <Pressable
-            style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed, (!tosAgreed || !animalsAgreed) && s.disabled]}
+            style={({ pressed }) => [s.secondaryAction, pressed && s.dimmed, (!tosAgreed || !animalsAgreed || !ageAgreed) && s.disabled]}
             onPress={() => {
               if (!tosAgreed) {
                 setError('please agree to the terms of service and privacy policy first.');
@@ -556,6 +588,10 @@ export default function SignUpScreen() {
               }
               if (!animalsAgreed) {
                 setError('please agree to keep it about the animals first.');
+                return;
+              }
+              if (!ageAgreed) {
+                setError('please confirm that you are 13 years of age or older first.');
                 return;
               }
               handleGoogle();

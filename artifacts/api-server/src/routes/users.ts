@@ -75,6 +75,7 @@ router.get("/me", async (req, res) => {
         createdAt:          usersTable.createdAt,
         role:               usersTable.role,
         acceptedTosVersion: usersTable.acceptedTosVersion,
+        ageAffirmedAt:      usersTable.ageAffirmedAt,
       })
       .from(usersTable)
       .where(eq(usersTable.id, userId)),
@@ -106,6 +107,7 @@ router.get("/me", async (req, res) => {
     createdAt:          user.createdAt.toISOString(),
     role:               user.role,
     acceptedTosVersion: user.acceptedTosVersion ?? null,
+    ageAffirmedAt:      user.ageAffirmedAt?.toISOString() ?? null,
     tosCurrentVersion,
   });
 });
