@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Response } from "express";
+import { logger } from "../lib/logger";
 import {
   db,
   postsTable,
@@ -581,7 +582,18 @@ router.delete("/posts/:id", async (req, res) => {
   try {
     await deleteObject(postRow.mediaKey);
   } catch (err) {
-    console.error({ err, mediaKey: postRow.mediaKey }, "R2 delete failed — DB row already removed");
+    // The DB transaction above has already committed: the post and all its
+    // reactions/comments are gone, and the user's intent (delete my post) has
+    // fully succeeded from their perspective. Only the R2 media cleanup
+    // failed, leaving an orphaned object — returning an error here would be
+    // misleading (nothing the client can retry: a retried DELETE would 404)
+    // and could make the UI claim a still-visible post. So: keep the success
+    // response, but log via the structured logger with the mediaKey so the
+    // orphan is visible/trackable for later cleanup.
+    logger.error(
+      { err, postId: id, mediaKey: postRow.mediaKey },
+      "R2 delete failed after post DB deletion — orphaned media object",
+    );
   }
 
   res.status(204).send();
