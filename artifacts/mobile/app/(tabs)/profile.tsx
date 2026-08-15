@@ -57,6 +57,7 @@ import {
 import type { Pet, PackedPetItem, FollowedSpeciesItem, FollowedBreedItem, MeProfile } from '@workspace/api-client-react';
 import { formatPostAge } from '@/utils/formatPostAge';
 import { useFollowsContext } from '@/context/FollowsContext';
+import { buildInviteMessage } from '@/utils/buildInviteMessage';
 
 /**
  * "sent …" line for a pending invite tile. Reuses the app-wide relative
@@ -303,11 +304,12 @@ export default function ProfileScreen() {
       const result = await customFetch<{ ok: boolean; invite: { id: string; code: string } }>(
         '/api/invites', { method: 'POST', body: JSON.stringify({ petIds: coPetIds }) },
       );
-      const link    = `https://pshpsh.net/invite/${result.invite.code}`;
-      const message = `you're invited to pshpsh — follow pets, not people. it's brand new, and you're one of the first to see it. 🐾 ${link}`;
+      const { link, message } = buildInviteMessage(result.invite.code);
       if (Platform.OS === 'web') {
         try {
-          await (navigator as unknown as { share(o: object): Promise<void> }).share({ text: message, url: link });
+          // text only — the link is embedded in message; passing url too made
+          // receiving apps show the link twice (Web Share API concatenates).
+          await (navigator as unknown as { share(o: object): Promise<void> }).share({ text: message });
         } catch {
           try {
             await (navigator as unknown as { clipboard: { writeText(s: string): Promise<void> } }).clipboard.writeText(link);

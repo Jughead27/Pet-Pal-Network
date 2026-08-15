@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, ArrowClockwise } from 'phosphor-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import { buildInviteMessage } from '@/utils/buildInviteMessage';
 import { customFetch } from '@workspace/api-client-react';
 import { formatAge } from '@/utils/formatAge';
 
@@ -90,11 +91,12 @@ export default function AdminInvitesScreen() {
       const result = await customFetch<{ ok: boolean; invite: { id: string; code: string } }>(
         `/api/admin/invite-requests/${id}/send-invite`, { method: 'POST' },
       );
-      const link    = `https://pshpsh.net/invite/${result.invite.code}`;
-      const message = `you're invited to pshpsh — follow pets, not people. it's brand new, and you're one of the first to see it. 🐾 ${link}`;
+      const { link, message } = buildInviteMessage(result.invite.code);
       if (Platform.OS === 'web') {
         try {
-          await (navigator as unknown as { share(o: object): Promise<void> }).share({ text: message, url: link });
+          // text only — the link is embedded in message; passing url too made
+          // receiving apps show the link twice (Web Share API concatenates).
+          await (navigator as unknown as { share(o: object): Promise<void> }).share({ text: message });
         } catch {
           try {
             await (navigator as unknown as { clipboard: { writeText(s: string): Promise<void> } }).clipboard.writeText(message);

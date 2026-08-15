@@ -1,0 +1,19 @@
+Do not modify any file outside: creating a new shared utility (e.g. mobile/utils/buildInviteMessage.ts, or wherever is idiomatic given how formatAge.ts/formatCount.ts were structured earlier), app/(tabs)/profile.tsx, and app/admin/invites.tsx. Do not touch any other invite logic, UI, or behavior beyond message construction and sharing.
+
+CONTEXT: The invite share message is built with identical duplicated logic in two places (profile.tsx's createAndShareInvite and admin/invites.tsx's sendInvite):
+
+const link = `https://pshpsh.net/invite/${result.invite.code}`;
+const message = `you're invited to pshpsh — follow pets, not people. it's brand new, and you're one of the first to see it. 🐾 ${link}`;
+
+On web only, both call sites then do:
+await navigator.share({ text: message, url: link });
+
+This passes the link TWICE — once embedded in `text`, once again as a separate `url` param. Per the Web Share API spec, receiving apps concatenate text and url, causing the link to appear duplicated in the shared message (confirmed via WhatsApp screenshot showing the link twice). This only affects the web path (including iOS Safari/PWA, the primary way pshpsh is used on iPhone) — the native Share.share({ message }) path is unaffected since it never passes a separate url.
+
+FIX:
+1. Extract the shared link/message-building logic into a new utility function (e.g. buildInviteMessage(code: string) returning { link, message }), so both call sites use the same source of truth going forward.
+2. Fix the web share bug: on the web path, call navigator.share({ text: message }) only — remove the redundant url parameter, since the link is already embedded in message.
+3. Update both profile.tsx and admin/invites.tsx to use the new shared utility instead of their local duplicated logic.
+4. Check both files' clipboard fallback paths (mentioned as using message/link directly) — ensure they continue to work correctly with the new shared utility's return shape, with no change to their existing behavior.
+
+ACCEPTANCE TEST: (1) Sharing an invite via the web path (e.g. iOS Safari/PWA) results in a message with the link appearing exactly ONCE, not twice — verify by actually sharing to a messaging app and checking the result. (2) Native iOS/Android share behavior is unchanged (was already correct, should remain so). (3) Clipboard fallback in both profile.tsx and admin/invites.tsx still works exactly as before. (4) Both call sites now use the shared utility — no duplicated message-building logic remains. (5) tsc clean.
