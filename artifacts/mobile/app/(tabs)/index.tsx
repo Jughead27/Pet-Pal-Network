@@ -66,9 +66,60 @@ export default function HomeScreen() {
   // page. No footer cell here: the pager snaps to full-page intervals, and a
   // short footer would break snap alignment — prefetching ahead means the
   // end is normally never seen.
+  //
+  // Web only: suppress CSS scroll-snap for the duration of the fetch+append.
+  // Appending cells mutates the DOM inside the scroller (new nodes, taller
+  // content container), and mandatory scroll-snap re-evaluates after
+  // in-scroller content changes — a mid-momentum append can therefore cut the
+  // user's scroll short and re-commit to a different snap position (rapid
+  // multi-post jump; sibling of the Aug 12 windowHeight bug, different
+  // trigger). Same suppress-then-restore technique as the restore loops.
+  // Restoration happens in the isFetchingNextPage effect below, a couple of
+  // rAFs after the append has committed to the DOM.
+  const appendSnapSuppressedRef = useRef<HTMLElement | null>(null);
   const handleEndReached = useCallback(() => {
-    if (hasNextPage && !isFetchingNextPage) fetchNextPage();
+    if (!hasNextPage || isFetchingNextPage) return;
+    if (Platform.OS === 'web' && webRestoreDone.current && !appendSnapSuppressedRef.current) {
+      // Skip if a restore loop is in flight — it manages snap suppression
+      // itself, and re-enabling snap mid-loop would fight it.
+      const node = (flatListRef.current as unknown as {
+        getScrollableNode?: () => HTMLElement | null;
+      } | null)?.getScrollableNode?.() ?? null;
+      if (node) {
+        node.style.scrollSnapType = 'none';
+        appendSnapSuppressedRef.current = node;
+      }
+    }
+    fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+
+  // Restore scroll-snap once the fetch has finished (success OR error) and the
+  // appended cells have committed to the DOM — two rAFs after the render in
+  // which isFetchingNextPage flipped back to false, matching the existing
+  // restore loops' frame-based timing. If a restore loop started while we were
+  // suppressed, leave restoration to the loop (it resets scrollSnapType at
+  // finish); just drop our claim.
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (isFetchingNextPage || !appendSnapSuppressedRef.current) return;
+    let cancelled = false;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (cancelled) return;
+      const node = appendSnapSuppressedRef.current;
+      appendSnapSuppressedRef.current = null;
+      if (node && webRestoreDone.current) {
+        node.style.scrollSnapType = ''; // back to RNW's mandatory snap
+      }
+    }));
+    return () => { cancelled = true; };
+  }, [isFetchingNextPage]);
+
+  // Unmount safety: never leave the scroller with snap disabled.
+  useEffect(() => () => {
+    const node = appendSnapSuppressedRef.current;
+    appendSnapSuppressedRef.current = null;
+    if (node) node.style.scrollSnapType = '';
+  }, []);
 
   // ── Window dimensions — used as the web fallback for page height ──────────
   // On web, the flex:1 chain inside Expo Router's Tabs shell never resolves to

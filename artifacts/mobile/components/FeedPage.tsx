@@ -139,7 +139,11 @@ interface FeedPageProps {
 
 // ─── FeedPage ─────────────────────────────────────────────────────────────────
 
-export default function FeedPage({
+// Memoized (default shallow compare): a pagination append gives the parent
+// FlatList a new posts array, but each existing post object keeps its identity
+// and height/reducedMotion/onOpenCommentSheet are stable at the call site —
+// so already-mounted pages skip re-rendering entirely on appends.
+function FeedPage({
   post,
   height,
   reducedMotion,
@@ -852,6 +856,8 @@ export default function FeedPage({
     </View>
   );
 }
+
+export default React.memo(FeedPage);
 
 // ─── Styles ──────────────────────────────────────────────────────────────────
 
