@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, ArrowClockwise } from 'phosphor-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import { formatCount } from '@/utils/formatCount';
 import { customFetch } from '@workspace/api-client-react';
 
 interface Suggestion {
@@ -73,7 +74,7 @@ export default function AdminBreedsScreen() {
             <Text style={[styles.speciesName,  { color: colors.mutedForeground }]}>{item.speciesName}</Text>
           </View>
           <Text style={[styles.count, { color: colors.mutedForeground }]}>
-            {item.petCount} {item.petCount === 1 ? 'pet' : 'pets'}
+            {formatCount(item.petCount)} {item.petCount === 1 ? 'pet' : 'pets'}
           </Text>
         </View>
 

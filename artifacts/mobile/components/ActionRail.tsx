@@ -28,6 +28,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { HandTap, Bone, Fish, Carrot, Cookie, ChatCircle, ShareNetwork } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
+import { formatCount } from '@/utils/formatCount';
 import { useBoopPost, useTreatPost } from '@workspace/api-client-react';
 
 // AsyncStorage keys for one-time teaching labels (persist across reloads).
@@ -757,13 +758,6 @@ export default function ActionRail({
 
     </View>
   );
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function formatCount(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────

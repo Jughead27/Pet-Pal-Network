@@ -1,0 +1,15 @@
+Do not modify any file outside: creating a new shared utility (follow this project's existing convention — e.g. mobile/utils/formatCount.ts, matching how formatAge.ts was set up earlier), and the files that display: post boop/treat counts, comment counts, follower/following counts (Pets I Follow, profile), the admin metrics strip (total users/invites-accepted/posts), and Invite Management per-user post/comment counts. Do not touch any other logic, styling, or behavior in these files beyond swapping in the new formatting utility.
+
+CONTEXT: Numeric counts throughout the app currently display as raw numbers (e.g. "1284") with no scaling for large values. Add IG/TikTok-style abbreviation for numbers at scale.
+
+FIX:
+1. Create a shared formatCount(n: number) utility with these rules:
+   - Below 1,000: show the exact number, unformatted (e.g. 284, 999).
+   - 1,000 to 999,999: show one decimal place with a "K" suffix, but DROP the decimal if it's .0 (e.g. 1284 → "1.2K", 15000 → "15K", not "15.0K"). Round, don't truncate (e.g. 1250 → "1.3K" not "1.2K").
+   - 1,000,000 and above: same pattern with "M" (e.g. 3,400,000 → "3.4M").
+   - Negative numbers or non-finite input: handle gracefully (return "0" or the raw value as a string — use judgment, but don't throw or return something broken).
+2. Find every place in the app that currently displays a raw count for: post boop counts, post treat counts, comment counts, follower/following counts (Pets I Follow list, profile screen), the admin Users page summary metrics strip (total users, invites-accepted, posts), and Invite Management's per-user post/comment counts. Search broadly — there may be other count displays not explicitly listed here that follow the same pattern (e.g. any other place a raw numeric count from the API is rendered directly) — apply the same utility there too if found, and report what you found.
+3. Replace each raw number render with a call to the new formatCount utility.
+4. Do NOT apply this to anything that isn't actually a count that could scale — e.g. do not touch dates, IDs, or any number that represents something other than a quantity of items/interactions.
+
+ACCEPTANCE TEST: (1) All small counts (under 1,000) display exactly as before, unchanged. (2) A count in the thousands displays in K format, correctly rounded (e.g. 1,250 → "1.3K"). (3) A count in the millions (if any exist / can be simulated) displays in M format. (4) No other UI, layout, or logic changes anywhere touched. (5) tsc clean. (6) Report back a full list of every location where formatCount was applied, including any additional spots found beyond what was explicitly listed above.

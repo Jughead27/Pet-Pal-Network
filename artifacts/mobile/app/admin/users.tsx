@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, ArrowClockwise } from 'phosphor-react-native';
 import { useQuery } from '@tanstack/react-query';
 import { useColors } from '@/hooks/useColors';
+import { formatCount } from '@/utils/formatCount';
 import { customFetch } from '@workspace/api-client-react';
 
 interface UsersSummary {
@@ -65,7 +66,7 @@ export default function AdminUsersScreen() {
         {item.role === 'admin' ? `${item.invitesUsed}/∞` : `${item.invitesUsed}/${item.effectiveQuota}`}
       </Text>
       <Text style={[styles.cellPosts, { color: colors.mutedForeground }]}>
-        {item.postCount}
+        {formatCount(item.postCount)}
       </Text>
     </View>
   );
@@ -104,7 +105,7 @@ export default function AdminUsersScreen() {
             <>
               {summary && (
                 <Text style={[styles.summaryStrip, { color: colors.mutedForeground }]}>
-                  {summary.totalUsers} users · {summary.totalInvitesAccepted}/{summary.totalInvites} invites accepted · {summary.totalPosts} posts
+                  {formatCount(summary.totalUsers)} users · {formatCount(summary.totalInvitesAccepted)}/{formatCount(summary.totalInvites)} invites accepted · {formatCount(summary.totalPosts)} posts
                 </Text>
               )}
               <View style={[styles.row, styles.headRow, { borderBottomColor: colors.border }]}>

@@ -23,6 +23,7 @@ import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'phosphor-react-native';
 import { useColors } from '@/hooks/useColors';
+import { formatCount } from '@/utils/formatCount';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { customFetch, useGetMe } from '@workspace/api-client-react';
 
@@ -358,7 +359,7 @@ function UserRow({
 
       {/* Content stats — live counts only (matches admin health-stats convention) */}
       <Text style={[styles.stats, { color: colors.mutedForeground }]}>
-        {row.postCount} post{row.postCount === 1 ? '' : 's'} · {row.commentCount} comment{row.commentCount === 1 ? '' : 's'}
+        {formatCount(row.postCount)} post{row.postCount === 1 ? '' : 's'} · {formatCount(row.commentCount)} comment{row.commentCount === 1 ? '' : 's'}
       </Text>
 
       {/* Quota editor — hidden for admin rows (quota is bypassed server-side) */}

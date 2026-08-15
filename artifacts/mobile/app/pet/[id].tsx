@@ -66,6 +66,7 @@ import {
 import type { FeedPost, PackResult } from "@workspace/api-client-react";
 import { useAuth } from "@clerk/clerk-expo";
 import { resolveMediaKey } from "@/utils/mediaKey";
+import { formatCount } from "@/utils/formatCount";
 import { compressImage } from "@/utils/compressImage";
 import { maybeConvertHeic } from "@/utils/maybeConvertHeic";
 import AddToPackLink from "@/components/AddToPackLink";
@@ -76,11 +77,6 @@ const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const HERO_HEIGHT = SCREEN_HEIGHT * 0.42;
 // GRID_ITEM_SIZE computed dynamically inside component using useColumnWidth() so
 // it respects the 430-px web column rather than the full window width.
-
-function formatCount(n: number): string {
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
 
 /** Filled paw icon for the Pack stat cell. */
 function PawStatIcon({ size = 16, color }: { size?: number; color: string }) {
