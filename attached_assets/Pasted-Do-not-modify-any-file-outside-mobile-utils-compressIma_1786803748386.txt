@@ -1,0 +1,15 @@
+Do not modify any file outside mobile/utils/compressImage.ts and the compose/post-creation screen(s) that call it (likely app/(tabs)/add.tsx and/or pet/create.tsx — wherever the crop tool finalizes output before upload). Do not touch the crop tool itself, the image picker, or any part of the composing/framing UI.
+
+CONTEXT: pshpsh currently stores photos without resizing or compressing them on ingest — likely at whatever resolution/size the user's device originally captured. This needs a resize+compress step, but it MUST happen only on the final cropped output, immediately before upload — never before or during cropping, so the crop tool always works against the full-resolution original photo (pinch/zoom/framing must be completely unaffected).
+
+FIND FIRST: locate the exact point in the compose flow where cropping is finalized and the resulting image is about to be uploaded (handed off to the presigned-upload flow). This is the ONLY point where the new compression step should be inserted.
+
+FIX:
+1. In compressImage.ts (or a new function alongside it if cleaner), add a resize+compress step: resize the image so its longest dimension is capped at 2048px (maintain aspect ratio, do not upscale images already smaller than this), re-encode as JPEG at 85% quality, and strip EXIF metadata (location data, camera info, etc. — this is also a privacy improvement, not just a size one).
+2. Wire this into the compose flow at the exact point identified above — after crop finalization, immediately before the file is handed to the upload step. Do NOT apply this resize/compress step anywhere earlier in the flow (not on picker selection, not during crop tool interaction).
+3. If avatar uploads go through a similar pipeline, apply the same treatment there too — but confirm this is a separate/similar call site before assuming, and report what you find.
+4. Preserve existing HEIC/HEIF handling (already built) — this compression step should run AFTER any HEIC-to-JPEG conversion already in place, not replace or conflict with it.
+
+DO NOT: apply any resizing/compression before the crop tool opens, change the crop tool's UI or interaction in any way, or change what resolution/quality the user sees WHILE composing (only the final uploaded output changes).
+
+ACCEPTANCE TEST: (1) Picking a photo and using the crop tool feels completely unchanged — zooming, panning, and framing work exactly as before, at full original resolution. (2) After posting, the uploaded photo displays normally in the feed with no visible quality degradation to the eye. (3) Check the actual file size of a newly uploaded photo (e.g. via browser dev tools network tab, or R2 dashboard) to confirm it's meaningfully smaller than before this change — report the before/after size difference if you can determine it. (4) HEIC/HEIF uploads still work correctly. (5) tsc clean.
