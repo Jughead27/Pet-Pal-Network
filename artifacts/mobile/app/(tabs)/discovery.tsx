@@ -154,7 +154,32 @@ export default function SniffScreen() {
     ...getGetSpeciesByIdBreedsQueryOptions(activeSpeciesId ?? ''),
     enabled: !!activeSpeciesId,
   });
-  const breedOptions = breedsData?.breeds ?? [];
+
+  // Same pattern as the species chips, one level deeper: a species-filtered
+  // sample (single max-size page — never displayed) enumerates which breeds
+  // actually appear among that species' recent posts. Deliberately WITHOUT
+  // breedId, so the option list stays complete while a breed is active.
+  const speciesSampleParams = { ...baseParams, speciesId: activeSpeciesId ?? '', limit: 50 };
+  const { data: speciesSampleData } = useGetFeed(speciesSampleParams, {
+    query: {
+      queryKey: getGetFeedQueryKey(speciesSampleParams),
+      enabled: !!activeSpeciesId,
+    },
+  });
+
+  // Catalogue breeds restricted to those present in the sample. Breed names in
+  // feed posts are server-resolved from the catalogue when breedId is set, so
+  // exact name matching is safe; free-text ("not listed") breeds match no
+  // catalogue entry and are correctly excluded (they can't be filtered anyway).
+  const breedOptions = useMemo(() => {
+    const all = breedsData?.breeds ?? [];
+    const postedBreeds = new Set(
+      (speciesSampleData?.posts ?? [])
+        .map((p) => p.pet.breed)
+        .filter((b): b is string => !!b),
+    );
+    return all.filter((b) => postedBreeds.has(b.name));
+  }, [breedsData, speciesSampleData]);
 
   // Row-3 visibility — same cached query SpotlightBanner uses (no extra fetch).
   // Divider + row only exist when there is content to separate.
