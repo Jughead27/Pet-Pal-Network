@@ -45,6 +45,7 @@ import { useColumnWidth } from '@/hooks/useColumnWidth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
+import { LinearGradient } from 'expo-linear-gradient';
 import { GetFeedSort, useGetFeed, useGetFeedInfinite, useGetFeedSpecies, useGetSpotlight, getGetFeedQueryKey } from '@workspace/api-client-react';
 import type { FeedResponse } from '@workspace/api-client-react';
 import type { InfiniteData } from '@tanstack/react-query';
@@ -540,6 +541,21 @@ export default function SniffScreen() {
           <View style={styles.chipScrollPlaceholder} />
         )}
 
+        {/* Right-edge fade — softens chips scrolling under the sort control.
+            Sits AFTER the ScrollView but BEFORE sortControl in the z-stack, so
+            chips fade out beneath it while the sort control's own opaque
+            background remains the final hard boundary. pointerEvents:none so
+            chip taps and scroll gestures pass straight through. */}
+        {chips.length > 0 && (
+          <LinearGradient
+            colors={[`${colors.background}00`, colors.background]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.chipFade}
+            pointerEvents="none"
+          />
+        )}
+
         {/* Sort toggle — absolutely positioned within the band, right-aligned */}
         <View
           style={[styles.sortControl, { backgroundColor: colors.background }]}
@@ -997,6 +1013,17 @@ const styles = StyleSheet.create({
   },
   chipTextInactive: {
     fontFamily: 'Inter_400Regular',
+  },
+
+  // ── Right-edge chip fade — overlays the chip scroll, under sortControl ────
+  // Width matches the SORT_CTRL_WIDTH end-padding already reserved in the
+  // chip scroll content, so the fade zone and the reserved space coincide.
+  chipFade: {
+    position: 'absolute',
+    right:    0,
+    top:      0,
+    bottom:   0,
+    width:    SORT_CTRL_WIDTH,
   },
 
   // ── Sort toggle — right-aligned within chipSortBand ───────────────────────
