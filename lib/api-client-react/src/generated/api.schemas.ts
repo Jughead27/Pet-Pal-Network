@@ -369,6 +369,18 @@ export interface BreedItem {
   name: string;
 }
 
+/**
+ * A species that has at least one eligible post
+ */
+export interface FeedSpeciesItem {
+  id: string;
+  name: string;
+}
+
+export interface FeedSpeciesResponse {
+  species: FeedSpeciesItem[];
+}
+
 export interface BreedListResponse {
   breeds: BreedItem[];
 }
@@ -761,6 +773,13 @@ export const GetFeedSort = {
   fresh: 'fresh',
   popular: 'popular',
 } as const;
+
+export type GetFeedSpeciesParams = {
+/**
+ * When true, restricts to nursery (is_nursery=true) posts.
+ */
+nursery?: boolean;
+};
 
 export type CancelCoOwnershipRequest200 = {
   ok: boolean;

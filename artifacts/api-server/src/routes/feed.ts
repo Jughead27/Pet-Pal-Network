@@ -10,6 +10,7 @@ import {
   packFollowsTable,
   postPetsTable,
   breedsTable,
+  speciesTable,
 } from "@workspace/db";
 import { and, eq, gte, desc, sql, isNull } from "drizzle-orm";
 import { activePets } from "../lib/petQueries.js";
@@ -320,6 +321,69 @@ router.get("/feed", async (req, res) => {
   }));
 
   res.json({ posts, viewer: { treatsRemainingToday }, nextCursor });
+});
+
+/**
+ * GET /feed/species
+ *
+ * Distinct species with at least one eligible post — powers the Sniff and
+ * Nursery species chips. Exhaustive (grouped query over all posts), NOT a
+ * recent-posts sample. Applies the exact same eligibility rules as GET /feed:
+ * archived, admin-hidden, blocked-owner, and soft-deleted-pet posts excluded.
+ *
+ * ?nursery=true scopes to nursery posts (for the Nursery screen's chips).
+ */
+router.get("/feed/species", async (req, res) => {
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const nurseryOnly = req.query.nursery === "true";
+
+  const rows = await db
+    .select({ id: speciesTable.id, name: speciesTable.name })
+    .from(postsTable)
+    .innerJoin(petsTable,    eq(petsTable.id, postsTable.petId))
+    .innerJoin(speciesTable, eq(speciesTable.id, petsTable.speciesId))
+    .where(and(
+      isNull(postsTable.archivedAt),
+      activePets,
+      nurseryOnly ? eq(postsTable.isNursery, true) : undefined,
+      notBlockedPostOwner(userId),
+      notHiddenByAdminPost(),
+    ))
+    .groupBy(speciesTable.id, speciesTable.name, speciesTable.sortOrder)
+    .orderBy(speciesTable.sortOrder);
+
+  res.json({ species: rows });
+});
+
+/**
+ * GET /feed/species/:id/breeds
+ *
+ * Distinct catalogue breeds of a species with at least one eligible post —
+ * powers the Sniff breed dropdown. Same eligibility rules as GET /feed.
+ * Pets with free-text ("not listed") breeds have breed_id NULL and are
+ * naturally excluded by the inner join. Alphabetical, same shape as
+ * GET /species/:id/breeds so the client can swap sources directly.
+ */
+router.get("/feed/species/:id/breeds", async (req, res) => {
+  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const { id: speciesId } = req.params;
+
+  const rows = await db
+    .select({ id: breedsTable.id, speciesId: breedsTable.speciesId, name: breedsTable.name })
+    .from(postsTable)
+    .innerJoin(petsTable,   eq(petsTable.id, postsTable.petId))
+    .innerJoin(breedsTable, eq(breedsTable.id, petsTable.breedId))
+    .where(and(
+      isNull(postsTable.archivedAt),
+      activePets,
+      sql`${petsTable.speciesId}::text = ${speciesId}`,
+      notBlockedPostOwner(userId),
+      notHiddenByAdminPost(),
+    ))
+    .groupBy(breedsTable.id, breedsTable.speciesId, breedsTable.name)
+    .orderBy(breedsTable.name);
+
+  res.json({ breeds: rows });
 });
 
 export default router;

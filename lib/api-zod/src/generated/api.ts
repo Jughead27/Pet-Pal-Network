@@ -101,6 +101,39 @@ export const GetSpotlightResponse = zod.object({
 
 
 /**
+ * Distinct species (catalogue id + name) that have at least one eligible post — same eligibility rules as GET /feed (excludes archived, admin-hidden, blocked-owner, and soft-deleted-pet posts). Exhaustive, not sample-based. Ordered by catalogue sort_order.
+ * @summary Species with eligible posts
+ */
+export const GetFeedSpeciesQueryParams = zod.object({
+  "nursery": zod.coerce.boolean().optional().describe('When true, restricts to nursery (is_nursery=true) posts.')
+})
+
+export const GetFeedSpeciesResponse = zod.object({
+  "species": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string()
+}).describe('A species that has at least one eligible post'))
+})
+
+
+/**
+ * Distinct catalogue breeds of the given species that have at least one eligible post — same eligibility rules as GET /feed. Exhaustive, not sample-based. Ordered alphabetically. Pets with free-text ("not listed") breeds have no catalogue breed and are never included.
+ * @summary Breeds with eligible posts for a species
+ */
+export const GetFeedSpeciesBreedsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const GetFeedSpeciesBreedsResponse = zod.object({
+  "breeds": zod.array(zod.object({
+  "id": zod.string(),
+  "speciesId": zod.string(),
+  "name": zod.string()
+}).describe('A breed entry'))
+})
+
+
+/**
  * Returns all species ordered by sort_order, each with a breed count.
  * @summary List all species
  */

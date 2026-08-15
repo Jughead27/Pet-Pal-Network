@@ -42,7 +42,7 @@ import { useColumnWidth } from '@/hooks/useColumnWidth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { useGetFeed, useGetFeedInfinite, getGetFeedQueryKey } from '@workspace/api-client-react';
+import { useGetFeed, useGetFeedInfinite, useGetFeedSpecies, getGetFeedQueryKey } from '@workspace/api-client-react';
 import type { FeedResponse } from '@workspace/api-client-react';
 import type { InfiniteData } from '@tanstack/react-query';
 import type { FeedPost } from '@workspace/api-client-react';
@@ -121,18 +121,17 @@ export default function NurseryScreen() {
     if (hasNextPage && !isFetchingNextPage) fetchNextPage();
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
-  // ── Species chips — derived from the unfiltered result ────────────────────
-  const chips: SpeciesChip[] = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const p of allData?.posts ?? []) {
-      if (p.pet.speciesId && !seen.has(p.pet.speciesId)) {
-        seen.set(p.pet.speciesId, p.pet.species);
-      }
-    }
-    return Array.from(seen.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [allData?.posts]);
+  // ── Species chips — exhaustive species-with-posts endpoint, scoped to
+  // nursery posts (same eligibility rules as /feed?nursery=true). A species
+  // with one eligible nursery post always gets a chip, however old the post.
+  // '/api/feed' prefix FIRST so existing feed invalidations refresh the chips.
+  const { data: feedSpeciesData } = useGetFeedSpecies({ nursery: true }, {
+    query: { queryKey: ['/api/feed', 'species', { nursery: true }] },
+  });
+  const chips: SpeciesChip[] = useMemo(
+    () => [...(feedSpeciesData?.species ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [feedSpeciesData],
+  );
 
   // ── Layout measurement (shared between grid and pager) ─────────────────────
   // On web effectivePageHeight is always windowHeight (onLayout resolves to 0).

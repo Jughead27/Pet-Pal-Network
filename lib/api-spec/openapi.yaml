@@ -145,6 +145,71 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /feed/species:
+    get:
+      operationId: getFeedSpecies
+      tags: [feed]
+      summary: Species with eligible posts
+      description: >
+        Distinct species (catalogue id + name) that have at least one eligible
+        post — same eligibility rules as GET /feed (excludes archived,
+        admin-hidden, blocked-owner, and soft-deleted-pet posts). Exhaustive,
+        not sample-based. Ordered by catalogue sort_order.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: nursery
+          in: query
+          required: false
+          schema:
+            type: boolean
+          description: When true, restricts to nursery (is_nursery=true) posts.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedSpeciesResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /feed/species/{id}/breeds:
+    get:
+      operationId: getFeedSpeciesBreeds
+      tags: [feed]
+      summary: Breeds with eligible posts for a species
+      description: >
+        Distinct catalogue breeds of the given species that have at least one
+        eligible post — same eligibility rules as GET /feed. Exhaustive, not
+        sample-based. Ordered alphabetically. Pets with free-text
+        ("not listed") breeds have no catalogue breed and are never included.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BreedListResponse"
+        "401":
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /species:
     get:
       operationId: getSpecies
@@ -2398,6 +2463,28 @@ components:
         - id
         - speciesId
         - name
+
+    FeedSpeciesItem:
+      type: object
+      description: A species that has at least one eligible post
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+        - id
+        - name
+
+    FeedSpeciesResponse:
+      type: object
+      properties:
+        species:
+          type: array
+          items:
+            $ref: "#/components/schemas/FeedSpeciesItem"
+      required:
+        - species
 
     BreedListResponse:
       type: object

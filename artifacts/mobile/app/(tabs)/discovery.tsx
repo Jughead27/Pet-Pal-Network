@@ -45,7 +45,7 @@ import { useColumnWidth } from '@/hooks/useColumnWidth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
-import { GetFeedSort, useGetFeed, useGetFeedInfinite, useGetSpotlight, getGetFeedQueryKey } from '@workspace/api-client-react';
+import { GetFeedSort, useGetFeed, useGetFeedInfinite, useGetFeedSpecies, useGetSpotlight, getGetFeedQueryKey } from '@workspace/api-client-react';
 import type { FeedResponse } from '@workspace/api-client-react';
 import type { InfiniteData } from '@tanstack/react-query';
 import type { FeedPost } from '@workspace/api-client-react';
@@ -58,7 +58,7 @@ import SpotlightBanner, { type SpotlightPetRef } from '@/components/SpotlightBan
 import { Dog } from 'phosphor-react-native';
 import { Modal } from 'react-native';
 import { useQuery } from '@tanstack/react-query';
-import { getGetSpeciesByIdBreedsQueryOptions } from '@workspace/api-client-react';
+import { getGetFeedSpeciesBreedsQueryOptions } from '@workspace/api-client-react';
 
 // ─── Layout constants ──────────────────────────────────────────────────────────
 
@@ -150,36 +150,19 @@ export default function SniffScreen() {
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Breeds for the selected species — drives the breed picker sheet.
+  // Exhaustive server-side DISTINCT over ALL eligible posts (same eligibility
+  // rules as /feed), not a recent-posts sample. Not breed-filtered, so the
+  // option list stays complete while a breed is active (switching still works).
+  // queryKey keeps the '/api/feed' prefix FIRST (same trick as the infinite
+  // feed keys) so existing invalidateQueries(getGetFeedQueryKey()) calls on
+  // post create/archive/delete/edit refresh the options too — matching how
+  // the old sample-based derivation stayed fresh.
   const { data: breedsData } = useQuery({
-    ...getGetSpeciesByIdBreedsQueryOptions(activeSpeciesId ?? ''),
+    ...getGetFeedSpeciesBreedsQueryOptions(activeSpeciesId ?? ''),
+    queryKey: ['/api/feed', 'species', activeSpeciesId ?? '', 'breeds'],
     enabled: !!activeSpeciesId,
   });
-
-  // Same pattern as the species chips, one level deeper: a species-filtered
-  // sample (single max-size page — never displayed) enumerates which breeds
-  // actually appear among that species' recent posts. Deliberately WITHOUT
-  // breedId, so the option list stays complete while a breed is active.
-  const speciesSampleParams = { ...baseParams, speciesId: activeSpeciesId ?? '', limit: 50 };
-  const { data: speciesSampleData } = useGetFeed(speciesSampleParams, {
-    query: {
-      queryKey: getGetFeedQueryKey(speciesSampleParams),
-      enabled: !!activeSpeciesId,
-    },
-  });
-
-  // Catalogue breeds restricted to those present in the sample. Breed names in
-  // feed posts are server-resolved from the catalogue when breedId is set, so
-  // exact name matching is safe; free-text ("not listed") breeds match no
-  // catalogue entry and are correctly excluded (they can't be filtered anyway).
-  const breedOptions = useMemo(() => {
-    const all = breedsData?.breeds ?? [];
-    const postedBreeds = new Set(
-      (speciesSampleData?.posts ?? [])
-        .map((p) => p.pet.breed)
-        .filter((b): b is string => !!b),
-    );
-    return all.filter((b) => postedBreeds.has(b.name));
-  }, [breedsData, speciesSampleData]);
+  const breedOptions = breedsData?.breeds ?? [];
 
   // Row-3 visibility — same cached query SpotlightBanner uses (no extra fetch).
   // Divider + row only exist when there is content to separate.
@@ -194,19 +177,17 @@ export default function SniffScreen() {
     [filteredData],
   );
 
-  // Chips derived from the UNFILTERED results (any sort — same post set).
-  // Only species with a catalogue speciesId get a chip.
-  const chips: SpeciesChip[] = useMemo(() => {
-    const seen = new Map<string, string>();
-    for (const p of allData?.posts ?? []) {
-      if (p.pet.speciesId && !seen.has(p.pet.speciesId)) {
-        seen.set(p.pet.speciesId, p.pet.species);
-      }
-    }
-    return Array.from(seen.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [allData?.posts]);
+  // Chips from the exhaustive species-with-posts endpoint (same eligibility
+  // rules as /feed) — a species with one eligible post always gets a chip,
+  // no matter how old the post is. Alphabetical, as before.
+  // '/api/feed' prefix FIRST so existing feed invalidations refresh the chips.
+  const { data: feedSpeciesData } = useGetFeedSpecies(undefined, {
+    query: { queryKey: ['/api/feed', 'species'] },
+  });
+  const chips: SpeciesChip[] = useMemo(
+    () => [...(feedSpeciesData?.species ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+    [feedSpeciesData],
+  );
 
   // ── Layout measurement ─────────────────────────────────────────────────────
   const [pageHeight, setPageHeight] = useState(0);

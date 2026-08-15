@@ -37,7 +37,9 @@ import type {
   DeleteMyAccount200,
   ErrorResponse,
   FeedResponse,
+  FeedSpeciesResponse,
   GetFeedParams,
+  GetFeedSpeciesParams,
   HealthStatus,
   InterestFollowResult,
   MePatchBody,
@@ -371,6 +373,169 @@ export function useGetSpotlight<TData = Awaited<ReturnType<typeof getSpotlight>>
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetSpotlightQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetFeedSpeciesUrl = (params?: GetFeedSpeciesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/feed/species?${stringifiedParams}` : `/api/feed/species`
+}
+
+/**
+ * Distinct species (catalogue id + name) that have at least one eligible post — same eligibility rules as GET /feed (excludes archived, admin-hidden, blocked-owner, and soft-deleted-pet posts). Exhaustive, not sample-based. Ordered by catalogue sort_order.
+ * @summary Species with eligible posts
+ */
+export const getFeedSpecies = async (params?: GetFeedSpeciesParams, options?: RequestInit): Promise<FeedSpeciesResponse> => {
+
+  return customFetch<FeedSpeciesResponse>(getGetFeedSpeciesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFeedSpeciesQueryKey = (params?: GetFeedSpeciesParams,) => {
+    return [
+    `/api/feed/species`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetFeedSpeciesQueryOptions = <TData = Awaited<ReturnType<typeof getFeedSpecies>>, TError = ErrorType<ErrorResponse>>(params?: GetFeedSpeciesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedSpecies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFeedSpeciesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeedSpecies>>> = ({ signal }) => getFeedSpecies(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFeedSpecies>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFeedSpeciesQueryResult = NonNullable<Awaited<ReturnType<typeof getFeedSpecies>>>
+export type GetFeedSpeciesQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Species with eligible posts
+ */
+
+export function useGetFeedSpecies<TData = Awaited<ReturnType<typeof getFeedSpecies>>, TError = ErrorType<ErrorResponse>>(
+ params?: GetFeedSpeciesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedSpecies>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFeedSpeciesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetFeedSpeciesBreedsUrl = (id: string,) => {
+
+
+
+
+  return `/api/feed/species/${id}/breeds`
+}
+
+/**
+ * Distinct catalogue breeds of the given species that have at least one eligible post — same eligibility rules as GET /feed. Exhaustive, not sample-based. Ordered alphabetically. Pets with free-text ("not listed") breeds have no catalogue breed and are never included.
+ * @summary Breeds with eligible posts for a species
+ */
+export const getFeedSpeciesBreeds = async (id: string, options?: RequestInit): Promise<BreedListResponse> => {
+
+  return customFetch<BreedListResponse>(getGetFeedSpeciesBreedsUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFeedSpeciesBreedsQueryKey = (id: string,) => {
+    return [
+    `/api/feed/species/${id}/breeds`
+    ] as const;
+    }
+
+
+export const getGetFeedSpeciesBreedsQueryOptions = <TData = Awaited<ReturnType<typeof getFeedSpeciesBreeds>>, TError = ErrorType<ErrorResponse>>(id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedSpeciesBreeds>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFeedSpeciesBreedsQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFeedSpeciesBreeds>>> = ({ signal }) => getFeedSpeciesBreeds(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: id !== null && id !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFeedSpeciesBreeds>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFeedSpeciesBreedsQueryResult = NonNullable<Awaited<ReturnType<typeof getFeedSpeciesBreeds>>>
+export type GetFeedSpeciesBreedsQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Breeds with eligible posts for a species
+ */
+
+export function useGetFeedSpeciesBreeds<TData = Awaited<ReturnType<typeof getFeedSpeciesBreeds>>, TError = ErrorType<ErrorResponse>>(
+ id: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFeedSpeciesBreeds>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFeedSpeciesBreedsQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
