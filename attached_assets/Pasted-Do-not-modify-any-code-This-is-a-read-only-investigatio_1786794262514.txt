@@ -1,0 +1,11 @@
+Do not modify any code. This is a read-only investigation — report findings only.
+
+CONTEXT: The Home feed previously had a rapid-scroll bug (root-caused Aug 12 to windowHeight re-anchoring during viewport changes, fixed via a debounce). That fix was live-verified working. Today, feed pagination was added to the Home feed (app/(tabs)/index.tsx) — the posts array is now a flattened memo derived from an infinite-query hook, with onEndReached triggering a fetch of the next page as the user scrolls near the end of loaded data. Shortly after this pagination work went live, the rapid-scroll symptom reappeared while the user was actively scrolling.
+
+INVESTIGATE:
+1. Does fetching a new page (via onEndReached) and appending it to the flattened posts memo cause the FlatList's data prop to receive a new array reference in a way that could trigger a re-render or re-layout of already-visible items, not just the newly appended ones?
+2. Does the existing windowHeight re-anchor effect (the debounced one from Aug 12) or the scroll-snap logic have any dependency, directly or indirectly, on the posts array or its length that could cause it to re-fire when a new page loads (even though windowHeight itself hasn't changed)?
+3. Is there any interaction between the "2-page prefetch threshold" onEndReached logic and the FlatList's getItemLayout / snapToInterval configuration — specifically, could a mid-scroll data update cause a momentary mismatch between the scroll position the user's momentum is carrying them to and where the FlatList thinks items are laid out?
+4. Report exactly what happens, step by step, in the code when onEndReached fires while the user is actively scrolling — does anything in that path touch scroll position, force a layout recalculation, or interact with the existing re-anchor/restore logic at all?
+
+Do not make any code changes or propose a fix — just trace and report the actual mechanism, so we can confirm whether this is really the pagination fetch interacting with the existing scroll logic, or something else entirely.
