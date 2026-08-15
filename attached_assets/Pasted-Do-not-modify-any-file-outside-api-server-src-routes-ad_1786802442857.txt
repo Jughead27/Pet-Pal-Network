@@ -1,0 +1,13 @@
+Do not modify any file outside api-server/src/routes/admin.ts (or wherever the existing GET /admin/cron/purge route lives) and index.ts if the same route-mounting treatment from earlier tonight is needed. Do not touch purgePets.ts's internal logic — that function is already correct.
+
+CONTEXT: The existing GET /admin/cron/purge route is already correctly wired to an external scheduler (secret-header-gated, timing-safe comparison, synthetic-auth dispatch to bypass the blanket admin role-gate while every other admin route stays protected — fixed earlier tonight). Separately, purgeSoftDeletedPets() in lib/purgePets.ts is fully built (hard-deletes a soft-deleted pet's posts/boops/treats/comments/pack_follows/pet_owners/co_ownership_requests + R2 media, in FK-safe order, after 30 days) but nothing currently invokes it.
+
+Rather than creating a second scheduled endpoint, fold pet-purging into the SAME existing /admin/cron/purge route, so one external scheduler trigger handles both jobs.
+
+FIX:
+1. Find the existing /admin/cron/purge handler and report what it currently purges (confirm what "purge" already refers to there, since the name suggests some existing cleanup duty — report this before changing anything).
+2. Add a call to purgeSoftDeletedPets() within that same handler, so both purge jobs run on the same trigger. purgeSoftDeletedPets() is idempotent-safe to call repeatedly (it internally filters to only pets soft-deleted more than 30 days ago, so calling it on any schedule — daily, hourly, etc. — is safe and simply finds nothing to purge on runs where nothing has aged past 30 days).
+3. Update the response summary to include results from BOTH purge operations (whatever the existing purge already reports, plus a count of pets/related rows purged by purgeSoftDeletedPets()).
+4. Ensure error handling is per-operation — if one purge operation fails, report that clearly without necessarily failing the entire request if the other operation succeeded (use judgment on the best approach here, but don't let one failure silently hide the other operation's success or failure).
+
+ACCEPTANCE TEST: (1) Calling the existing /admin/cron/purge endpoint with the correct secret now also invokes purgeSoftDeletedPets(), and the response summary reflects both operations. (2) Wrong/missing secret still rejects, exactly as before. (3) Every other admin route remains protected, unaffected. (4) tsc clean. (5) Report back what the ACTUAL external scheduling cadence for this route currently is (if determinable from the codebase — e.g. a documented cron expression, a comment, or configuration) so we know how often pet-purging will now run.

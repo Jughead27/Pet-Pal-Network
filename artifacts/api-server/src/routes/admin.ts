@@ -1533,16 +1533,37 @@ adminRouter.get("/admin/cron/purge", async (req, res) => {
     return;
   }
 
-  const [pets, comments, clerkDeletions] = await Promise.all([
+  // Per-operation error isolation: one failing purge job must not hide the
+  // outcome of the others. Each result is reported independently; the request
+  // returns 500 only if every operation failed, 207-style ok:false otherwise.
+  const [pets, comments, clerkDeletions] = await Promise.allSettled([
     purgeSoftDeletedPets(),
     purgeDeletedComments(),
     processClerkDeletions(),
   ]);
 
-  res.json({
-    ok: true,
-    purged: { pets: pets.purged, comments: comments.purged },
-    clerkDeletions,
+  // Log the real rejection server-side; return only a stable public code —
+  // this endpoint is externally reachable and must not echo provider/DB
+  // error text (query fragments, service identifiers) to the caller.
+  const logFailure = (op: string, r: PromiseSettledResult<unknown>) => {
+    if (r.status === "rejected") console.error(`[cron/purge] ${op} failed:`, r.reason);
+  };
+  logFailure("pet purge", pets);
+  logFailure("comment purge", comments);
+  logFailure("clerk deletions", clerkDeletions);
+
+  const failures = [pets, comments, clerkDeletions].filter(
+    (r) => r.status === "rejected",
+  );
+
+  res.status(failures.length === 3 ? 500 : 200).json({
+    ok: failures.length === 0,
+    purged: {
+      pets:     pets.status     === "fulfilled" ? pets.value.purged     : { error: "pet purge failed" },
+      comments: comments.status === "fulfilled" ? comments.value.purged : { error: "comment purge failed" },
+    },
+    clerkDeletions:
+      clerkDeletions.status === "fulfilled" ? clerkDeletions.value : { error: "clerk deletions failed" },
   });
 });
 
