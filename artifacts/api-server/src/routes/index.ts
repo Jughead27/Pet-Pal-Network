@@ -29,6 +29,18 @@ const router: IRouter = Router();
 router.use(healthRouter);  // GET /healthz
 router.use(mediaRouter);   // GET /media/* — HMAC-token-gated, no Clerk session
 router.use(invitesRouter); // POST /invites/request — public invite capture
+// GET /admin/cron/purge — called by an external scheduler with only the
+// X-Purge-Secret header (no Clerk session). Dispatched for this EXACT
+// method+path only; every other /admin/* route stays behind requireClerkAuth
+// below. adminRouter's blanket requireRole("admin") gate would 401 the
+// scheduler before the purge handler's secret check runs (despite the route's
+// doc comment, it IS covered by that gate), so a synthetic auth is attached
+// first — safe here because the ONLY thing reachable through this dispatch is
+// the purge handler, whose real gate is the timing-safe X-Purge-Secret check.
+router.get("/admin/cron/purge", (req, res, next) => {
+  (req as Express.RequestWithAuth).auth = { userId: "cron:purge", role: "admin" };
+  adminRouter(req, res, next);
+});
 
 // ─── Auth boundary ────────────────────────────────────────────────────────────
 // Every route registered after this point requires a valid Clerk session token.
