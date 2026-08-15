@@ -1,0 +1,17 @@
+Do not modify any file outside: mobile/app/pet/create.tsx, mobile/utils/compressImage.ts, api-server/src/routes/pack.ts, api-server/src/routes/blocks.ts, api-server/src/routes/notifications.ts, and api-server/src/routes/admin.ts. Do not touch pet/[id].tsx, ActionRail.tsx, or index.tsx — those are explicitly out of scope for this pass. Do not change any runtime behavior — this is purely adding correct types in place of `any`, with no logic changes.
+
+PART 1 — pet/create.tsx:
+The `makeStyles` function currently returns `Record<string, any>`, discarding style typing for the whole screen. Replace this with a proper type — use React Native's `StyleSheet.NamedStyles<T>` pattern (or whatever typed-styles convention is already used correctly elsewhere in this codebase — check other screens for the established pattern and match it) so invalid style keys/values would be caught at compile time.
+
+PART 2 — compressImage.ts:
+The `manipulateAsync` actions are currently accumulated in an `any[]`. Replace this with the actual action type from the image manipulation library being used (check the import — likely expo-image-manipulator — and use its exported action type, e.g. `ImageManipulator.Action[]` or equivalent) so malformed resize actions would be caught at compile time.
+
+PART 3 — pack.ts, blocks.ts, notifications.ts:
+Each of these currently hand-casts the request to `{ auth: { userId: string } }` instead of using the shared `Express.RequestWithAuth` type already used correctly elsewhere in this codebase (find where this shared type is defined and used correctly in other route files, and replicate that exact pattern here). Replace each hand-cast with the shared type.
+
+PART 4 — admin.ts:
+Raw query results are currently forced through `as unknown as Record<string, unknown>[]`, `as string`, `as number` in a few places (around lines 157-170, 968, 1237 per prior audit notes — verify current line numbers, code may have shifted from other changes tonight). Replace these with the actual return type of the query (infer or explicitly type based on what the query actually selects) rather than an unknown-cast escape hatch.
+
+For all four parts: if a type doesn't cleanly exist and would require significant new type definitions to do properly, use good judgment on the cleanest correct approach given this codebase's existing conventions, but do not introduce `any` anywhere as a shortcut — the entire point of this pass is removing `any`/unknown-cast usage, not relocating it.
+
+ACCEPTANCE TEST: (1) tsc clean across api-server and mobile — this is the primary correctness signal for a type-only change. (2) No behavior change anywhere — pet creation/editing, image compression during upload, pack/blocks/notifications endpoints, and all admin.ts functionality (users table, reports, etc.) work exactly as before. (3) Report back any spot where a clean type wasn't achievable and a judgment call was made, so it can be reviewed.

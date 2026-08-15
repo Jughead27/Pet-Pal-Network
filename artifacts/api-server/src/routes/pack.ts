@@ -13,7 +13,7 @@ const router: IRouter = Router();
  */
 router.post("/pets/:id/pack", async (req, res) => {
   const { id: petId } = req.params;
-  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const userId = (req as Express.RequestWithAuth).auth!.userId;
 
   // Verify pet exists and is not soft-deleted
   const [pet] = await db.select({ id: petsTable.id }).from(petsTable).where(and(eq(petsTable.id, petId), activePets));
@@ -44,7 +44,7 @@ router.post("/pets/:id/pack", async (req, res) => {
  */
 router.delete("/pets/:id/pack", async (req, res) => {
   const { id: petId } = req.params;
-  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const userId = (req as Express.RequestWithAuth).auth!.userId;
 
   // Verify pet exists and is not soft-deleted
   const [pet] = await db.select({ id: petsTable.id }).from(petsTable).where(and(eq(petsTable.id, petId), activePets));

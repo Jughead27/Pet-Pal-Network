@@ -119,8 +119,28 @@ adminRouter.get("/admin/stats", async (_req, res) => {
  * object (shape: { rows, rowCount, fields, ... }), NOT a bare array.
  * Always destructure .rows to get the actual data array.
  */
+type AdminReportRow = {
+  id:                   string;
+  targetType:           string;
+  targetId:             string;
+  reason:               string;
+  note:                 string | null;
+  createdAt:            Date;
+  reporterUsername:     string | null;
+  postCaption:          string | null;
+  postMediaKey:         string | null;
+  postHiddenByAdmin:    boolean | null;
+  postOwnerId:          string | null;
+  commentText:          string | null;
+  commentHiddenByAdmin: boolean | null;
+  commentAuthorId:      string | null;
+  targetUserUsername:    string | null;
+  targetUserDisplayName: string | null;
+  targetUserSuspended:   boolean | null;
+};
+
 adminRouter.get("/admin/reports", async (_req, res) => {
-  const { rows } = await db.execute(sql`
+  const { rows } = await db.execute<AdminReportRow>(sql`
     SELECT
       r.id,
       r.target_type         AS "targetType",
@@ -155,7 +175,7 @@ adminRouter.get("/admin/reports", async (_req, res) => {
       r.created_at ASC
   `);
 
-  const reports = (rows as unknown as Record<string, unknown>[]).map((r) => ({
+  const reports = rows.map((r) => ({
     id:              r.id,
     targetType:      r.targetType,
     targetId:        r.targetId,
@@ -168,7 +188,7 @@ adminRouter.get("/admin/reports", async (_req, res) => {
         ? {
             type:         "post",
             caption:      r.postCaption ?? null,
-            mediaUrl:     r.postMediaKey ? mediaTokenUrl(r.postMediaKey as string) : null,
+            mediaUrl:     r.postMediaKey ? mediaTokenUrl(r.postMediaKey) : null,
             hiddenByAdmin: Boolean(r.postHiddenByAdmin),
           }
         : r.targetType === "comment"
@@ -960,8 +980,15 @@ adminRouter.get("/admin/users-overview", async (_req, res) => {
  * NOTE: db.execute() with drizzle-orm/node-postgres returns a pg.QueryResult;
  * destructure .rows to get the bare array.
  */
+type BreedSuggestionRow = {
+  speciesId:   string;
+  speciesName: string;
+  breedName:   string;
+  petCount:    number;
+};
+
 adminRouter.get("/admin/breed-suggestions", async (_req, res) => {
-  const { rows } = await db.execute(sql`
+  const { rows } = await db.execute<BreedSuggestionRow>(sql`
     SELECT
       p.species_id     AS "speciesId",
       sp.name          AS "speciesName",
@@ -976,7 +1003,7 @@ adminRouter.get("/admin/breed-suggestions", async (_req, res) => {
     ORDER BY sp.name ASC, p.breed ASC
   `);
 
-  res.json({ suggestions: rows as unknown as Record<string, unknown>[] });
+  res.json({ suggestions: rows });
 });
 
 /**
@@ -1241,11 +1268,11 @@ adminRouter.get("/admin/invite-management", async (req, res) => {
     LIMIT ${limit} OFFSET ${offset}
   `);
 
-  const { rows: [{ total }] } = await db.execute(sql`
+  const { rows: [{ total }] } = await db.execute<{ total: number }>(sql`
     SELECT COUNT(*)::int AS total FROM users WHERE deleted_at IS NULL
   `);
 
-  res.json({ defaultQuota, users: userRows, total: (total as number) });
+  res.json({ defaultQuota, users: userRows, total });
 });
 
 /**

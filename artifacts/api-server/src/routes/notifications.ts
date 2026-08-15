@@ -12,7 +12,7 @@ const router: IRouter = Router();
  * Each entry is enriched with petName and actorUsername for display.
  */
 router.get("/notifications", async (req, res) => {
-  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const userId = (req as Express.RequestWithAuth).auth!.userId;
 
   const rows = await db
     .select({
@@ -58,7 +58,7 @@ router.get("/notifications", async (req, res) => {
  * Marks all of the viewer's unread notifications as read.
  */
 router.patch("/notifications/read-all", async (req, res) => {
-  const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const userId = (req as Express.RequestWithAuth).auth!.userId;
 
   await db
     .update(notificationsTable)

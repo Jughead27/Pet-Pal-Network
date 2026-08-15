@@ -563,7 +563,7 @@ export default function CreatePetScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function makeStyles(c: ReturnType<typeof useColors>): Record<string, any> {
+function makeStyles(c: ReturnType<typeof useColors>) {
   return StyleSheet.create({
     flex:   { flex: 1 },
     scroll: { flexGrow: 1, paddingHorizontal: 20 },

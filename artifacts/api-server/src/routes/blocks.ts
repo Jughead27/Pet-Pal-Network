@@ -16,7 +16,7 @@ const router: IRouter = Router();
  * Unknown target returns 404.
  */
 router.post("/blocks", async (req, res) => {
-  const viewerId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const viewerId = (req as Express.RequestWithAuth).auth!.userId;
   const { blockedUserId } = req.body as { blockedUserId?: string };
 
   if (!blockedUserId?.trim()) {
@@ -68,7 +68,7 @@ router.post("/blocks", async (req, res) => {
  * block exists (nothing to undo).
  */
 router.delete("/blocks/:blockedUserId", async (req, res) => {
-  const viewerId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const viewerId = (req as Express.RequestWithAuth).auth!.userId;
   const { blockedUserId } = req.params;
 
   await db
@@ -90,7 +90,7 @@ router.delete("/blocks/:blockedUserId", async (req, res) => {
  * usernames joined.  Used by the profile → "Blocked Owners" unblock list.
  */
 router.get("/blocks", async (req, res) => {
-  const viewerId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const viewerId = (req as Express.RequestWithAuth).auth!.userId;
 
   const rows = await db
     .select({

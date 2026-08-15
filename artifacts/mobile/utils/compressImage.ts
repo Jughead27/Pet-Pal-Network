@@ -5,7 +5,7 @@
  * Target: longest edge ≤ 2048 px, JPEG quality 0.85.
  */
 
-import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { manipulateAsync, SaveFormat, type Action } from 'expo-image-manipulator';
 
 const MAX_DIMENSION = 2048;
 const JPEG_QUALITY  = 0.85;
@@ -20,8 +20,7 @@ export async function compressImage(
   originalHeight: number,
 ): Promise<CompressResult> {
   const longest  = Math.max(originalWidth, originalHeight);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const actions: any[] = [];
+  const actions: Action[] = [];
 
   if (longest > MAX_DIMENSION) {
     if (originalWidth >= originalHeight) {
