@@ -1,4 +1,4 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Response } from "express";
 import {
   db,
   postsTable,
@@ -21,6 +21,29 @@ import { activePets } from "../lib/petQueries.js";
 
 const router: IRouter = Router();
 
+// ── Per-user rate limiting ────────────────────────────────────────────────────
+// Same in-memory map pattern used by reports.ts / uploads.ts, keyed per
+// endpoint so heavy use of one action (e.g. lots of boops) doesn't block an
+// unrelated action (e.g. posting): 25 requests per minute per user per action.
+const postsLimiter = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(action: string, userId: string): boolean {
+  const key = `${action}:${userId}`;
+  const now = Date.now();
+  const entry = postsLimiter.get(key);
+  if (!entry || now > entry.resetAt) {
+    postsLimiter.set(key, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 25) return false;
+  entry.count += 1;
+  return true;
+}
+
+function rateLimited(res: Response): void {
+  res.status(429).json({ error: "too many requests, please slow down." });
+}
+
 /**
  * POST /posts
  *
@@ -33,6 +56,7 @@ const router: IRouter = Router();
  */
 router.post("/posts", async (req, res) => {
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("create", userId)) { rateLimited(res); return; }
 
   const parsed = CreatePostBody.safeParse(req.body);
   if (!parsed.success) {
@@ -165,6 +189,7 @@ router.post("/posts", async (req, res) => {
 router.post("/posts/:id/pets/:petId", async (req, res) => {
   const { id: postId, petId } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("tag", userId)) { rateLimited(res); return; }
 
   // Caller must be the original poster
   const [postRow] = await db
@@ -240,6 +265,7 @@ router.post("/posts/:id/pets/:petId", async (req, res) => {
 router.delete("/posts/:id/pets/:petId", async (req, res) => {
   const { id: postId, petId } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("untag", userId)) { rateLimited(res); return; }
 
   // Allow the pet's owner OR the post's original poster
   const [postRow] = await db
@@ -333,6 +359,7 @@ router.get("/posts/:id/comments", async (req, res) => {
 router.delete("/posts/:id/comments/:commentId", async (req, res) => {
   const { commentId } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("comment-delete", userId)) { rateLimited(res); return; }
 
   const [comment] = await db
     .select({ userId: commentsTable.userId })
@@ -367,6 +394,7 @@ router.delete("/posts/:id/comments/:commentId", async (req, res) => {
 router.post("/posts/:id/boops", async (req, res) => {
   const { id } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("boop", userId)) { rateLimited(res); return; }
 
   const [post] = await db
     .select({ id: postsTable.id, blocked: blockedFromPostPetOwners(userId) })
@@ -399,6 +427,7 @@ router.post("/posts/:id/boops", async (req, res) => {
 router.post("/posts/:id/treats", async (req, res) => {
   const { id } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("treat", userId)) { rateLimited(res); return; }
 
   const [postRow] = await db
     .select({ postedByUserId: postsTable.postedByUserId, blocked: blockedFromPostPetOwners(userId) })
@@ -474,6 +503,7 @@ router.post("/posts/:id/treats", async (req, res) => {
 router.patch("/posts/:id", async (req, res) => {
   const { id } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("edit", userId)) { rateLimited(res); return; }
 
   const [postRow] = await db
     .select({
@@ -524,6 +554,7 @@ router.patch("/posts/:id", async (req, res) => {
 router.delete("/posts/:id", async (req, res) => {
   const { id } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("delete", userId)) { rateLimited(res); return; }
 
   const [postRow] = await db
     .select({ mediaKey: postsTable.mediaKey, petId: postsTable.petId, postedByUserId: postsTable.postedByUserId })
@@ -564,6 +595,7 @@ router.delete("/posts/:id", async (req, res) => {
 router.post("/posts/:id/archive", async (req, res) => {
   const { id } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("archive", userId)) { rateLimited(res); return; }
 
   const [postRow] = await db
     .select({ petId: postsTable.petId, postedByUserId: postsTable.postedByUserId })
@@ -597,6 +629,7 @@ router.post("/posts/:id/archive", async (req, res) => {
 router.post("/posts/:id/unarchive", async (req, res) => {
   const { id } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("unarchive", userId)) { rateLimited(res); return; }
 
   const [postRow] = await db
     .select({ petId: postsTable.petId, postedByUserId: postsTable.postedByUserId })
@@ -627,6 +660,7 @@ router.post("/posts/:id/unarchive", async (req, res) => {
 router.post("/posts/:id/comments", async (req, res) => {
   const { id } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit("comment", userId)) { rateLimited(res); return; }
   const { text } = req.body as { text?: string };
 
   if (!text?.trim()) {

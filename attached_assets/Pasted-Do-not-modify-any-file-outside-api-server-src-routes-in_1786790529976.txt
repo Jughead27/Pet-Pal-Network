@@ -1,0 +1,17 @@
+Do not modify any file outside: api-server/src/routes/invites-member.ts, api-server/src/routes/posts.ts, and api-server/src/routes/pets.ts. Do not touch any other route file, schema, or client/mobile code.
+
+CONTEXT: These endpoints currently have no rate limiting despite being authenticated mutation/action endpoints:
+- invites-member.ts: invite-code redemption (accepts arbitrary caller-supplied codes)
+- posts.ts: post creation, tagging, reactions (boop/treat), comments, edits, deletes, archive
+- pets.ts: pet creation, updates, avatar changes, deletion
+
+FIX: Apply the SAME in-memory per-user rate-limiting pattern already used elsewhere in this codebase (the Map-based limiter used in reports.ts/invites.ts, and already reused in uploads.ts for the presign/verify endpoints) to each of the endpoints above. Do not introduce a new rate-limiting approach or library — reuse the existing pattern/middleware exactly as it's implemented elsewhere.
+
+SUGGESTED LIMITS (adjust only if the existing pattern's convention strongly suggests otherwise — otherwise use these):
+- invites-member.ts redemption endpoint: 8 requests per minute per user (tighter than the others — this endpoint is about preventing rapid code-guessing, not just general spam prevention, since a real user has no reason to attempt many codes quickly).
+- posts.ts: 25 requests per minute per user, applied per-endpoint (i.e. creating posts, reacting, commenting, etc. each get their own 25/min counter — not one shared counter across all of them) so that heavy use of one action (e.g. lots of boops) doesn't block an unrelated action (e.g. posting).
+- pets.ts: 12 requests per minute per user for creation/update/delete actions (pets are created/edited far less frequently in normal use than posts/reactions).
+
+All limits should return a 429 status with a clear but generic message (e.g. "Too many requests, please slow down.") — do not reveal internal rate-limit thresholds in the response.
+
+ACCEPTANCE TEST: (1) Normal use of all affected features (posting, commenting, reacting, editing/deleting posts, creating/editing/deleting pets, redeeming an invite code) works completely normally with zero disruption — a real user should never hit these limits during ordinary use. (2) Rapidly repeating any of these actions well past the limit (e.g. scripted or very fast manual repetition) triggers a 429 response instead of processing further requests. (3) tsc clean, no changes to any other route, schema, or client code.

@@ -25,6 +25,24 @@ import { isPetOwner, getPetOwnerRow } from "../lib/isPetOwner.js";
 
 const router: IRouter = Router();
 
+// ── Per-user rate limiting ────────────────────────────────────────────────────
+// Same in-memory map pattern used by reports.ts / uploads.ts: 12 requests per
+// minute per user across pet creation/update/avatar/delete (pets are mutated
+// far less often than posts, so one shared counter is fine here).
+const petsLimiter = new Map<string, { count: number; resetAt: number }>();
+
+function checkRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const entry = petsLimiter.get(userId);
+  if (!entry || now > entry.resetAt) {
+    petsLimiter.set(userId, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 12) return false;
+  entry.count += 1;
+  return true;
+}
+
 /**
  * GET /pets/search?q=&exclude=
  *
@@ -478,6 +496,7 @@ router.get("/pets/:id", async (req, res) => {
  */
 router.post("/pets", async (req, res) => {
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit(userId)) { res.status(429).json({ error: "too many requests, please slow down." }); return; }
 
   const parsed = CreatePetBody.safeParse(req.body);
   if (!parsed.success) {
@@ -675,6 +694,7 @@ router.get("/me/pets", async (req, res) => {
 router.patch("/pets/:id", async (req, res) => {
   const { id } = req.params;
   const userId  = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit(userId)) { res.status(429).json({ error: "too many requests, please slow down." }); return; }
 
   const [existing] = await db
     .select({ id: petsTable.id })
@@ -788,6 +808,7 @@ router.patch("/pets/:id", async (req, res) => {
 router.patch("/pets/:id/avatar", async (req, res) => {
   const { id } = req.params;
   const userId = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit(userId)) { res.status(429).json({ error: "too many requests, please slow down." }); return; }
 
   const [pet] = await db
     .select({ id: petsTable.id, ownerId: petsTable.ownerId })
@@ -868,6 +889,7 @@ router.patch("/pets/:id/avatar", async (req, res) => {
 router.delete("/pets/:id", async (req, res) => {
   const { id }  = req.params;
   const userId  = (req as unknown as { auth: { userId: string } }).auth.userId;
+  if (!checkRateLimit(userId)) { res.status(429).json({ error: "too many requests, please slow down." }); return; }
 
   const [petRow] = await db
     .select({ id: petsTable.id, name: petsTable.name })

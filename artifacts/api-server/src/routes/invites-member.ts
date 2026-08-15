@@ -19,6 +19,25 @@ import { activePets } from "../lib/petQueries.js";
 
 const router: IRouter = Router();
 
+// ── Per-user rate limiting ────────────────────────────────────────────────────
+// Same in-memory map pattern used by reports.ts / uploads.ts. Applied only to
+// /invites/redeem: 8 requests per minute per user — deliberately tight, since
+// a real user has no reason to attempt many codes quickly and this guards
+// against rapid code-guessing.
+const redeemLimiter = new Map<string, { count: number; resetAt: number }>();
+
+function checkRedeemRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const entry = redeemLimiter.get(userId);
+  if (!entry || now > entry.resetAt) {
+    redeemLimiter.set(userId, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 8) return false;
+  entry.count += 1;
+  return true;
+}
+
 /** Generates a short, URL-safe, unguessable invite code (11 chars, 64-bit entropy). */
 export function generateCode(): string {
   return randomBytes(8).toString("base64url");
@@ -37,6 +56,10 @@ export function generateCode(): string {
  */
 router.post("/invites/redeem", async (req, res) => {
   const { userId } = (req as Express.RequestWithAuth).auth!;
+  if (!checkRedeemRateLimit(userId)) {
+    res.status(429).json({ error: "too many requests, please slow down." });
+    return;
+  }
   const { code } = req.body as { code?: string };
 
   if (!code || typeof code !== "string" || !code.trim()) {
