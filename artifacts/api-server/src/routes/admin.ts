@@ -744,8 +744,18 @@ adminRouter.get("/admin/suspended-users", async (_req, res) => {
  * Returns all invite requests, oldest-first, with email, note, age, and status.
  */
 adminRouter.get("/admin/invite-requests", async (_req, res) => {
+  // Explicit projection — exactly the fields the admin invites screen renders
+  // (id, email, note, requestedAt, status, inviteId), so columns added to the
+  // table later are not accidentally exposed here.
   const rows = await db
-    .select()
+    .select({
+      id:          inviteRequestsTable.id,
+      email:       inviteRequestsTable.email,
+      note:        inviteRequestsTable.note,
+      requestedAt: inviteRequestsTable.requestedAt,
+      status:      inviteRequestsTable.status,
+      inviteId:    inviteRequestsTable.inviteId,
+    })
     .from(inviteRequestsTable)
     .orderBy(asc(inviteRequestsTable.requestedAt));
 

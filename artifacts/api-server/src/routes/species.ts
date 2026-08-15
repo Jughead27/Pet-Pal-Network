@@ -35,9 +35,9 @@ router.get("/species", async (_req, res) => {
 router.get("/species/:id/breeds", async (req, res) => {
   const { id } = req.params;
 
-  // Verify species exists
+  // Verify species exists — only used as an existence check, so pull id only.
   const [species] = await db
-    .select()
+    .select({ id: speciesTable.id })
     .from(speciesTable)
     .where(eq(speciesTable.id, id))
     .limit(1);
