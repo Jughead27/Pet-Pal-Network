@@ -1,0 +1,15 @@
+Do not modify any file outside api-server/src/routes/pets.ts. This is a narrow security fix — do not refactor any other logic in this file.
+
+CONTEXT: DELETE /pets/:id (around line 889) currently checks `isPetOwner(userId, id)`, which returns true for ANY co-owner — not just the primary owner. The handler's own doc comment says "Primary owner only," but the code doesn't enforce that. This means any co-owner can currently soft-delete a shared pet unilaterally, removing it from all public views for every co-owner without their consent.
+
+This needs the same authorization pattern already used and proven for co-owner revocation (DELETE /pets/:id/co-owners/:userId) — find that exact pattern (primary-owner check via pets.owner_id, in-transaction row locking, audit logging) and replicate it here.
+
+FIX:
+1. Change the authorization check on DELETE /pets/:id from `isPetOwner(userId, id)` (any co-owner) to specifically checking `pets.owner_id === userId` (primary owner only) — matching the exact check already used in the co-owner revocation endpoint.
+2. If the co-owner revocation endpoint uses in-transaction row locking to prevent race conditions, apply the same locking approach here for consistency and correctness.
+3. Update the error message and the doc comment above the handler to be accurate and consistent (the doc comment already correctly says "Primary owner only" — just make the code actually match it; update the 403 message from "only an owner may delete a pet" to something like "only the primary owner may delete a pet").
+4. While in this file: note that this handler still uses the old hand-cast auth pattern rather than the shared Express.RequestWithAuth type used in tonight's type-safety pass — you may update this handler specifically to use the shared type for consistency, but do not touch any other unrelated part of this file.
+
+Do NOT change: the soft-delete mechanism itself (pets.deleted_at), the audit logging content, any other endpoint, or any client/mobile code.
+
+ACCEPTANCE TEST: (1) The primary owner of a pet can still successfully delete it, exactly as before. (2) A co-owner who is NOT the primary owner attempting to delete the pet now receives a 403 with the corrected message, and the pet is NOT deleted. (3) A user with no ownership relationship to the pet still gets rejected as before (unchanged behavior). (4) tsc clean.

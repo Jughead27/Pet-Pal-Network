@@ -887,34 +887,54 @@ router.patch("/pets/:id/avatar", async (req, res) => {
  * Returns 204 on success.
  */
 router.delete("/pets/:id", async (req, res) => {
-  const { id }  = req.params;
-  const userId  = (req as unknown as { auth: { userId: string } }).auth.userId;
+  const { id } = req.params;
+  const userId = (req as Express.RequestWithAuth).auth!.userId;
   if (!checkRateLimit(userId)) { res.status(429).json({ error: "too many requests, please slow down." }); return; }
 
-  const [petRow] = await db
-    .select({ id: petsTable.id, name: petsTable.name })
-    .from(petsTable)
-    .where(and(eq(petsTable.id, id), activePets))
-    .limit(1);
+  // All checks + the soft-delete run in ONE transaction with the pet's
+  // ownership rows locked (SELECT … FOR UPDATE) — same pattern as co-owner
+  // revocation — so a concurrent leave/revoke cannot produce a stale-primary
+  // delete or a phantom audit row.
+  const outcome = await db.transaction(async (tx) => {
+    const [petRow] = await tx
+      .select({ id: petsTable.id, name: petsTable.name, ownerId: petsTable.ownerId })
+      .from(petsTable)
+      .where(and(eq(petsTable.id, id), activePets))
+      .limit(1);
 
-  if (!petRow) {
-    res.status(404).json({ error: "Not found" });
-    return;
-  }
+    if (!petRow) return { status: 404 as const, error: "Not found" };
 
-  if (!(await isPetOwner(userId, id))) {
-    res.status(403).json({ error: "Forbidden — only an owner may delete a pet" });
-    return;
-  }
+    // Lock every ownership row for this pet for the duration of the tx.
+    const ownerRows = await tx
+      .select({ userId: petOwnersTable.userId })
+      .from(petOwnersTable)
+      .where(eq(petOwnersTable.petId, id))
+      .for("update");
 
-  await db.transaction(async (tx) => {
-    await tx
+    const callerIsOwner = ownerRows.some((r) => r.userId === userId);
+    if (petRow.ownerId !== userId || !callerIsOwner) {
+      return { status: 403 as const, error: "Forbidden — only the primary owner may delete a pet" };
+    }
+
+    // Conditional on activePets so a concurrent duplicate DELETE (which read
+    // the pet before the first commit) flips zero rows — only the request
+    // that actually transitions the pet writes the audit row and gets 204.
+    const flipped = await tx
       .update(petsTable)
       .set({ deletedAt: new Date() })
-      .where(eq(petsTable.id, id));
+      .where(and(eq(petsTable.id, id), activePets))
+      .returning({ id: petsTable.id });
+
+    if (flipped.length === 0) return { status: 404 as const, error: "Not found" };
+
     await writeAudit(tx, userId, "pet.delete", "pet", id, { petName: petRow.name });
+    return { status: 204 as const };
   });
 
+  if (outcome.status !== 204) {
+    res.status(outcome.status).json({ error: outcome.error });
+    return;
+  }
   res.status(204).send();
 });
 
