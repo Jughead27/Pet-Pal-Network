@@ -82,7 +82,10 @@ export const requireClerkAuth: RequestHandler = async (req, res, next) => {
         username = `${prefix}${counter++}`;
       }
 
-      await db.insert(usersTable).values({ id: userId, username });
+      // Idempotent: two parallel first-login requests can race on this insert;
+      // the loser must not throw (which would now surface as a spurious 503
+      // under the fail-closed error path below).
+      await db.insert(usersTable).values({ id: userId, username }).onConflictDoNothing();
       logger.info({ userId, username }, "Provisioned new user");
       // New users always start as 'member' (DB default); role stays 'member'.
     } else {
@@ -103,8 +106,13 @@ export const requireClerkAuth: RequestHandler = async (req, res, next) => {
       role = existing.role;
     }
   } catch (err) {
-    // Provisioning failure must never block the API — log and continue.
+    // Fail CLOSED: if the local user lookup/provisioning fails we cannot run
+    // the tombstone/suspension checks above, so the request must not proceed
+    // into protected routes. 503 — transient infrastructure failure, not an
+    // auth failure.
     logger.error({ err, userId }, "User provisioning failed");
+    res.status(503).json({ error: "service_unavailable" });
+    return;
   }
 
   (req as Express.RequestWithAuth).auth = { userId, role };

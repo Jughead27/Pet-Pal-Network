@@ -24,6 +24,7 @@
  */
 
 import { Router } from "express";
+import { createHash, timingSafeEqual } from "node:crypto";
 import {
   db,
   reportsTable,
@@ -1484,7 +1485,13 @@ adminRouter.get("/admin/cron/purge", async (req, res) => {
     res.status(503).json({ error: "PURGE_SECRET not configured — cron route disabled" });
     return;
   }
-  if (req.headers["x-purge-secret"] !== secret) {
+  // Timing-safe comparison (same pattern as verifyMediaToken in lib/r2.ts).
+  // Both values are hashed to a fixed length first so timingSafeEqual never
+  // throws on length mismatch and no length information leaks via timing.
+  const provided = req.headers["x-purge-secret"];
+  const providedHash = createHash("sha256").update(typeof provided === "string" ? provided : "").digest();
+  const expectedHash = createHash("sha256").update(secret).digest();
+  if (typeof provided !== "string" || !timingSafeEqual(providedHash, expectedHash)) {
     res.status(401).json({ error: "Invalid or missing X-Purge-Secret header" });
     return;
   }
