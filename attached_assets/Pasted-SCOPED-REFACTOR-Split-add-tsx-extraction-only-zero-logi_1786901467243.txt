@@ -1,0 +1,80 @@
+SCOPED REFACTOR: Split add.tsx — extraction only, zero logic changes
+
+CONTEXT
+mobile/app/add.tsx (or wherever the compose screen lives) is 1,294 lines — the 
+full post-creation pipeline: photo pick → HEIC convert → compress → auto-frame → 
+crop → form → post. This is a PURE STRUCTURAL SPLIT — code moved verbatim into new 
+files, nothing rewritten, improved, or changed. This is file 4 of the ongoing split 
+initiative. Files 1-3 (ActionRail.tsx, discovery.tsx, FeedPage.tsx) are done — two 
+of the three turned out to be closure-heavy mega-components where sub-component 
+extraction would require inventing prop interfaces (a logic change, not an 
+extraction), so they fell back to verbatim relocation + genuinely standalone pieces 
+(styles/constants/types/helpers) only. If add.tsx follows the same pattern, that's 
+a legitimate, expected outcome — do not force artificial decomposition to hit a 
+"nicer" file count. Report which case this turns out to be.
+
+REQUIRED APPROACH
+
+1. Read the full file first and assess: are there genuinely independent, non-closure 
+   pieces (styles, constants/types, standalone helper functions with no closure 
+   dependency on component-local state)? Or is this one large component/pipeline 
+   with tightly coupled internals? Report this assessment before proceeding.
+   
+   Given this is described as a "compose pipeline," also specifically check: are 
+   the pipeline STAGES (HEIC-convert, compressImage, auto-frame, crop) already 
+   calling out to separate utility files (compressImage.ts etc. are referenced 
+   elsewhere in the codebase per prior audit notes), or is pipeline orchestration 
+   logic itself embedded inline in this file? If the orchestration is inline but 
+   calls genuinely separate utilities, that orchestration logic likely can't be 
+   split further without becoming a closure problem — report accordingly.
+
+2. Extract whatever is genuinely bounded under the byte-for-byte rule. If the answer 
+   is "mostly styles/constants/types, main pipeline logic stays as one file," that's 
+   a legitimate outcome, same as discovery.tsx and FeedPage.tsx.
+
+3. ABSOLUTE RULE: every extracted piece must be byte-for-byte identical to its 
+   original — same logic, same JSX, same comments. Only import/export statements 
+   and file boundaries change. No new prop interfaces, no invented component 
+   boundaries that weren't already clean seams in the original code.
+
+4. Confirm placement: if this file lives under app/ (route-registered), extracted 
+   pieces go under components/ with a route shim left behind (same as discovery.tsx). 
+   If already under components/, split in place (same as FeedPage.tsx).
+
+5. Do NOT fix, improve, or flag-and-fix anything that looks like a bug or dead code 
+   — note it and report separately at the end, do not touch it. NOTE: type-safety 
+   pass 1 previously flagged that add.tsx has the identical makeStyles/
+   Record<string,any> pattern seen in pet/create.tsx (fixed in pass 1) but was left 
+   untouched as out of scope at the time — do NOT fix that type issue now either, 
+   this prompt is extraction only, not type cleanup. Just note it's still there if 
+   relevant to how you structure the styles extraction.
+
+VERIFICATION (required, in order — same rigor as prior files)
+
+1. tsc clean on the mobile package.
+2. Run the automated test suite — report whether it touches this file (likely not, 
+   same as prior three — mobile UI, suite is API-only).
+3. Pure-relocation mechanical proof: old file vs. concatenated new files, imports 
+   stripped/exports normalized, compared as line multisets — 0 lines only-in-old, 
+   0 lines only-in-new (except a route shim's re-export, if applicable). If anything 
+   differs, stop and report.
+4. Deliver a specific, detailed manual click-through checklist for James covering 
+   the full compose pipeline: photo picker launch, HEIC file handling (if testable), 
+   compression/auto-frame behavior, the crop tool (pan/zoom, rotation if present), 
+   caption entry + character limits, pet tagging during compose, the "Add a photo" 
+   copy fix (item 10 in backlog, confirm unaffected), post submission, and error 
+   states (failed upload, etc.).
+
+DO NOT MODIFY
+- Any logic, styling values, or behavior — pure file reorganization only.
+- The makeStyles type-safety issue noted above — leave it exactly as-is.
+- Any file outside add.tsx and its new extracted pieces.
+- Do not touch any other item on the oversized-file list — scoped to this file only.
+
+ACCEPTANCE TEST
+1. Report the structural assessment from step 1.
+2. tsc clean.
+3. Test suite confirmation (touches/doesn't touch this file).
+4. Mechanical proof confirms pure relocation, zero logic changes (report explicitly).
+5. Deliver the manual click-through checklist for James.
+6. Report file structure before/after (line counts per new file).
