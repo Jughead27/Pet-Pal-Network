@@ -1,0 +1,53 @@
+URGENT FIX: Purge cron verification + account_deleted client message
+
+PART 1 — VERIFY/FIX PURGE CRON SCHEDULING
+5 accounts tombstoned on Aug 9 (18:22-18:24) are still not hard-deleted 7+ days later, 
+well past any reasonable retention window. processClerkDeletions() only runs via 
+GET /admin/cron/purge, which requires an external scheduler to call it with the correct 
+secret.
+
+- Investigate whether there is in fact an external scheduler configured to call this 
+  route daily. Check any available config/env/webhook/integration referencing 
+  PURGE_SECRET or the /admin/cron/purge path.
+- If no external scheduler is actually configured (most likely, given the evidence): 
+  set one up. If Replit has a built-in scheduled-jobs feature, use that. Otherwise, 
+  the simplest reliable fix is a cron-capable external service (e.g. a free-tier 
+  scheduled HTTP ping service) hitting GET /admin/cron/purge with the correct 
+  X-Purge-Secret header, once daily.
+- Report back clearly: what was actually found (scheduler exists but misconfigured, 
+  vs. no scheduler exists at all), and what was set up/fixed.
+- Once fixed, manually trigger one purge run (respecting the existing secret gate) 
+  to clear the current backlog of 5 tombstoned accounts, and report the purge result.
+
+PART 2 — CLIENT-SIDE: HANDLE account_deleted ERROR
+mobile/app/(tabs)/_layout.tsx currently has a full-screen wall for {"error":"suspended"} 
+but no handling for {"error":"account_deleted"} — that case currently falls through to 
+a generic/confusing feed-load failure.
+
+- Add handling for account_deleted alongside the existing suspended wall: same 
+  full-screen pattern, clear copy along the lines of "this account was deleted." — 
+  sentence case, no exclamation point, matching existing copy conventions elsewhere 
+  in the app.
+- Since this is now expected to be rare/nonexistent going forward (Part 1 should keep 
+  the backlog empty), keep this simple — no special recovery flow, just an honest 
+  message instead of a confusing generic error. A "sign out" or "back to sign in" 
+  action is appropriate if the suspended wall already has one — match that pattern.
+
+DO NOT MODIFY
+- The tombstone check itself in requireClerkAuth.ts — it is working correctly, do not 
+  weaken or change its logic.
+- Any other error-handling wall or auth flow not named above.
+- Feed query logic, pagination, or any of the recently-fixed reassignment/uploads/ 
+  type-safety work — unrelated, do not touch.
+
+ACCEPTANCE TEST (must pass, ending in golden path)
+1. Confirm a scheduler is now actually configured and verified to call 
+   /admin/cron/purge daily (report the mechanism used).
+2. Manually trigger one purge run — confirm the 5 backlogged tombstoned accounts are 
+   now hard-deleted (Clerk + DB), and report the purge result summary.
+3. Simulate/confirm account_deleted now shows a clear dedicated message on mobile 
+   instead of a generic feed-load error (test against a tombstoned test account if one 
+   can be safely created and cleaned up, or via code review if not).
+4. Confirm the suspended wall's existing behavior is completely unchanged.
+5. Golden path on a normal, non-deleted account: sign in → Home loads → boop persists 
+   → Nursery pager → post flow → sign out. Confirm identically on web/iOS/Android.

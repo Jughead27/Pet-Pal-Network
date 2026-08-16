@@ -36,6 +36,15 @@ function isSuspendedError(e: unknown): boolean {
   return data?.error === 'suspended';
 }
 
+/** Returns true when an ApiError carries { error: "account_deleted" }. */
+function isAccountDeletedError(e: unknown): boolean {
+  if (!e || typeof e !== 'object') return false;
+  const err = e as { status?: number; data?: unknown };
+  if (err.status !== 403) return false;
+  const data = err.data as { error?: string } | null | undefined;
+  return data?.error === 'account_deleted';
+}
+
 export default function TabLayout() {
   // All hooks must be called unconditionally before any early return.
   const { isSignedIn, isLoaded, signOut } = useAuth();
@@ -227,6 +236,23 @@ export default function TabLayout() {
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
         <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 18, color: colors.foreground, textAlign: 'center', lineHeight: 28 }}>
           this account is suspended.
+        </Text>
+        <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.mutedForeground, textAlign: 'center', marginTop: 12, lineHeight: 22 }}>
+          if you believe this is a mistake, contact support.
+        </Text>
+      </View>
+    );
+  }
+
+  // ─── Deleted-account gate ────────────────────────────────────────────────
+  // When the server returns 403 { error: "account_deleted" }, the account was
+  // tombstoned (deletion in progress). Same full-screen pattern as the
+  // suspension gate — an honest message instead of a generic feed error.
+  if (isAccountDeletedError(meError)) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center', padding: 40 }}>
+        <Text style={{ fontFamily: 'Inter_600SemiBold', fontSize: 18, color: colors.foreground, textAlign: 'center', lineHeight: 28 }}>
+          this account was deleted.
         </Text>
         <Text style={{ fontFamily: 'Inter_400Regular', fontSize: 14, color: colors.mutedForeground, textAlign: 'center', marginTop: 12, lineHeight: 22 }}>
           if you believe this is a mistake, contact support.
