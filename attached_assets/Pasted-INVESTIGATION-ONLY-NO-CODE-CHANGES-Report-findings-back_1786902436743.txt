@@ -1,0 +1,43 @@
+INVESTIGATION ONLY — NO CODE CHANGES. Report findings back.
+
+SYMPTOM: After the add.tsx split published, James logged out and back in, then 
+tapped the Add tab for the first time in that session — saw a multi-second hourglass 
+delay before the screen loaded. Subsequent taps to Add felt normal. Need to determine 
+if this is a side effect of the recent split or expected/pre-existing behavior.
+
+INVESTIGATE:
+
+1. BUNDLE STRUCTURE: compare how add.tsx's route was bundled BEFORE the split (single 
+   file directly under app/(tabs)/) versus AFTER (route shim re-exporting from 
+   components/add/index.tsx). Does Expo Router / Metro's web bundler treat this as 
+   a separate lazily-loaded chunk now, when it may not have been before? Check the 
+   actual build output/bundle manifest for evidence of a new chunk boundary 
+   specifically tied to the add route or components/add/.
+
+2. COMPARE TO OTHER SPLIT FILES: discovery.tsx and FeedPage.tsx were also split 
+   recently (discovery.tsx got the same route-shim treatment). Did James or anyone 
+   report a similar first-navigation delay when discovery.tsx (Sniff tab) was 
+   verified? If not, that's a signal this might be add.tsx-specific rather than a 
+   general effect of the shim pattern — check what's different about add.tsx's 
+   imports (e.g. does it pull in heavier libraries — image picker, HEIC conversion, 
+   crop editor — that discovery.tsx doesn't?).
+
+3. NETWORK/RESOURCE CHECK: is there anything add.tsx's mount triggers on first load 
+   that could explain a multi-second delay unrelated to bundling — e.g. requesting 
+   camera-roll permissions for the first time in a fresh session, an expensive 
+   initial data fetch (useGetMyPets or similar), or lazy-loading a heavy dependency 
+   (image manipulation libraries) only on first use rather than at app boot.
+
+4. REPRODUCE IF POSSIBLE: if there's a way to test this in a fresh session (or 
+   simulate one), do so and report actual timing/network waterfall — what's actually 
+   happening during those few seconds, not just a guess.
+
+5. HISTORICAL CONTEXT: check whether this matches any pattern in the existing 
+   "gotchas" documentation — e.g. anything about cold-start bundle loading, 
+   first-load-after-login behavior, or similar timing quirks already known in this 
+   codebase.
+
+Report clearly: is this a real regression introduced by the add.tsx split (and if 
+so, what specifically causes it), or expected/unrelated behavior (cold start, 
+permission prompts, first-use lazy imports)? Do not fix anything yet — we need the 
+diagnosis first.
