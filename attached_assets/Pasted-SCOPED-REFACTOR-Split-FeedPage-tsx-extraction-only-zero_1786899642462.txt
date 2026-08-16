@@ -1,0 +1,76 @@
+SCOPED REFACTOR: Split FeedPage.tsx — extraction only, zero logic changes
+
+CONTEXT
+FeedPage.tsx is 982 lines (the core Home/Sniff/Nursery feed page-renderer, shared 
+across all three since they use the same paginated feed endpoint). This is a PURE 
+STRUCTURAL SPLIT — code moved verbatim into new files, nothing rewritten, improved, 
+or changed. This is file 3 of the ongoing split initiative. Files 1 and 2 
+(ActionRail.tsx, discovery.tsx) are done — discovery.tsx's finding is directly 
+relevant here: if FeedPage.tsx's internals turn out to be closures capturing many 
+local variables (same pattern as discovery.tsx's SniffScreen), do NOT invent prop 
+interfaces to force a finer split — that would be a logic change, not an extraction. 
+In that case, fall back to verbatim relocation + extracting only genuinely 
+standalone pieces (styles, constants, types, any truly independent helper 
+functions), exactly as discovery.tsx did. Report which case this turns out to be.
+
+REQUIRED APPROACH
+
+1. Read the full file first and assess: are there genuinely independent, non-closure 
+   pieces (styles, constants/types, standalone helper functions with no closure 
+   dependency on component-local state)? Or is this one large component with tightly 
+   coupled internals like discovery.tsx? Report this assessment before proceeding.
+
+2. Extract whatever is genuinely bounded under the byte-for-byte rule. If the answer 
+   is "mostly styles/constants/types, main render logic stays as one file," that's a 
+   legitimate outcome — same as discovery.tsx.
+
+3. ABSOLUTE RULE: every extracted piece must be byte-for-byte identical to its 
+   original — same logic, same JSX, same comments. Only import/export statements 
+   and file boundaries change. No new prop interfaces, no invented component 
+   boundaries that weren't already clean seams in the original code.
+
+4. Confirm placement matches the established pattern: if this file lives under 
+   app/ (route-registered), extracted pieces go under components/ with a route 
+   shim left behind (same as discovery.tsx) — expo-router turns files under app/ 
+   into routes, so this isn't optional. If FeedPage.tsx is already under 
+   components/ (not a route file), confirm and extract in place without needing 
+   a shim.
+
+5. Do NOT fix, improve, or flag-and-fix anything that looks like a bug or dead code 
+   — note it and report separately at the end, do not touch it.
+
+VERIFICATION (required, in order — same rigor as prior files)
+
+1. tsc clean on the mobile package.
+2. Run the automated test suite — report whether it touches this file (likely not, 
+   same as prior two — mobile UI, suite is API-only). NOTE: suite was just confirmed 
+   green (29/29) immediately before this prompt — re-run it as part of this 
+   verification to reconfirm nothing regressed from this change specifically.
+3. Pure-relocation mechanical proof: old file vs. concatenated new files, imports 
+   stripped/exports normalized, compared as line multisets — 0 lines only-in-old, 
+   0 lines only-in-new (except genuinely new lines like a route shim's re-export, 
+   same exception as discovery.tsx). If anything differs, stop and report.
+4. Deliver a specific, detailed manual click-through checklist for James covering 
+   every interaction FeedPage.tsx owns — this is the shared page-renderer for Home, 
+   Sniff, and Nursery, so the checklist needs to cover its behavior across all three 
+   contexts it's used in, not just one. Include: scroll/snap behavior, pagination/
+   infinite scroll, the boop/scroll-suppression interaction (per the known rapid-
+   scroll regression history — this exact interaction was the site of two prior 
+   real bugs), ActionRail integration (already split, confirm it still renders 
+   correctly from its new location), ordering across Fresh/Popular/Nursery.
+
+DO NOT MODIFY
+- Any logic, styling values, or behavior — pure file reorganization only.
+- Any file outside FeedPage.tsx and its new extracted pieces (including no changes 
+  to the already-split ActionRail or discovery components, even though this file 
+  likely imports them).
+- Do not touch any other item on the oversized-file list — scoped to this file only.
+
+ACCEPTANCE TEST
+1. Report the structural assessment from step 1 (closures vs. genuinely bounded).
+2. tsc clean.
+3. Test suite re-run clean (29/29 or report any change).
+4. Mechanical proof confirms pure relocation, zero logic changes (report explicitly).
+5. Deliver the manual click-through checklist for James, covering all three usage 
+   contexts (Home, Sniff, Nursery).
+6. Report file structure before/after (line counts per new file).

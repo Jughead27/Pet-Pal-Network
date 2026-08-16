@@ -48,94 +48,33 @@ import { executeShareCard } from '@/utils/shareCardAction';
 import { computeNativeLuminance } from '@/utils/luminance';
 import PopText from '@/components/PopText';
 import { setFeedCellDimensions } from '@/utils/feedCellDimensions';
+import {
+  RAIL_TOUCH_WIDTH,
+  RAIL_RIGHT_INSET,
+  RAIL_MARGIN,
+  POP_RAIL_CLEARANCE,
+  POP_EST_MAX_WIDTH,
+  POP_LEFT_MARGIN,
+  POP_SCATTER_FLOOR,
+  POP_SCATTER_TOP_MARGIN,
+  POP_MAX_COUNT,
+  BOOP_COLOR,
+  TREAT_COLOR,
+  BOOP_WORDS,
+  TREAT_WORDS,
+  pickWord,
+} from './constants';
+import type { Pop, FeedPageProps } from './types';
+import type { CommentSheetConfig } from './types';
+import { styles } from './styles';
 
-// ─── Constants ────────────────────────────────────────────────────────────────
+export type { CommentSheetConfig } from './types';
 
-// Horizontal exclusion zone constants — taps this far from the right edge won't toggle chrome.
-// RAIL_EXCLUSION_X is computed dynamically inside handleMediaPress from pageWidthRef.current
-// so it stays correct inside the 430-px web column (Dimensions.get returns the full window
-// width on web, not the column width).
 // Per-URI natural-size cache — avoids repeat Image.getSize calls as pager
 // cells recycle and the same post scrolls back into view.
 const heroNatSizeCache = new Map<string, { w: number; h: number }>();
 
-const RAIL_TOUCH_WIDTH   = 40;
-const RAIL_RIGHT_INSET   = 14;
-const RAIL_MARGIN        = 24;
-
-// ─── Reaction pop — scatter geometry ─────────────────────────────────────────
-// Right clearance: rail at right:14, touch width 40px, 12px margin.
-const POP_RAIL_CLEARANCE     = RAIL_RIGHT_INSET + RAIL_TOUCH_WIDTH + 12; // ~66px from right
-// Max pop text width — generous for "Boop boop!" at largest size (44×1.4).
-const POP_EST_MAX_WIDTH      = 210;
-// Min gap from the left screen edge.
-const POP_LEFT_MARGIN        = 12;
-// How far above `bottomOffset` the scatter floor sits (clears petInfo + caption).
-const POP_SCATTER_FLOOR      = 160;
-// How far below the top edge pops are kept (status bar / nav clearance).
-const POP_SCATTER_TOP_MARGIN = 90;
-// Max simultaneous pops; oldest is recycled when the cap is hit.
-const POP_MAX_COUNT          = 8;
-
-// Accent colors — locked semantics: boop = coral, treat = gold.
-const BOOP_COLOR  = '#FF7A5C'; // matches colors.accent
-const TREAT_COLOR = '#F4C542'; // matches ActionRail treat activeColor
-
-// Word sets — weighted toward primary word; variants add surprise, not noise.
-const BOOP_WORDS = [
-  { word: 'Boop!',      weight: 7 },
-  { word: 'Boop boop!', weight: 2 },
-  { word: 'Booped!',    weight: 1 },
-] as const;
-const TREAT_WORDS = [
-  { word: 'Yum!',      weight: 7 },
-  { word: 'Yummy!',    weight: 1 },
-  { word: 'Tasty!',    weight: 1 },
-  { word: 'Nom nom!',  weight: 1 },
-] as const;
-
-/** Weighted random pick from a word set. */
-function pickWord(words: ReadonlyArray<{ word: string; weight: number }>): string {
-  const total = words.reduce((s, w) => s + w.weight, 0);
-  let r = Math.random() * total;
-  for (const w of words) {
-    r -= w.weight;
-    if (r <= 0) return w.word;
-  }
-  return words[0].word;
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const TEXT_SHADOW: any = { textShadow: '0px 1px 3px rgba(0,0,0,0.4)' };
-
-// ─── Pop state ────────────────────────────────────────────────────────────────
-
-interface Pop {
-  id: number;
-  word: string;
-  /** Accent color — coral for boop, gold for treat. */
-  color: string;
-  rotation: number;
-  right: number;
-  bottom: number;
-}
-
 let popCounter = 0;
-
-// ─── Props ────────────────────────────────────────────────────────────────────
-
-export interface CommentSheetConfig {
-  postId: string;
-  onCommentPosted: () => void;
-}
-
-interface FeedPageProps {
-  post: FeedPost;
-  /** Exact rendered height of the pager container — used for full-bleed sizing. */
-  height: number;
-  reducedMotion: boolean;
-  onOpenCommentSheet: (config: CommentSheetConfig) => void;
-}
 
 // ─── FeedPage ─────────────────────────────────────────────────────────────────
 
@@ -858,131 +797,3 @@ function FeedPage({
 }
 
 export default React.memo(FeedPage);
-
-// ─── Styles ──────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  page: {
-    width: '100%',
-    overflow: 'hidden',
-    backgroundColor: '#060B10',
-  },
-  heroImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: '100%',
-  },
-  scrim: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 300,
-  },
-  railScrim: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: 96,
-  },
-  railContainer: {
-    position: 'absolute',
-    right: 14,
-  },
-  petInfo: {
-    position: 'absolute',
-    left: 18,
-    right: 80,
-    gap: 3,
-  },
-  identityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  petNameBtn: {
-    // flexShrink:1 lets a long name truncate without eating all row space,
-    // so AddToPackLink always stays visible inline next to the name.
-    flexShrink: 1,
-    overflow: 'hidden',
-    marginRight: 6,
-  },
-  petName: {
-    color: '#F0F4F8',
-    fontSize: 22,
-    fontWeight: '700' as const,
-    letterSpacing: 0.2,
-    ...TEXT_SHADOW,
-  },
-  petBreed: {
-    fontSize: 13,
-    fontWeight: '500' as const,
-    letterSpacing: 0.3,
-    ...TEXT_SHADOW,
-  },
-  taggedWith: {
-    fontSize: 12,
-    marginTop: 2,
-    ...TEXT_SHADOW,
-  },
-  taggedPetName: {
-    fontWeight: '600' as const,
-    textDecorationLine: 'underline' as const,
-  },
-  petCaption: {
-    fontSize: 13,
-    lineHeight: 18,
-    marginTop: 2,
-    fontStyle: 'italic',
-    ...TEXT_SHADOW,
-  },
-  // Out-of-treats toast — centered, wide, sits just above the rail.
-  // Warm copy, no harsh error styling. pointerEvents:none so it never
-  // intercepts taps on the content beneath.
-  // zIndex/elevation ensure it renders above every other absolute layer
-  // (Pressable tap-target, scrims, rail) so nothing can bury or clip it.
-  outOfTreatsToast: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    backgroundColor: 'rgba(16,20,28,0.88)',
-    borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    alignItems: 'center',
-    zIndex: 999,
-    elevation: 999,
-    overflow: 'visible',
-  },
-  outOfTreatsText: {
-    fontSize: 13,
-    fontWeight: '600' as const,
-    color: 'rgba(240,244,248,0.95)',
-    textAlign: 'center',
-    letterSpacing: 0.1,
-    ...TEXT_SHADOW,
-  },
-  // Expand glyph — inline hint that the text block is tappable.
-  // fontStyle: 'normal' overrides the parent petCaption's italic so ↗ renders upright.
-  // Opacity ~60 % makes it secondary to the caption without disappearing.
-  captionExpand: {
-    fontSize: 12,
-    lineHeight: 18,
-    fontStyle: 'normal' as const,
-    color: 'rgba(240,244,248,0.60)',
-    ...TEXT_SHADOW,
-  },
-  // Share-card generation overlay — brief translucent dimmer while the card
-  // is being composited and handed to the OS share sheet.
-  // pointerEvents:none lets through any taps underneath.
-  sharingOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems:      'center',
-    justifyContent:  'center',
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    zIndex:          1000,
-    elevation:       1000,
-  },
-});
