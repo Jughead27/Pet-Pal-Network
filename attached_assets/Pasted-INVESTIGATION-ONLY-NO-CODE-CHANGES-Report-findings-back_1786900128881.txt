@@ -1,0 +1,45 @@
+INVESTIGATION ONLY — NO CODE CHANGES. Report findings back.
+
+SYMPTOM: On pshpsh.net Home feed, tapping "View full photo" on the FIRST photo in 
+the feed returns a "Post not found" error. This surfaced during manual click-through 
+verification of the recent FeedPage.tsx split (components/FeedPage.tsx → 
+components/FeedPage/index.tsx + styles.ts + constants.ts + types.ts, pure extraction, 
+no logic changes per the split's own verification).
+
+CONTEXT: there's prior history here — item 53 in the backlog notes a similar transient 
+"Post not found" from Sniff→full-image, investigated Aug 14 and marked self-resolved 
+with no recurrence at the time. This could be: (a) a recurrence of that same 
+underlying issue, now surfacing via Home instead of Sniff, or (b) a genuinely new 
+regression introduced by the FeedPage.tsx split, or (c) something unrelated to both.
+
+INVESTIGATE:
+
+1. Reproduce: tap "View full photo" on the first post in Home feed. Report the exact 
+   error, any console/network errors, and the actual post ID being requested (check 
+   the network request to whatever endpoint post detail uses — likely GET /posts/:id 
+   or similar).
+
+2. Check whether that post ID actually exists and is not soft-deleted/archived in the 
+   database. Report its actual state.
+
+3. Compare the "View full photo" / post-detail navigation code path against what it 
+   looked like BEFORE the FeedPage.tsx split — specifically, does anything in the 
+   split change how the post ID is captured or passed to the navigation call? Check 
+   handleMediaPress (mentioned in the split's own report as one of the closure-heavy 
+   functions) — does it correctly reference the intended post's ID, or could there be 
+   an off-by-one / stale-closure issue specifically affecting the FIRST post in the 
+   list?
+
+4. Test whether this reproduces on posts OTHER than the first one (2nd, 3rd, etc.) — 
+   report which positions fail and which don't. This is important: an issue specific 
+   to only the first post suggests an index/initialization bug, not a general 
+   post-detail routing problem.
+
+5. Check git blame/history on the relevant navigation logic — was it touched by the 
+   FeedPage.tsx split at all (should be byte-identical per the split's own claims), 
+   or does this pre-date the split entirely?
+
+Report all findings clearly. Do not fix anything yet — we need to know if this is a 
+split regression (meaning the split needs review) or a pre-existing/unrelated bug 
+(meaning FeedPage.tsx split can still be considered a clean extraction) before 
+deciding next steps.
