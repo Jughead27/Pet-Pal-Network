@@ -1,0 +1,46 @@
+SCOPED BUILD: Wire test suite into the build/publish pipeline
+
+CONTEXT
+The API test suite (artifacts/api-server/test/, 29 tests, Vitest) currently runs 
+manually via `pnpm --filter @workspace/api-server test`. This wires it into the 
+build step so a failing test blocks publish, catching regressions before they reach 
+production.
+
+REQUIRED BEHAVIOR
+
+1. Add the test run as a step in the existing build process (check the current 
+   build command/script — likely in package.json or a build config) BEFORE the 
+   deploy/bundle step. If tests fail (non-zero exit), the build must fail and stop 
+   — never proceed to bundle/deploy on a failing suite.
+
+2. The test run must use the DEV database connection exactly as it does today — do 
+   NOT let this step run against or near production credentials. Confirm the build 
+   environment's DATABASE_URL at this step still matches the existing safeguard's 
+   expected dev pattern; if the build environment doesn't have access to a dev DB 
+   connection at build time, stop and report that constraint rather than guessing 
+   around it — this may require using a separate test-specific DB connection secret 
+   scoped only to this step.
+
+3. Output: test failures must show clearly in the build log — test file, test name, 
+   and failure reason, not just a generic non-zero exit.
+
+4. Runtime: current suite is ~3.5s + ~13s cold-start import — confirm this doesn't 
+   meaningfully slow the existing build/publish cycle beyond that.
+
+DO NOT MODIFY
+- The test suite itself, its coverage, or its harness — this is purely wiring, 
+  not new tests.
+- Any existing build steps beyond adding this one in sequence.
+- Do not point this step at anything other than the existing dev database 
+  connection pattern already enforced by the suite's safeguard.
+
+ACCEPTANCE TEST
+1. Trigger a normal build with the current (passing) test suite — confirm build 
+   proceeds to completion as before, with test results visible in the log.
+2. Temporarily break one test locally (not committed) to confirm the build step 
+   actually fails and halts on a failing suite, then revert.
+3. Confirm normal publish timing isn't meaningfully impacted.
+4. Report back: does this actually block a Republish in Replit's UI, or only fail 
+   a separate CI step? Be explicit about what "blocked" means in this environment — 
+   Replit's publish flow may not have a clean pass/fail gate depending on how builds 
+   are configured here, so report the real mechanism rather than assuming.
