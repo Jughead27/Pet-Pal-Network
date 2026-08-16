@@ -1,0 +1,76 @@
+SCOPED REFACTOR: Split admin.ts — extraction only, zero logic changes
+
+CONTEXT
+artifacts/api-server/src/routes/admin.ts is 1,505 lines — the admin API surface 
+(reports, invite-requests, breed-suggestions, users, audit log, quota-requests, 
+merge-suggestions, cron/purge, etc.). This is a PURE STRUCTURAL SPLIT — code moved 
+verbatim into new files, nothing rewritten, improved, or changed. This is file 5 of 
+the ongoing split initiative, and the FIRST API-side file — the automated test suite 
+(29 tests, artifacts/api-server/test/) gives real regression coverage here, unlike 
+the four mobile files done so far.
+
+REQUIRED APPROACH
+
+1. Read the full file and identify natural route-group boundaries — likely candidates 
+   (confirm against actual structure): reports handling, invite-requests, breed-
+   suggestions, users/summary-metrics, audit log, quota-requests, merge-suggestions, 
+   the cron/purge dispatch (NOTE: this has a documented special-case auth bypass — 
+   see below), any shared helpers/middleware specific to admin routes.
+
+2. IMPORTANT — the cron/purge route has non-obvious auth wiring: per existing project 
+   history, admin.ts's role-gate (requireRole('admin')) is applied via 
+   adminRouter.use('/admin', requireRole('admin')), and the cron/purge route is 
+   reached via a SEPARATE exact-path dispatch in index.ts that attaches a synthetic 
+   auth (cron:purge/admin) BEFORE handing off to adminRouter — this is how the purge 
+   route's secret-only auth (X-Purge-Secret) works despite living under the admin 
+   router. If you extract route groups into separate files, this exact wiring MUST be 
+   preserved precisely — do not accidentally route cron/purge through a path that 
+   would re-trigger the normal role gate, and do not change index.ts's dispatch 
+   logic. If genuinely uncertain how to preserve this safely during extraction, stop 
+   and report rather than guessing.
+
+3. Extract each bounded route group into its own file (e.g. an admin/ directory with 
+   an index.ts that composes/mounts all sub-routers, or however best fits Express 
+   router conventions already used elsewhere in this codebase — check how other 
+   route files are structured for consistency).
+
+4. ABSOLUTE RULE: every extracted handler must be byte-for-byte identical to its 
+   original — same logic, same middleware order, same validation, same error 
+   handling. Only import/export/file-boundary changes and router-mounting wiring.
+
+5. Do NOT fix, improve, or flag-and-fix anything — note separately, don't touch.
+
+VERIFICATION (required, in order)
+
+1. tsc clean on api-server.
+2. Run the automated test suite (pnpm --filter @workspace/api-server test) — THIS 
+   FILE IS COVERED, so a genuine regression here should show as a test failure. 
+   Report full results — this is the primary regression check for this file, not 
+   just a formality like it was for the mobile files.
+3. Pure-relocation mechanical proof: old file vs. concatenated new files, imports/
+   exports normalized, compared as line multisets — 0 lines only-in-old, 0 only-in-new 
+   (except necessary router-composition wiring, which should be minimal — report 
+   exactly what's new and why).
+4. Specifically re-verify the cron/purge route's auth behavior end-to-end after the 
+   split: valid secret + no Clerk token → 200; wrong/missing secret → 401; every 
+   other /admin/* route → still 401 without Clerk auth. This exact behavior was 
+   fought hard for historically (see prior project notes on the purge-route auth 
+   bypass) — do not let this split silently break it.
+5. Report a manual click-through checklist for James covering: admin login/access, 
+   reports queue, invite-requests, breed-suggestions approval, users table, audit 
+   log, quota-requests, merge-suggestions queue (including the merge mechanism 
+   itself), and the cron/purge route's secret-gated behavior specifically.
+
+DO NOT MODIFY
+- Any logic, auth wiring, or behavior — pure file reorganization only.
+- index.ts's cron/purge dispatch logic.
+- Any file outside admin.ts and its new extracted pieces.
+- Do not touch any other item on the oversized-file list — scoped to this file only.
+
+ACCEPTANCE TEST
+1. tsc clean.
+2. Full test suite run and reported (this is the real regression gate for this file).
+3. Mechanical proof confirms pure relocation, zero logic changes (report explicitly).
+4. Cron/purge auth behavior specifically re-verified as unchanged.
+5. Deliver the manual click-through checklist for James.
+6. Report file structure before/after (line counts per new file).
