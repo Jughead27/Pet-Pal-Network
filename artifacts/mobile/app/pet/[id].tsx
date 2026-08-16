@@ -81,6 +81,7 @@ import { formatCount } from "@/utils/formatCount";
 import { compressImage } from "@/utils/compressImage";
 import { maybeConvertHeic } from "@/utils/maybeConvertHeic";
 import AddToPackLink from "@/components/AddToPackLink";
+import MergeSuggestFlow from "@/components/MergeSuggestFlow";
 import InterestChip from "@/components/InterestChip";
 import { useFollowsContext } from "@/context/FollowsContext";
 
@@ -114,6 +115,7 @@ export default function PetProfileScreen() {
 
   const [selectedPostId,  setSelectedPostId]  = useState<string | null>(null);
   const [packMembersOpen, setPackMembersOpen] = useState(false);
+  const [mergeSuggestOpen, setMergeSuggestOpen] = useState(false);
   // Local pack count — initialised from server, updated optimistically on toggle
   const [localPackCount, setLocalPackCount] = useState<number | null>(null);
   // Delete-confirm, archive-confirm, and edit states for the post modal
@@ -888,6 +890,23 @@ export default function PetProfileScreen() {
             </Text>
           ) : null}
 
+          {/* ── Merge-suggestion whisper — only for viewers with NO ownership
+                 relationship to this pet (viewerOwnsPet covers owner + co-owner) ── */}
+          {!pet.viewerOwnsPet && (
+            <TouchableOpacity
+              onPress={() => setMergeSuggestOpen(true)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel="Same pet as one of yours?"
+              activeOpacity={0.6}
+              style={styles.mergeWhisperBtn}
+            >
+              <Text style={[styles.mergeWhisper, { color: colors.foreground }]}>
+                same pet as one of yours?
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* ── Stats ── */}
           <View style={[styles.statsRow, { borderColor: colors.border }]}>
             {/* Pack stat — tappable to view member list */}
@@ -938,6 +957,14 @@ export default function PetProfileScreen() {
             colors={colors}
           />
         )}
+
+        {/* ── Merge suggestion flow modal ── */}
+        <MergeSuggestFlow
+          visible={mergeSuggestOpen}
+          onClose={() => setMergeSuggestOpen(false)}
+          targetPetId={pet.id}
+          targetPetName={pet.name}
+        />
 
         {/* ── Pending co-owner invite banner — shown to the invitee ── */}
         {myPendingInvite && (
@@ -2210,6 +2237,10 @@ const styles = StyleSheet.create({
   profileSection: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 8, gap: 8 },
   nameRow:  { flexDirection: "row", alignItems: "center", gap: 8 },
   petName:  { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: 0.2 },
+  // Whisper-level "same pet as one of yours?" link — same register as the old
+  // report whisper: 11px, ~35% opacity, typographic only.
+  mergeWhisperBtn: { alignSelf: "flex-start", marginTop: 10 },
+  mergeWhisper:    { fontSize: 11, opacity: 0.35, fontFamily: "Inter_400Regular", letterSpacing: 0.1 },
   editProfileBtn: {
     padding: 6,
   },

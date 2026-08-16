@@ -41,6 +41,11 @@ const SECTIONS = [
     description: 'Approve or reject "Not listed" free-text breed submissions.',
   },
   {
+    route:       '/admin/merge-suggestions' as const,
+    label:       'Merge Suggestions',
+    description: 'User-flagged possible duplicate pets — review side by side.',
+  },
+  {
     route:       '/admin/log' as const,
     label:       'Audit Log',
     description: 'Chronological record of every admin action. Read-only.',

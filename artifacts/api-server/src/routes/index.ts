@@ -11,6 +11,7 @@ import followsRouter from "./follows";
 import usersRouter from "./users";
 import adminRouter from "./admin";
 import reportsRouter from "./reports";
+import mergeSuggestionsRouter from "./merge-suggestions";
 import blocksRouter from "./blocks";
 import feedbackRouter from "./feedback";
 import invitesMemberRouter from "./invites-member";
@@ -59,6 +60,7 @@ router.use(followsRouter); // POST/DELETE /follows/species/:id  POST/DELETE /fol
 router.use(usersRouter);  // GET /me  PATCH /me
 router.use(adminRouter);  // GET /admin/ping — and future admin routes
 router.use(reportsRouter); // POST /reports
+router.use(mergeSuggestionsRouter); // POST /merge-suggestions
 router.use(blocksRouter);  // POST /blocks  DELETE /blocks/:id  GET /blocks
 router.use(feedbackRouter);      // POST /feedback
 router.use(invitesMemberRouter); // POST /invites/redeem  POST /invites  GET /invites/mine  POST /invites/:id/revoke

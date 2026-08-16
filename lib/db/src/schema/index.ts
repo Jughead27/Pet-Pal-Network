@@ -20,3 +20,4 @@ export * from "./quota-requests";
 export * from "./post-pets";
 export * from "./spotlight";
 export * from "./notifications";
+export * from "./merge-suggestions";

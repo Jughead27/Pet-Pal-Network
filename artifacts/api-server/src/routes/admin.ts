@@ -43,7 +43,9 @@ import {
   spotlightStateTable,
   treatsTable,
   boopsTable,
+  mergeSuggestionsTable,
 } from "@workspace/db";
+import { alias } from "drizzle-orm/pg-core";
 import { eq, asc, desc, sql, and, isNull } from "drizzle-orm";
 import { PETS_INCLUDING_DELETED } from "../lib/petQueries.js";
 import { requireRole } from "../middlewares/requireRole";
@@ -1142,6 +1144,116 @@ adminRouter.post("/admin/breed-suggestions/reject", async (req, res) => {
   });
 
   res.json({ ok: true, petsUpdated });
+});
+
+// ─── Merge suggestions ────────────────────────────────────────────────────────
+
+/**
+ * GET /admin/merge-suggestions
+ *
+ * Pending user-submitted "same pet" suggestions, oldest first. Joins both
+ * pets and their primary owners so the queue card can show them side by side.
+ * Returns: { suggestions }
+ */
+adminRouter.get("/admin/merge-suggestions", async (_req, res) => {
+  const suggesterPet   = alias(petsTable, "suggester_pet");
+  const targetPet      = alias(petsTable, "target_pet");
+  const suggesterUser  = alias(usersTable, "suggester_user");
+  const targetOwner    = alias(usersTable, "target_owner");
+
+  const suggestions = await db
+    .select({
+      id:                 mergeSuggestionsTable.id,
+      createdAt:          mergeSuggestionsTable.createdAt,
+      suggesterUserId:    mergeSuggestionsTable.suggesterUserId,
+      suggesterUsername:  suggesterUser.username,
+      suggesterPetId:     mergeSuggestionsTable.suggesterPetId,
+      suggesterPetName:   suggesterPet.name,
+      suggesterPetSpecies: suggesterPet.species,
+      suggesterPetBreed:  suggesterPet.breed,
+      targetPetId:        mergeSuggestionsTable.targetPetId,
+      targetPetName:      targetPet.name,
+      targetPetSpecies:   targetPet.species,
+      targetPetBreed:     targetPet.breed,
+      targetOwnerId:      targetPet.ownerId,
+      targetOwnerUsername: targetOwner.username,
+    })
+    .from(mergeSuggestionsTable)
+    .innerJoin(suggesterPet,  eq(suggesterPet.id, mergeSuggestionsTable.suggesterPetId))
+    .innerJoin(targetPet,     eq(targetPet.id, mergeSuggestionsTable.targetPetId))
+    .innerJoin(suggesterUser, eq(suggesterUser.id, mergeSuggestionsTable.suggesterUserId))
+    .innerJoin(targetOwner,   eq(targetOwner.id, targetPet.ownerId))
+    .where(eq(mergeSuggestionsTable.status, "pending"))
+    .orderBy(asc(mergeSuggestionsTable.createdAt));
+
+  res.json({ suggestions });
+});
+
+/**
+ * POST /admin/merge-suggestions/:id/dismiss
+ *
+ * Marks a pending suggestion dismissed. Audit: merge_suggestion.dismiss
+ */
+adminRouter.post("/admin/merge-suggestions/:id/dismiss", async (req, res) => {
+  const { id } = req.params;
+  const { userId } = (req as Express.RequestWithAuth).auth!;
+
+  const updated = await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(mergeSuggestionsTable)
+      .set({ status: "dismissed" })
+      .where(and(eq(mergeSuggestionsTable.id, id), eq(mergeSuggestionsTable.status, "pending")))
+      .returning({ id: mergeSuggestionsTable.id });
+    if (rows.length === 0) return false;
+
+    await writeAudit(tx, userId, "merge_suggestion.dismiss", "merge_suggestion", id, {});
+    return true;
+  });
+
+  if (!updated) {
+    res.status(404).json({ error: "suggestion not found or already handled" });
+    return;
+  }
+  res.json({ ok: true });
+});
+
+/**
+ * POST /admin/merge-suggestions/:id/action
+ *
+ * Marks a pending suggestion actioned — i.e. the admin has performed (or is
+ * performing) the merge through the merge tooling. This route does NOT merge
+ * anything itself; it only resolves the queue entry.
+ * Audit: merge_suggestion.action
+ */
+adminRouter.post("/admin/merge-suggestions/:id/action", async (req, res) => {
+  const { id } = req.params;
+  const { userId } = (req as Express.RequestWithAuth).auth!;
+
+  const updated = await db.transaction(async (tx) => {
+    const rows = await tx
+      .update(mergeSuggestionsTable)
+      .set({ status: "actioned" })
+      .where(and(eq(mergeSuggestionsTable.id, id), eq(mergeSuggestionsTable.status, "pending")))
+      .returning({
+        id:             mergeSuggestionsTable.id,
+        suggesterPetId: mergeSuggestionsTable.suggesterPetId,
+        targetPetId:    mergeSuggestionsTable.targetPetId,
+      });
+    const row = rows[0];
+    if (!row) return false;
+
+    await writeAudit(tx, userId, "merge_suggestion.action", "merge_suggestion", id, {
+      suggesterPetId: row.suggesterPetId,
+      targetPetId:    row.targetPetId,
+    });
+    return true;
+  });
+
+  if (!updated) {
+    res.status(404).json({ error: "suggestion not found or already handled" });
+    return;
+  }
+  res.json({ ok: true });
 });
 
 // ─── Feedback inbox ───────────────────────────────────────────────────────────

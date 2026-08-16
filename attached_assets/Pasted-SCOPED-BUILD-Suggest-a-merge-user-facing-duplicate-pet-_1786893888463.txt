@@ -1,0 +1,72 @@
+SCOPED BUILD: "Suggest a merge" — user-facing duplicate-pet flow
+
+CONTEXT
+Admin-side merge tool already exists conceptually (pick A+B, migrate posts/followers/
+co-owners, soft-delete B) but there's currently no way for a USER to flag that two 
+pets might be the same animal. This adds that user-facing suggestion step, framed as 
+positive/collaborative (owners discovering their pets are the same animal), never as 
+a report or moderation action.
+
+REQUIRED BEHAVIOR
+
+1. PLACEMENT (pet profile screen):
+   - A single whisper-level text link, same register as the existing "report" whisper 
+     (11px, ~35% opacity, typographic only — no icon, no button, no border).
+   - Positioned within the pet's existing info block near name/species/breed — NOT 
+     near the photo grid, no new visual chrome.
+   - Text: "same pet as one of yours?"
+   - VISIBILITY RULE: only shown to signed-in users who do NOT already have any 
+     ownership relationship to the pet being viewed — i.e. hidden if the viewer is 
+     the primary owner OR a co-owner of that pet. Never shown on any pet you already 
+     share in any capacity, not just pets you solely own.
+
+2. TAP FLOW:
+   - Opens a simple picker of the viewer's own pets (reuse existing pet-picker pattern 
+     if one exists in the codebase — e.g. tagging flow — for visual consistency). 
+     Only pets the viewer solely or co-owns should appear as selectable options.
+   - User selects which of their own pets they believe is the same animal.
+   - Submit creates a merge_suggestions row: suggester_user_id, suggester_pet_id, 
+     target_pet_id, status (pending), created_at.
+   - Confirmation copy on submit: warm, non-clinical — e.g. "thanks — we'll take a 
+     look and help you combine their history." Auto-dismiss, same pattern as other 
+     lightweight confirmation flows in the app (e.g. ReportFlow's thank-you step).
+   - No notification sent to the target pet's owner(s) — this stays between the 
+     suggester and the admin queue only, to avoid false-positive awkwardness.
+
+3. ADMIN SURFACE:
+   - New admin queue view listing pending merge_suggestions (suggester pet/owner, 
+     target pet/owner, submitted date).
+   - Admin can view both pets side by side, then either dismiss the suggestion or 
+     proceed to the existing merge action (reuse/link to whatever merge mechanism 
+     was already decided — pick A+B, migrate posts/followers/co-owners, soft-delete B).
+   - Suggestion status updates to actioned/dismissed accordingly, audit-logged like 
+     other admin actions (reuse existing writeAudit helper pattern).
+
+4. RATE LIMITING: apply the same lightweight per-user rate limit pattern already used 
+   elsewhere (e.g. reports.ts) to prevent spam suggestions — a generous limit like 
+   10/day/user is plenty for legitimate use.
+
+DO NOT MODIFY
+- The actual merge mechanism/admin action itself if it already exists — this only 
+  adds the user-facing suggestion entry point and the admin queue to review them.
+- Any other pet-profile UI, photo grid, or existing whisper elements (report, block).
+- Post/feed logic — unrelated.
+
+PRESERVATION CLAUSE
+No behavior change to existing pet-profile display for owners/co-owners viewing pets 
+they already share, or to any existing admin tooling beyond adding the new queue view.
+
+ACCEPTANCE TEST (must pass, ending in golden path)
+1. View a pet you don't own or co-own at all — confirm the whisper link appears, 
+   correctly styled/positioned, no new visual weight near the photo grid.
+2. View a pet you solely own — confirm the whisper link does NOT appear.
+3. View a pet you CO-own (not primary owner) — confirm the whisper link does NOT 
+   appear either, since you already share this pet.
+4. Tap the whisper on an eligible pet, select one of your own pets, submit — confirm 
+   warm confirmation copy shows and auto-dismisses, confirm a merge_suggestions row 
+   is created correctly.
+5. As admin, confirm the new suggestion appears in an admin queue with both pets' 
+   info, and that dismiss/proceed-to-merge actions work and audit-log correctly.
+6. Confirm rate limiting kicks in after repeated rapid submissions (10+/day).
+7. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → 
+   sign out. Confirm identically on web/iOS/Android.
