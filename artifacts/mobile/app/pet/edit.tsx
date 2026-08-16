@@ -155,6 +155,28 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
   // ── Delete state ───────────────────────────────────────────────────────────
   const [deleteConfirmVisible, setDeleteConfirmVisible] = useState(false);
 
+  // Pre-deletion impact preview: which primary-tagged posts will move to a
+  // surviving tagged pet vs. disappear entirely. null = fetch failed/pending
+  // (modal falls back to the generic totalPosts copy).
+  const [deleteImpact, setDeleteImpact] = useState<{
+    reassigned: { petId: string; petName: string; count: number }[];
+    removedCount: number;
+  } | null>(null);
+
+  const openDeleteConfirm = useCallback(async () => {
+    setDeleteImpact(null);
+    setDeleteConfirmVisible(true);
+    try {
+      const impact = await customFetch<{
+        reassigned: { petId: string; petName: string; count: number }[];
+        removedCount: number;
+      }>(`/api/pets/${petId}/delete-impact`, { method: 'GET' });
+      setDeleteImpact(impact);
+    } catch {
+      // Generic copy remains — never block the modal on the preview.
+    }
+  }, [petId]);
+
   // ── Breed picker modal ─────────────────────────────────────────────────────
   const [breedPickerVisible, setBreedPickerVisible] = useState(false);
 
@@ -491,7 +513,7 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
           <Button
             variant="quiet"
             label="delete this pet"
-            onPress={() => setDeleteConfirmVisible(true)}
+            onPress={openDeleteConfirm}
             disabled={isPending || isDeleting}
           />
         </View>
@@ -514,9 +536,21 @@ function EditPetForm({ pet, petId, topInset, colors, insets }: EditPetFormProps)
               {`delete ${pet.name}?`}
             </Text>
             <Text style={[s.deleteCardBody, { color: colors.mutedForeground }]}>
-              {totalPosts > 0
-                ? `this removes their profile and all ${totalPosts} post${totalPosts === 1 ? '' : 's'}. this can't be undone.`
-                : `this removes their profile. this can't be undone.`}
+              {deleteImpact
+                ? [
+                    'this removes their profile.',
+                    ...deleteImpact.reassigned.map(
+                      (r) =>
+                        `${r.count} post${r.count === 1 ? '' : 's'} will move to ${r.petName} as the primary pet.`,
+                    ),
+                    ...(deleteImpact.removedCount > 0
+                      ? [`${deleteImpact.removedCount} post${deleteImpact.removedCount === 1 ? '' : 's'} will be removed.`]
+                      : []),
+                    "this can't be undone.",
+                  ].join(' ')
+                : totalPosts > 0
+                  ? `this removes their profile and all ${totalPosts} post${totalPosts === 1 ? '' : 's'}. this can't be undone.`
+                  : `this removes their profile. this can't be undone.`}
             </Text>
             <View style={s.deleteCardActions}>
               <Button

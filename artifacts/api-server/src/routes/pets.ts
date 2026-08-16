@@ -877,6 +877,67 @@ router.patch("/pets/:id/avatar", async (req, res) => {
 });
 
 /**
+ * GET /pets/:id/delete-impact
+ *
+ * Pre-deletion preview for the confirmation UI. Reports, for the pet's
+ * primary-tagged posts:
+ *   - reassigned: posts that would survive by reassigning to another living
+ *     tagged pet (grouped by that target pet, earliest-tag-wins per post)
+ *   - removedCount: posts that would disappear (no surviving tagged pet)
+ *
+ * Primary owner only (mirrors DELETE /pets/:id authorization).
+ */
+router.get("/pets/:id/delete-impact", async (req, res) => {
+  const { id } = req.params;
+  const userId = (req as Express.RequestWithAuth).auth!.userId;
+
+  const [petRow] = await db
+    .select({ ownerId: petsTable.ownerId })
+    .from(petsTable)
+    .where(and(eq(petsTable.id, id), activePets))
+    .limit(1);
+
+  if (!petRow) { res.status(404).json({ error: "Not found" }); return; }
+  if (petRow.ownerId !== userId) {
+    res.status(403).json({ error: "Forbidden — only the primary owner may delete a pet" });
+    return;
+  }
+
+  // For each post where this pet is primary, find the surviving tagged pet
+  // that would inherit it (same earliest-tag ordering the delete tx uses).
+  const { rows: reassignedRows } = await db.execute<{ petId: string; petName: string; count: number }>(sql`
+    SELECT s.target_pet_id AS "petId", p.name AS "petName", COUNT(*)::int AS "count"
+    FROM (
+      SELECT (
+        SELECT pp.pet_id FROM post_pets pp
+        JOIN pets pt ON pt.id = pp.pet_id
+        WHERE pp.post_id = posts.id
+          AND pp.pet_id <> ${id}
+          AND pt.deleted_at IS NULL
+        ORDER BY pp.created_at ASC, pp.id ASC
+        LIMIT 1
+      ) AS target_pet_id
+      FROM posts
+      WHERE posts.pet_id = ${id}
+    ) s
+    JOIN pets p ON p.id = s.target_pet_id
+    WHERE s.target_pet_id IS NOT NULL
+    GROUP BY s.target_pet_id, p.name
+    ORDER BY "count" DESC, p.name ASC
+  `);
+
+  const { rows: totalRows } = await db.execute<{ total: number }>(sql`
+    SELECT COUNT(*)::int AS total FROM posts WHERE posts.pet_id = ${id}
+  `);
+
+  const reassignedTotal = reassignedRows.reduce((sum, r) => sum + r.count, 0);
+  res.json({
+    reassigned: reassignedRows,
+    removedCount: (totalRows[0]?.total ?? 0) - reassignedTotal,
+  });
+});
+
+/**
  * DELETE /pets/:id
  *
  * Soft-deletes a pet by setting deleted_at = now(). Primary owner only.
@@ -926,6 +987,31 @@ router.delete("/pets/:id", async (req, res) => {
       .returning({ id: petsTable.id });
 
     if (flipped.length === 0) return { status: 404 as const, error: "Not found" };
+
+    // Multi-pet posts: if the deleted pet was the PRIMARY pet on a post that
+    // has at least one other LIVING tagged pet, reassign posts.pet_id to the
+    // earliest-tagged surviving pet so the post survives. Posts with no
+    // surviving tagged pet keep the old behavior (drop out via activePets).
+    // Runs in the same tx — no window with a primary pointing at a dead pet.
+    await tx.execute(sql`
+      UPDATE posts SET pet_id = (
+        SELECT pp.pet_id FROM post_pets pp
+        JOIN pets pt ON pt.id = pp.pet_id
+        WHERE pp.post_id = posts.id
+          AND pp.pet_id <> ${id}
+          AND pt.deleted_at IS NULL
+        ORDER BY pp.created_at ASC, pp.id ASC
+        LIMIT 1
+      )
+      WHERE posts.pet_id = ${id}
+        AND EXISTS (
+          SELECT 1 FROM post_pets pp2
+          JOIN pets pt2 ON pt2.id = pp2.pet_id
+          WHERE pp2.post_id = posts.id
+            AND pp2.pet_id <> ${id}
+            AND pt2.deleted_at IS NULL
+        )
+    `);
 
     await writeAudit(tx, userId, "pet.delete", "pet", id, { petName: petRow.name });
     return { status: 204 as const };

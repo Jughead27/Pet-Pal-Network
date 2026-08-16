@@ -1,0 +1,58 @@
+SCOPED FIX: Multi-pet post primary-pet reassignment on pet deletion
+
+CONTEXT
+When a pet is deleted, if it was the PRIMARY tagged pet on a post that has other 
+LIVING tagged pets, the post currently vanishes from feed for everyone — even though 
+other pets in that post are still alive and taggable. This is wrong: the post should 
+survive and reassign to a surviving tagged pet.
+
+REQUIRED BEHAVIOR
+
+1. DATA FIX — on pet deletion:
+   - For every post where the deleted pet is the primary tagged pet AND at least one 
+     other tagged pet on that post is still alive (not soft-deleted/purged):
+     - Reassign primaryPetId to the surviving tagged pet with the EARLIEST tag 
+       timestamp (i.e. whichever other pet was tagged on the post first).
+   - If the deleted pet was primary and NO other living tagged pets exist on a post, 
+     leave existing behavior unchanged (post correctly disappears — no surviving 
+     subject).
+   - This must happen atomically as part of the existing pet-deletion transaction — 
+     do not leave a window where the post has a primaryPetId pointing at a deleted pet.
+
+2. USER-FACING CLARITY — delete confirmation flow:
+   - Before the deletion is confirmed, check whether the pet being deleted is the 
+     primary tagged pet on any post(s) that have other living tagged pets.
+   - If so, surface this clearly in the confirmation UI before the user commits, e.g.:
+     "X post(s) will be reassigned to [other pet's name] as the primary pet."
+   - If multiple different posts reassign to different pets, summarize honestly 
+     (don't oversimplify to one name if it's not accurate) — e.g. group by target pet 
+     name if there's more than one.
+   - If deletion would cause posts to disappear entirely (no surviving tagged pet), 
+     that should also be clear in the confirmation copy, distinct from the reassignment 
+     case — do not conflate "will be reassigned" with "will be removed."
+   - No new UI is needed on the post itself post-reassignment — the surviving pet was 
+     already visibly tagged, so nothing new to display there.
+
+DO NOT MODIFY
+- Pet deletion's existing soft-delete/purge mechanics themselves.
+- Any other field or table beyond primaryPetId reassignment and the confirmation copy.
+- Feed query logic, comment logic, or any unrelated deletion flows (e.g. account 
+  deletion, comment deletion).
+
+PRESERVATION CLAUSE
+Do not change any other pet-deletion, post-deletion, or tagging behavior not described 
+above. If existing tests or flows touch primaryPetId elsewhere, leave them untouched 
+unless this fix requires it.
+
+ACCEPTANCE TEST (must pass, ending in golden path)
+1. Create a post tagging two living pets (Pet A primary, Pet B secondary, B tagged 
+   after A).
+2. Delete Pet A. Confirm the delete UI clearly states the post will reassign to Pet B 
+   before confirming.
+3. Confirm deletion. Verify: post still appears in feed, primaryPetId now = Pet B, 
+   no error, no dangling reference to Pet A anywhere in the post record.
+4. Create a second post tagging only one pet (no co-tagged pets). Delete that pet. 
+   Confirm the delete UI clearly states the post will be removed (not reassigned), 
+   and confirm the post disappears as before — this path is unchanged.
+5. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → 
+   sign out. Confirm identically on web/iOS/Android.
