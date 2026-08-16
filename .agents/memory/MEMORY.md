@@ -37,5 +37,6 @@
 - [Animated style pointerEvents race](animated-style-pointerevents-race.md) — never put pointerEvents in an animated style array on web; outer box-none prop + inner toggling View wrapper.
 - [Feed cursor pagination](feed-pagination.md) — keyset cursor on /feed; to_char microsecond cursor rule; infinite queryKey must keep '/api/feed' prefix first.
 - [Age Gate Architecture](age-gate-architecture.md) — age_affirmed_at, POST /age/affirm atomic idempotency, signup checkbox + pending-affirm storage, fail-closed retroactive gate in TabLayout.
+- [API Test Suite Harness](api-test-suite.md) — rollback-per-test harness; every BEGIN takes the mutex; DATABASE_URL guard rejects ?host= overrides; Clerk mocked via test_ tokens.
 - [Pet Merge Mechanism](pet-merge-mechanism.md) — admin merge transaction pattern; deleted-pet write-guard triggers (FOR KEY SHARE) created in startupBackfill.
 - [Zoom-out + Fill Architecture](zoom-out-fill-architecture.md) — rect fractions may exceed [0,1]; canonical compose-time avg color in crop_fill_color; allowZoomOut gate; web canvas full-image draw trick.
