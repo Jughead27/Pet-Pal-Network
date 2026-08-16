@@ -1,0 +1,55 @@
+SCOPED BUILD: Automated API test suite (non-destructive, dev DB only)
+
+CONTEXT
+No automated test suite currently exists. This adds one that is safe to run 
+repeatedly against the DEV database without leaving any persistent side effects — 
+NEVER runs against production. Two secondary goals beyond basic coverage: (1) protect 
+against regressions in the specific flows Apple App Store reviewers manually test 
+(auth, account deletion, content moderation) ahead of submission; (2) add lightweight 
+concurrency sanity checks relevant to scaling — NOT full load-testing infrastructure, 
+just confirming parallel requests don't corrupt data.
+
+REQUIRED SETUP
+
+1. Add Vitest + Supertest to api-server as dev dependencies. Test files live in 
+   a new artifacts/api-server/test/ directory, one file per route group.
+
+2. NON-DESTRUCTIVE STRATEGY (critical): every test runs inside a database 
+   transaction that is ALWAYS rolled back afterward, win or fail — beforeEach/
+   afterEach pattern opening a transaction, handing the test a scoped client, 
+   rolling back regardless of outcome. No test may commit data. Hard safeguard: 
+   test setup reads DATABASE_URL and refuses to run (throws immediately) if it does 
+   not match the known dev database connection pattern — must be impossible to 
+   accidentally point at production.
+
+3. Test data: factory helpers (createTestUser, createTestPet, createTestPost, etc.) 
+   insert minimal valid rows within the same transaction — self-contained, no 
+   dependency on existing seed data, order-independent.
+
+INITIAL TEST COVERAGE (v1)
+
+1. AUTH MIDDLEWARE: valid session passes; suspended user 403 {error:"suspended"}; 
+   tombstoned user 403 {error:"account_deleted"}; missing/invalid token 401.
+
+2. FEED: pagination page size + nextCursor correctness; Fresh/Popular/Nursery sort 
+   ordering; blocked-owner exclusion; archived-post exclusion.
+
+3. PETS: create/edit/delete happy paths; DELETE /pets/:id primary-owner-only 
+   enforcement; reassignment logic (surviving tag reassigns primary, no surviving 
+   tag removes post); delete-impact preview matches actual delete behavior.
+
+4. ACCOUNT DELETION: solo-pet reassignment via shared helper; co-owned pets survive, 
+   primary ownership repoints to earliest surviving co-owner.
+
+5. MERGE SUGGESTIONS: suggestion rejected when suggester already owns/co-owns target; 
+   10/day rate limit triggers; merge endpoint correctly re-tags posts, dedupes 
+   followers/co-owners, reassigns primary tags, soft-deletes merged pet; write-guard 
+   trigger rejects a write against a soft-deleted pet.
+
+6. RATE LIMITING: spot-check posts.ts mutation limit and uploads.ts actually 429 
+   after threshold.
+
+7. REPORTS/BLOCKS: report submission respects the locked reason list; block excludes 
+   blocked-owner content from feed/comments (both directions).
+
+8. CONCURRENCY SANITY (new): fire several
