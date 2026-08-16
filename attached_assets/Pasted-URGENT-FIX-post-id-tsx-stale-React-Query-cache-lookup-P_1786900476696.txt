@@ -1,0 +1,60 @@
+URGENT FIX: post/[id].tsx stale React Query cache lookup — "Post not found" on every post
+
+CONTEXT
+app/post/[id].tsx resolves the post via an exact-key React Query cache lookup on 
+['/api/feed'] — but the Aug 14 pagination migration moved Home/Sniff/Nursery to 
+useGetFeedInfinite under 'infinite'-suffixed keys, so that plain key is never 
+populated anymore. Result: EVERY post detail view returns "Post not found," live in 
+production, affecting testers right now. Root-caused via investigation, confirmed 
+unrelated to the recent FeedPage.tsx split (that split is clean).
+
+TWO KNOWN BROKEN SPOTS in app/post/[id].tsx:
+1. ~line 134: `queryClient.getQueryData<FeedResponse>(getGetFeedQueryKey())` — exact 
+   lookup on the dead plain key.
+2. ~line 95: an optimistic tag-removal `setQueryData` call, same stale-key problem.
+
+REQUIRED FIX
+
+1. Replace the exact-key lookup with logic that searches the actual populated 
+   infinite-query cache entries. React Query's infinite query cache stores pages 
+   under a query key like ['/api/feed', params, 'infinite'] (or similar — confirm 
+   exact shape by inspecting how Home/Sniff/Nursery actually key their 
+   useGetFeedInfinite calls, since params differ per screen/filter). Use 
+   queryClient.getQueriesData() with a predicate/partial key match on the '/api/feed' 
+   prefix to find ALL infinite-query cache entries currently populated (there may be 
+   several — one per screen/filter combination the user has visited), then search 
+   across all of their pages' posts arrays for the matching post ID. Take the first 
+   match found.
+
+2. Apply the same fix pattern to the optimistic tag-removal setQueryData call at 
+   ~line 95 — it needs to update the post's data across every matching cache entry 
+   it's actually present in, not just the dead plain key.
+
+3. Fallback behavior: if truly no cache entry contains the post (e.g. a user opens a 
+   direct link to a post they haven't scrolled past in their session), the current 
+   "Post not found" is the correct outcome in THAT case — this fix does not need to 
+   add a real API fetch fallback (there is no GET /posts/:id endpoint currently, and 
+   adding one is out of scope for this urgent fix — flag it as a worthwhile future 
+   improvement but do not build it now).
+
+4. Keep the fix scoped to these two known-broken read/write spots — do not restructure 
+   how feed caching or pagination works more broadly.
+
+DO NOT MODIFY
+- The pagination migration itself, useGetFeedInfinite, or any feed-fetching hooks.
+- The FeedPage.tsx split or any of its extracted files.
+- Any other part of post/[id].tsx not directly related to these two cache-lookup 
+  spots.
+
+ACCEPTANCE TEST (must pass, ending in golden path)
+1. From Home feed, tap "View full photo" on several different posts (not just the 
+   first) — confirm each correctly opens post detail, no "Post not found."
+2. Same test from Sniff (both Fresh and Popular sort) and Nursery.
+3. Confirm the optimistic tag-removal flow (whatever UI action triggers it — likely 
+   removing a tagged pet from a post) still updates the visible post data correctly 
+   after the fix.
+4. Confirm a post NOT currently in any visited screen's cache (e.g. a very old post 
+   reached via direct link with a fresh session) still shows "Post not found" 
+   gracefully — this is expected/acceptable, not a new bug.
+5. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → 
+   sign out. Confirm identically on web/iOS/Android.

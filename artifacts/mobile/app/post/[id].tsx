@@ -28,11 +28,25 @@ import { useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import type { InfiniteData } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { getGetFeedQueryKey, useRemovePostPetTag, customFetch } from '@workspace/api-client-react';
 import type { FeedPost, FeedResponse } from '@workspace/api-client-react';
 import { resolveMediaKey } from '@/utils/mediaKey';
+
+// The feed cache holds two shapes under '/api/feed'-prefixed keys: plain
+// FeedResponse entries (grid screens' useGetFeed) and InfiniteData pages
+// (Home/Sniff/Nursery pagers' useGetFeedInfinite under 'infinite'-suffixed
+// keys). The Aug 14 pagination migration means the bare ['/api/feed'] key is
+// never populated, so lookups/writes must prefix-match across ALL entries.
+type FeedCacheData = FeedResponse | InfiniteData<FeedResponse> | undefined;
+
+const feedPagesOf = (data: FeedCacheData): FeedResponse[] => {
+  if (!data) return [];
+  if ('pages' in data && Array.isArray(data.pages)) return data.pages;
+  return [data as FeedResponse];
+};
 import { formatPostAge } from '@/utils/formatPostAge';
 import ReportFlow from '@/components/ReportFlow';
 
@@ -92,16 +106,25 @@ export default function PostDetailScreen() {
       await removeTag({ id, petId });
       // Optimistically remove the pet from the feed cache so the row
       // disappears immediately without waiting for a refetch.
-      queryClient.setQueryData<FeedResponse>(getGetFeedQueryKey(), (old) => {
+      queryClient.setQueriesData<FeedCacheData>({ queryKey: getGetFeedQueryKey() }, (old) => {
         if (!old) return old;
-        return {
-          ...old,
-          posts: old.posts.map((p) =>
-            p.id === id
-              ? { ...p, taggedPets: (p.taggedPets ?? []).filter((tp) => tp.id !== petId) }
-              : p
-          ),
-        };
+        // The '/api/feed' prefix also matches non-feed entries (species /
+        // breed-option caches) — leave anything without a posts array alone.
+        const stripTag = (page: FeedResponse): FeedResponse =>
+          Array.isArray(page?.posts)
+            ? {
+                ...page,
+                posts: page.posts.map((p) =>
+                  p.id === id
+                    ? { ...p, taggedPets: (p.taggedPets ?? []).filter((tp) => tp.id !== petId) }
+                    : p
+                ),
+              }
+            : page;
+        if ('pages' in old && Array.isArray(old.pages)) {
+          return { ...old, pages: old.pages.map(stripTag) };
+        }
+        return stripTag(old as FeedResponse);
       });
     } catch {
       // Silent — the tag stays visible if the request failed.
@@ -130,9 +153,18 @@ export default function PostDetailScreen() {
     }
   }, [blocking, queryClient]);
 
-  // Look up the post from the feed cache.
-  const feedData = queryClient.getQueryData<FeedResponse>(getGetFeedQueryKey());
-  const post: FeedPost | undefined = feedData?.posts.find((p: FeedPost) => p.id === id);
+  // Look up the post across every populated feed cache entry — the pagers
+  // store InfiniteData under 'infinite'-suffixed keys and the grids store
+  // plain FeedResponse entries with params; prefix-match them all and take
+  // the first hit.
+  let post: FeedPost | undefined;
+  for (const [, data] of queryClient.getQueriesData<FeedCacheData>({ queryKey: getGetFeedQueryKey() })) {
+    for (const page of feedPagesOf(data)) {
+      const hit = page.posts?.find((p: FeedPost) => p.id === id);
+      if (hit) { post = hit; break; }
+    }
+    if (post) break;
+  }
 
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
