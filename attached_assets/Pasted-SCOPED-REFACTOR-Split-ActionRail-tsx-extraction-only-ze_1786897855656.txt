@@ -1,0 +1,61 @@
+SCOPED REFACTOR: Split ActionRail.tsx — extraction only, zero logic changes
+
+CONTEXT
+ActionRail.tsx is 837 lines mixing multiple concerns (icon rendering, boop/treat/
+comment/share handlers, web-style workarounds, layout). This is a PURE STRUCTURAL 
+SPLIT — code is moved verbatim into new files, nothing is rewritten, improved, or 
+changed. This is step 1 of a larger multi-file initiative; treat this as the template 
+for how every subsequent file will be handled, so be meticulous.
+
+REQUIRED APPROACH
+
+1. First, read the full file and identify natural, clearly-bounded sub-pieces — 
+   likely candidates (confirm against actual structure, don't assume): icon 
+   components/definitions, individual action handlers (boop/treat/comment/share), 
+   any shared styling/constants, the main ActionRail component shell itself.
+
+2. Extract each bounded piece into its own file in a sensible location (e.g. a new 
+   ActionRail/ directory with index.tsx re-exporting the main component, plus 
+   sibling files for each extracted piece — use judgment on naming/structure that 
+   fits existing codebase conventions).
+
+3. ABSOLUTE RULE: every extracted function/component's body must be byte-for-byte 
+   identical to its original — same logic, same JSX, same comments (including the 
+   ones marking the documented web-style workaround casts — do NOT touch those, do 
+   NOT "fix" them, they are correct and load-bearing). Only import/export statements 
+   and file boundaries change.
+
+4. If you notice something that looks like a bug, dead code, or an opportunity to 
+   improve while doing this — do NOT fix it. Note it and report it separately at 
+   the end. This prompt is extraction only.
+
+VERIFICATION (required, in order)
+
+1. tsc clean on the mobile package.
+2. Run the automated test suite (pnpm --filter @workspace/api-server test) — note 
+   whether it's expected to touch this file at all (it likely won't, since 
+   ActionRail is a mobile UI component, not API-side — confirm and report either way).
+3. git diff review: confirm the diff shows large deletions from the original 
+   ActionRail.tsx and equivalent additions in new files, with ZERO changes to any 
+   function/component body — only relocation. If any line of actual logic differs 
+   from its original, stop and report rather than proceeding.
+4. Report a specific, detailed manual click-through checklist for James to run on 
+   pshpsh.net covering every interaction ActionRail owns (boop tap, treat tap, 
+   comment tap, share tap, rapid-tap escalation behavior, icon rendering across all 
+   actions, web-only style behaviors — filter/textShadow/pointerEvents — still 
+   correct). Be exhaustive; this is the primary regression check for this file 
+   since it isn't covered by the API test suite.
+
+DO NOT MODIFY
+- Any logic, styling values, or behavior — this is pure file reorganization.
+- The documented web-style workaround casts and their comments.
+- Any file outside ActionRail.tsx and its new extracted pieces.
+- Do not touch any other item on the oversized-file list — this prompt is scoped 
+  to ActionRail.tsx only.
+
+ACCEPTANCE TEST
+1. tsc clean.
+2. git diff confirms pure relocation, zero logic changes (report this explicitly).
+3. Deliver the manual click-through checklist for James.
+4. Report file structure before/after (line counts per new file) so James can see 
+   the split achieved its goal.
