@@ -1,0 +1,69 @@
+SCOPED FIX: Share pet-deletion reassignment logic between the pets.ts route and 
+account deletion
+
+CONTEXT
+pets.ts's DELETE /pets/:id transaction was recently fixed so that when a pet is 
+deleted, any post where it was the primary tagged pet AND another living tagged pet 
+exists gets posts.pet_id reassigned to the earliest-tagged surviving pet (rather than 
+the post silently vanishing from feed).
+
+deleteAccountData (artifacts/api-server/src/lib/deleteAccount.ts, solo-pet branch, 
+~lines 100-114) does its OWN bare soft-delete for solely-owned pets and does NOT call 
+the pets.ts route or share code with it — so it never got this fix. Its doc comment 
+claiming "same as DELETE /pets/:id" is now false.
+
+REQUIRED FIX
+1. Extract the reassignment step from pets.ts's delete-pet transaction into a shared 
+   helper function (e.g. reassignPrimaryPetOnDeletion(tx, petId) or similar, placed 
+   wherever shared pet-deletion logic best lives in the existing structure) that:
+   - Takes the transaction and the pet id being soft-deleted.
+   - Runs the same earliest-tagged-surviving-pet reassignment UPDATE against 
+     posts.pet_id (post_pets.created_at ASC, id tie-break) that pets.ts currently 
+     has inline.
+   - Must be safe to call AFTER the soft-delete flip, same ordering as today, so it 
+     can't pick the pet being deleted as its own successor.
+
+2. pets.ts's DELETE /pets/:id transaction: replace its inline reassignment logic with 
+   a call to the new shared helper. No behavior change here — just de-duplication.
+
+3. deleteAccountData's solo-pet branch (lines ~100-114): after its existing soft-delete 
+   UPDATE for each solely-owned pet, call the same shared helper before the transaction 
+   commits. Must run inside the same transaction as the soft-delete, same atomicity 
+   guarantee as the route.
+
+4. Update deleteAccount.ts's stale doc comment to accurately reflect that it now truly 
+   shares the reassignment behavior with DELETE /pets/:id (rather than just claiming to).
+
+5. pet.delete audit rows: leave account deletion's existing separate audit trail as-is 
+   — do not merge audit logging between the two paths, only the reassignment logic.
+
+DO NOT MODIFY
+- The GET /pets/:id/delete-impact preview route or its UI — it already uses the 
+  identical subquery independently and needs no changes.
+- Co-owned pet handling in deleteAccount.ts (lines ~104-136) — already correct, do 
+  not touch.
+- Any other part of account deletion (email/data purge, other tables, etc.).
+- Any behavior for pets with no surviving tagged pet on a post (still removed, 
+  unchanged).
+
+PRESERVATION CLAUSE
+No behavior change for the existing pets.ts DELETE /pets/:id flow — this is a pure 
+refactor-to-shared-helper for that path. The only NEW behavior is that account 
+deletion's solo-pet cleanup now also reassigns, where previously it silently didn't.
+
+ACCEPTANCE TEST (must pass, ending in golden path)
+1. Create a post tagging two living pets (Pet A primary, Pet B secondary, B tagged 
+   after A), both solely owned by a test account.
+2. Delete the test account (not the pet directly — use account deletion). Verify: 
+   the post still appears in feed, posts.pet_id now = Pet B, no dangling reference 
+   to Pet A.
+3. Repeat the original pets.ts DELETE /pets/:id acceptance test (single-pet delete, 
+   not account deletion) to confirm no regression: reassignment still works exactly 
+   as before via the shared helper.
+4. Confirm a post with only one tagged pet on a solely-owned-pet account deletion 
+   still results in the post being removed (unchanged behavior, no surviving tag).
+5. Confirm co-owned pet behavior is completely unchanged (pet survives, primary 
+   ownership repoints to earliest surviving co-owner) — no regression from this 
+   refactor.
+6. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → 
+   sign out. Confirm identically on web/iOS/Android.

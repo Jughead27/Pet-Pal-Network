@@ -8,7 +8,10 @@
  * (see lib/clerkDeletions.ts), scheduled through GET /admin/cron/purge.
  *
  * Immediate effects (all local, all in one tx):
- *   1.  Solely-owned pets       → soft-delete (deleted_at), same as DELETE /pets/:id
+ *   1.  Solely-owned pets       → soft-delete (deleted_at) + multi-pet post
+ *                                 primary reassignment via the shared
+ *                                 reassignPrimaryPetOnDeletion helper — the
+ *                                 same behavior as DELETE /pets/:id.
  *   2.  Co-owned pets           → remove this user's pet_owners row (same as the
  *                                 leave-as-owner flow); if the user is the
  *                                 denormalized pets.owner_id primary pointer,
@@ -53,6 +56,7 @@ import {
   notificationsTable,
 } from "@workspace/db";
 import { and, eq, or, inArray, isNull, sql } from "drizzle-orm";
+import { reassignPrimaryPetOnDeletion } from "./reassignPrimaryPet.js";
 import { writeAudit } from "./writeAudit.js";
 
 export async function deleteAccount(
@@ -105,12 +109,17 @@ export async function deleteAccount(
     const coOwnedNeedingRepoint = ownedRows
       .filter((r) => r.ownerCount > 1 && r.primaryOwnerId === targetUserId)
       .map((r) => r.petId);
-    // 1. Solo pets: soft-delete (existing pattern — purge job handles hard cleanup)
+    // 1. Solo pets: soft-delete (existing pattern — purge job handles hard
+    //    cleanup), then reassign multi-pet posts' primary pointer via the same
+    //    shared helper DELETE /pets/:id uses, in this same transaction.
     if (soloPetIds.length > 0) {
       await tx
         .update(petsTable)
         .set({ deletedAt: new Date() })
         .where(inArray(petsTable.id, soloPetIds));
+      for (const petId of soloPetIds) {
+        await reassignPrimaryPetOnDeletion(tx, petId);
+      }
     }
 
     // 2. Co-owned pets: repoint denormalized primary pointer to a surviving owner

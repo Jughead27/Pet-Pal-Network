@@ -22,6 +22,7 @@ import { mediaTokenUrl, copyObject } from "../lib/r2.js";
 import { notHiddenByAdminPost } from "../lib/excludeBlocked.js";
 import { writeAudit } from "../lib/writeAudit.js";
 import { isPetOwner, getPetOwnerRow } from "../lib/isPetOwner.js";
+import { reassignPrimaryPetOnDeletion } from "../lib/reassignPrimaryPet.js";
 
 const router: IRouter = Router();
 
@@ -988,30 +989,11 @@ router.delete("/pets/:id", async (req, res) => {
 
     if (flipped.length === 0) return { status: 404 as const, error: "Not found" };
 
-    // Multi-pet posts: if the deleted pet was the PRIMARY pet on a post that
-    // has at least one other LIVING tagged pet, reassign posts.pet_id to the
-    // earliest-tagged surviving pet so the post survives. Posts with no
-    // surviving tagged pet keep the old behavior (drop out via activePets).
-    // Runs in the same tx — no window with a primary pointing at a dead pet.
-    await tx.execute(sql`
-      UPDATE posts SET pet_id = (
-        SELECT pp.pet_id FROM post_pets pp
-        JOIN pets pt ON pt.id = pp.pet_id
-        WHERE pp.post_id = posts.id
-          AND pp.pet_id <> ${id}
-          AND pt.deleted_at IS NULL
-        ORDER BY pp.created_at ASC, pp.id ASC
-        LIMIT 1
-      )
-      WHERE posts.pet_id = ${id}
-        AND EXISTS (
-          SELECT 1 FROM post_pets pp2
-          JOIN pets pt2 ON pt2.id = pp2.pet_id
-          WHERE pp2.post_id = posts.id
-            AND pp2.pet_id <> ${id}
-            AND pt2.deleted_at IS NULL
-        )
-    `);
+    // Multi-pet posts: reassign posts.pet_id to the earliest-tagged surviving
+    // pet where one exists (shared helper — also used by account deletion).
+    // Runs after the flip in the same tx, so the tx sees its own write and
+    // can't pick the deleted pet as its own successor.
+    await reassignPrimaryPetOnDeletion(tx, id);
 
     await writeAudit(tx, userId, "pet.delete", "pet", id, { petName: petRow.name });
     return { status: 204 as const };
