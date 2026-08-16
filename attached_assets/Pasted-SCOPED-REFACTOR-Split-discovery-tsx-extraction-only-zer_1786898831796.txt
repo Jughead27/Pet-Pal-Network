@@ -1,0 +1,42 @@
+SCOPED REFACTOR: Split discovery.tsx — extraction only, zero logic changes
+
+CONTEXT
+mobile/app/(tabs)/discovery.tsx is 1,062 lines (Sniff screen — species chips, breed 
+filter, Fresh/Popular sort, Spotlight banner, grid). This is a PURE STRUCTURAL SPLIT — 
+code moved verbatim into new files, nothing rewritten, improved, or changed. This is 
+file 2 of the ongoing split initiative; ActionRail.tsx was file 1 and its split 
+(components/ActionRail/) is the proven template — follow the same rigor.
+
+REQUIRED APPROACH
+
+1. Read the full file and identify natural, clearly-bounded sub-pieces — likely 
+   candidates (confirm against actual structure, don't assume): species-chip row 
+   component, breed-filter dropdown, Spotlight banner, Fresh/Popular sort control, 
+   the grid/list rendering, any shared styles/constants, data-fetching hooks, the 
+   main screen component shell.
+
+2. Extract each bounded piece into its own file (e.g. a discovery/ directory or 
+   similar, matching whatever convention ActionRail/ established) with the main 
+   screen file re-exporting/composing them.
+
+3. ABSOLUTE RULE: every extracted function/component body must be byte-for-byte 
+   identical to its original — same logic, same JSX, same comments. Only import/
+   export statements and file boundaries change.
+
+4. Do NOT fix, improve, or flag-and-fix anything that looks like a bug or dead code 
+   — note it and report separately at the end, do not touch it.
+
+VERIFICATION (required, in order — same rigor as ActionRail)
+
+1. tsc clean on the mobile package.
+2. Run the automated test suite — confirm and report whether it touches this file 
+   at all (likely not, same as ActionRail — mobile UI, suite is API-only).
+3. Pure-relocation mechanical proof: old file vs. concatenated new files, imports 
+   stripped/exports normalized, compared as line multisets — 0 lines only-in-old, 
+   0 lines only-in-new. If anything differs, stop and report rather than proceeding.
+4. Deliver a specific, detailed manual click-through checklist for James covering 
+   every interaction discovery.tsx owns: species chip selection/scrolling, breed 
+   dropdown (progressive disclosure once species picked), Spotlight banner tap 
+   (filters to that pet's posts), Fresh/Popular sort toggle, grid rendering + 
+   pagination/infinite scroll, tapping into a post from the grid, Nursery-filtered 
+   variant if this file also serves that
