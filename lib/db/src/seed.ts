@@ -412,6 +412,7 @@ async function main() {
       INSERT INTO pet_owners (pet_id, user_id)
       SELECT id, owner_id
       FROM   pets
+      WHERE  deleted_at IS NULL
       ON CONFLICT DO NOTHING
     `);
     console.log(`  ✓ pet_owners backfill — ${coOwnerResult.rowCount ?? 0} new row(s) inserted`);
@@ -436,6 +437,7 @@ async function main() {
   const packResult = await db.execute(sql`
     INSERT INTO pack_follows (user_id, pet_id)
     SELECT owner_id, id FROM pets
+    WHERE deleted_at IS NULL
     ON CONFLICT DO NOTHING
   `);
   console.log(`  ✓ pack_follows backfill — ${packResult.rowCount ?? 0} new row(s) inserted.`);

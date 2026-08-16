@@ -1,0 +1,47 @@
+URGENT FIX: seed.ts pet_owners backfill fails on soft-deleted pets
+
+CONTEXT
+The pet_owners backfill in lib/db/src/seed.ts (~line 411) runs on every publish:
+  INSERT INTO pet_owners (pet_id, user_id)
+  SELECT id, owner_id FROM pets
+  ON CONFLICT DO NOTHING
+
+This has no WHERE clause excluding soft-deleted pets. The write-guard trigger added 
+for the merge mechanism (reject_writes_to_deleted_pet()) correctly rejects any new 
+row attached to a soft-deleted pet — so this backfill now fails the entire build 
+whenever any pet in the table is soft-deleted (confirmed failure on pet 
+b0e231cc-4451-4340-97b0-42abc19a28a5 during this publish).
+
+REQUIRED FIX
+Add a WHERE clause to the backfill query excluding soft-deleted pets — e.g.:
+  INSERT INTO pet_owners (pet_id, user_id)
+  SELECT id, owner_id FROM pets
+  WHERE deleted_at IS NULL
+  ON CONFLICT DO NOTHING
+
+This is a correctness fix, not just a workaround: soft-deleted pets should not have 
+pet_owners rows backfilled for them regardless of whether the trigger exists — the 
+trigger just surfaced a pre-existing gap in the backfill's logic.
+
+CHECK FOR SIMILAR ISSUES
+Grep the rest of seed.ts (and any other startup-backfill code) for other bulk writes 
+against the pets table or tables with a pet_id foreign key that don't already filter 
+out soft-deleted pets. Report any other spots that could hit the same trigger under 
+different data conditions, even if they don't currently fail (e.g. because no 
+relevant pet happens to be soft-deleted yet). Fix any genuine instances of the same 
+pattern; report anything ambiguous rather than guessing.
+
+DO NOT MODIFY
+- The write-guard trigger itself — it is working correctly, do not weaken it.
+- Any other part of the seed script unrelated to this specific backfill query.
+- The ActionRail split or any other in-flight work.
+
+ACCEPTANCE TEST
+1. Confirm the fixed backfill query runs successfully against the current dev DB 
+   (which has at least one soft-deleted pet) without triggering the write-guard.
+2. Confirm the backfill still correctly creates pet_owners rows for all LIVE pets 
+   that need them (no regression in its actual purpose).
+3. Report findings from the broader grep check — any other spots fixed or flagged.
+4. Confirm this fix is safe to include in the current in-flight publish (the 
+   ActionRail split) — i.e. it doesn't touch anything the split touched, and can 
+   ship in the same publish without additional risk.

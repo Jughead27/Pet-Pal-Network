@@ -23,6 +23,7 @@ export async function runStartupBackfill(): Promise<void> {
       INSERT INTO pet_owners (pet_id, user_id)
       SELECT id, owner_id
       FROM   pets
+      WHERE  deleted_at IS NULL
       ON CONFLICT DO NOTHING
     `);
     if ((ownerResult.rowCount ?? 0) > 0) {
