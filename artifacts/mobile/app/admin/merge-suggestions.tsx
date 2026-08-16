@@ -1,8 +1,11 @@
 /**
  * Merge suggestions — admin queue of user-submitted "same pet" suggestions.
  * Shows both pets side by side (suggester pet/owner vs target pet/owner).
- * Actions: dismiss / mark merged (actioned). The actual merge itself is
- * performed via the merge tooling — this queue only resolves the entry.
+ *
+ * Actions: dismiss, or run the REAL merge — the admin must explicitly choose
+ * which pet survives (no default), then confirm a summary of what will move
+ * ("X posts, Y followers, Z co-owners will move…"), then the server performs
+ * the whole migration in one transaction and returns what moved.
  */
 
 import React, { useCallback, useState } from 'react';
@@ -37,6 +40,22 @@ interface Suggestion {
   targetPetBreed: string | null;
   targetOwnerId: string;
   targetOwnerUsername: string | null;
+  suggesterPetPosts: number;
+  suggesterPetFollowers: number;
+  suggesterPetOwners: number;
+  targetPetPosts: number;
+  targetPetFollowers: number;
+  targetPetOwners: number;
+}
+
+interface MergeResult {
+  ok: boolean;
+  moved: {
+    postsRetagged: number;
+    primaryReassigned: number;
+    followersMoved: number;
+    coOwnersMoved: number;
+  };
 }
 
 function relativeAge(iso: string): string {
@@ -53,9 +72,13 @@ export default function AdminMergeSuggestionsScreen() {
   const topInset = Platform.OS === 'web' ? 67 : insets.top;
 
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
-  // Two-tap confirm for the actioned ("mark merged") action — only one
-  // suggestion can be in confirm mode at a time (reports.tsx pattern).
-  const [confirmingActionId, setConfirmingActionId] = useState<string | null>(null);
+  // Merge flow state — one suggestion at a time can be in the flow.
+  // mergingId: card whose survivor picker is open; survivorPick: chosen pet.
+  const [mergingId, setMergingId] = useState<string | null>(null);
+  const [survivorPick, setSurvivorPick] = useState<string | null>(null);
+  // Result banner after a completed merge (persists until refresh removes card).
+  const [lastResult, setLastResult] = useState<{ id: string; text: string } | null>(null);
+  const [errorText, setErrorText] = useState<string | null>(null);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['admin-merge-suggestions'],
@@ -64,24 +87,67 @@ export default function AdminMergeSuggestionsScreen() {
 
   const suggestions = data?.suggestions ?? [];
 
-  const mutate = useCallback(async (id: string, action: 'dismiss' | 'action') => {
+  const resetFlow = useCallback(() => {
+    setMergingId(null);
+    setSurvivorPick(null);
+  }, []);
+
+  const dismiss = useCallback(async (id: string) => {
     if (pendingIds.has(id)) return;
     setPendingIds((s) => new Set(s).add(id));
-    setConfirmingActionId(null);
+    resetFlow();
+    setErrorText(null);
     try {
-      await customFetch(`/api/admin/merge-suggestions/${id}/${action}`, { method: 'POST' });
+      await customFetch(`/api/admin/merge-suggestions/${id}/dismiss`, { method: 'POST' });
       await refetch();
+    } catch {
+      setErrorText('dismiss failed — try again.');
     } finally {
       setPendingIds((s) => { const n = new Set(s); n.delete(id); return n; });
     }
-  }, [pendingIds, refetch]);
+  }, [pendingIds, refetch, resetFlow]);
+
+  const executeMerge = useCallback(async (item: Suggestion, survivorPetId: string) => {
+    if (pendingIds.has(item.id)) return;
+    const mergedPetId = survivorPetId === item.suggesterPetId ? item.targetPetId : item.suggesterPetId;
+    setPendingIds((s) => new Set(s).add(item.id));
+    setErrorText(null);
+    try {
+      const result = await customFetch<MergeResult>(
+        `/api/admin/merge-suggestions/${item.id}/merge`,
+        { method: 'POST', body: JSON.stringify({ survivorPetId, mergedPetId }) },
+      );
+      const m = result.moved;
+      setLastResult({
+        id: item.id,
+        text: `merged. ${m.postsRetagged} post tag${m.postsRetagged === 1 ? '' : 's'} moved, ` +
+              `${m.followersMoved} follower${m.followersMoved === 1 ? '' : 's'} moved, ` +
+              `${m.coOwnersMoved} co-owner${m.coOwnersMoved === 1 ? '' : 's'} moved.`,
+      });
+      resetFlow();
+      await refetch();
+    } catch (e) {
+      const err = e as { data?: { error?: string } };
+      setErrorText(err.data?.error ?? 'merge failed — nothing was changed.');
+    } finally {
+      setPendingIds((s) => { const n = new Set(s); n.delete(item.id); return n; });
+    }
+  }, [pendingIds, refetch, resetFlow]);
 
   const petLine = (name: string, species: string, breed: string | null) =>
     `${name} · ${breed?.trim() || species}`;
 
   const renderItem = useCallback(({ item }: { item: Suggestion }) => {
     const isPending = pendingIds.has(item.id);
-    const confirming = confirmingActionId === item.id;
+    const inMergeFlow = mergingId === item.id;
+
+    // Merged-away pet stats for the confirm summary.
+    const survivorIsSuggester = survivorPick === item.suggesterPetId;
+    const mergedName    = survivorIsSuggester ? item.targetPetName      : item.suggesterPetName;
+    const survivorName  = survivorIsSuggester ? item.suggesterPetName   : item.targetPetName;
+    const mergedPosts   = survivorIsSuggester ? item.targetPetPosts     : item.suggesterPetPosts;
+    const mergedFollows = survivorIsSuggester ? item.targetPetFollowers : item.suggesterPetFollowers;
+    const mergedOwners  = survivorIsSuggester ? item.targetPetOwners    : item.suggesterPetOwners;
 
     return (
       <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -100,6 +166,9 @@ export default function AdminMergeSuggestionsScreen() {
             <Text style={[styles.ownerName, { color: colors.mutedForeground }]}>
               @{item.suggesterUsername ?? 'unknown'}
             </Text>
+            <Text style={[styles.statsLine, { color: colors.mutedForeground }]}>
+              {item.suggesterPetPosts} posts · {item.suggesterPetFollowers} followers · {item.suggesterPetOwners} owners
+            </Text>
           </TouchableOpacity>
           <Text style={[styles.pairSep, { color: colors.mutedForeground }]}>=?</Text>
           <TouchableOpacity
@@ -115,6 +184,9 @@ export default function AdminMergeSuggestionsScreen() {
             <Text style={[styles.ownerName, { color: colors.mutedForeground }]}>
               @{item.targetOwnerUsername ?? 'unknown'}
             </Text>
+            <Text style={[styles.statsLine, { color: colors.mutedForeground }]}>
+              {item.targetPetPosts} posts · {item.targetPetFollowers} followers · {item.targetPetOwners} owners
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -122,56 +194,103 @@ export default function AdminMergeSuggestionsScreen() {
           submitted {relativeAge(item.createdAt)}
         </Text>
 
+        {lastResult?.id === item.id && (
+          <Text style={[styles.resultTxt, { color: colors.foreground }]}>{lastResult.text}</Text>
+        )}
+        {errorText && inMergeFlow && (
+          <Text style={[styles.errorTxt, { color: colors.destructive }]}>{errorText}</Text>
+        )}
+
         {isPending ? (
           <ActivityIndicator size="small" color={colors.mutedForeground} />
-        ) : (
+        ) : !inMergeFlow ? (
           <View style={styles.actions}>
-            {confirming ? (
-              <>
-                <TouchableOpacity
-                  onPress={() => mutate(item.id, 'action')}
-                  style={styles.actionBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Confirm mark merged"
-                >
-                  <Text style={[styles.actionText, { color: colors.destructive }]}>confirm merged?</Text>
-                </TouchableOpacity>
-                <Text style={[styles.sep, { color: colors.border }]}>·</Text>
-                <TouchableOpacity
-                  onPress={() => setConfirmingActionId(null)}
-                  style={styles.actionBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel"
-                >
-                  <Text style={[styles.actionText, { color: colors.mutedForeground }]}>cancel</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              <>
-                <TouchableOpacity
-                  onPress={() => setConfirmingActionId(item.id)}
-                  style={styles.actionBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Mark merged"
-                >
-                  <Text style={[styles.actionText, { color: colors.foreground }]}>mark merged</Text>
-                </TouchableOpacity>
-                <Text style={[styles.sep, { color: colors.border }]}>·</Text>
-                <TouchableOpacity
-                  onPress={() => mutate(item.id, 'dismiss')}
-                  style={styles.actionBtn}
-                  accessibilityRole="button"
-                  accessibilityLabel="Dismiss suggestion"
-                >
-                  <Text style={[styles.actionText, { color: colors.mutedForeground }]}>dismiss</Text>
-                </TouchableOpacity>
-              </>
+            <TouchableOpacity
+              onPress={() => { setMergingId(item.id); setSurvivorPick(null); setErrorText(null); }}
+              style={styles.actionBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Merge these pets"
+            >
+              <Text style={[styles.actionText, { color: colors.foreground }]}>merge…</Text>
+            </TouchableOpacity>
+            <Text style={[styles.sep, { color: colors.border }]}>·</Text>
+            <TouchableOpacity
+              onPress={() => dismiss(item.id)}
+              style={styles.actionBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss suggestion"
+            >
+              <Text style={[styles.actionText, { color: colors.mutedForeground }]}>dismiss</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.mergeFlow}>
+            {/* Survivor picker — deliberately no default */}
+            <Text style={[styles.pickerLabel, { color: colors.mutedForeground }]}>
+              which pet survives?
+            </Text>
+            <View style={styles.pickerRow}>
+              {([
+                { id: item.suggesterPetId, name: item.suggesterPetName },
+                { id: item.targetPetId,   name: item.targetPetName },
+              ] as const).map((p) => {
+                const selected = survivorPick === p.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => setSurvivorPick(selected ? null : p.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${p.name} survives`}
+                    style={[
+                      styles.pickerChip,
+                      { borderColor: selected ? colors.foreground : colors.border },
+                      selected && { backgroundColor: colors.background },
+                    ]}
+                  >
+                    <Text style={[styles.pickerChipTxt, { color: colors.foreground, opacity: selected ? 1 : 0.6 }]}>
+                      {p.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Confirm summary — only once a survivor is chosen */}
+            {survivorPick && (
+              <Text style={[styles.summaryTxt, { color: colors.foreground }]}>
+                {mergedPosts} post{mergedPosts === 1 ? '' : 's'}, {mergedFollows} follower{mergedFollows === 1 ? '' : 's'}, {mergedOwners} co-owner{mergedOwners === 1 ? '' : 's'} will
+                move from {mergedName} to {survivorName}. This can't be undone.
+              </Text>
             )}
+
+            <View style={styles.actions}>
+              {survivorPick && (
+                <>
+                  <TouchableOpacity
+                    onPress={() => executeMerge(item, survivorPick)}
+                    style={styles.actionBtn}
+                    accessibilityRole="button"
+                    accessibilityLabel="Confirm merge"
+                  >
+                    <Text style={[styles.actionText, { color: colors.destructive }]}>merge now</Text>
+                  </TouchableOpacity>
+                  <Text style={[styles.sep, { color: colors.border }]}>·</Text>
+                </>
+              )}
+              <TouchableOpacity
+                onPress={() => { resetFlow(); setErrorText(null); }}
+                style={styles.actionBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Cancel merge"
+              >
+                <Text style={[styles.actionText, { color: colors.mutedForeground }]}>cancel</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
       </View>
     );
-  }, [colors, pendingIds, confirmingActionId, mutate]);
+  }, [colors, pendingIds, mergingId, survivorPick, lastResult, errorText, dismiss, executeMerge, resetFlow]);
 
   return (
     <View style={[styles.fill, { backgroundColor: colors.background }]}>
@@ -184,6 +303,12 @@ export default function AdminMergeSuggestionsScreen() {
           <ArrowClockwise size={16} color={colors.mutedForeground} weight="regular" />
         </TouchableOpacity>
       </View>
+
+      {lastResult && !suggestions.some((s) => s.id === lastResult.id) && (
+        <Text style={[styles.resultBanner, { color: colors.foreground, borderBottomColor: colors.border }]}>
+          {lastResult.text}
+        </Text>
+      )}
 
       {isLoading ? (
         <View style={styles.centered}><ActivityIndicator color={colors.primary} size="large" /></View>
@@ -222,6 +347,12 @@ const styles = StyleSheet.create({
   refreshBtn: { padding: 6, marginLeft: 'auto' },
   headerTitle: { fontFamily: 'Inter_700Bold', fontSize: 18, flex: 1 },
 
+  resultBanner: {
+    fontFamily: 'Inter_400Regular', fontSize: 13,
+    paddingHorizontal: 16, paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+
   card: {
     borderRadius: 12, borderWidth: StyleSheet.hairlineWidth,
     padding: 14, gap: 10,
@@ -232,7 +363,21 @@ const styles = StyleSheet.create({
   colLabel: { fontFamily: 'Inter_400Regular', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.4 },
   petName: { fontFamily: 'Inter_600SemiBold', fontSize: 14 },
   ownerName: { fontFamily: 'Inter_400Regular', fontSize: 12 },
+  statsLine: { fontFamily: 'Inter_400Regular', fontSize: 11, marginTop: 2 },
   age: { fontFamily: 'Inter_400Regular', fontSize: 11, fontStyle: 'italic' },
+
+  resultTxt: { fontFamily: 'Inter_400Regular', fontSize: 12 },
+  errorTxt: { fontFamily: 'Inter_400Regular', fontSize: 12 },
+
+  mergeFlow: { gap: 10 },
+  pickerLabel: { fontFamily: 'Inter_400Regular', fontSize: 12 },
+  pickerRow: { flexDirection: 'row', gap: 8 },
+  pickerChip: {
+    borderWidth: 1, borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 8,
+  },
+  pickerChipTxt: { fontFamily: 'Inter_500Medium', fontSize: 13 },
+  summaryTxt: { fontFamily: 'Inter_400Regular', fontSize: 13, lineHeight: 19 },
 
   actions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   actionBtn: { paddingVertical: 4, paddingHorizontal: 2 },

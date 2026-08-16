@@ -1,0 +1,90 @@
+SCOPED BUILD: Real merge mechanism for admin merge-suggestions queue
+
+CONTEXT
+The "suggest a merge" user-facing flow and admin queue are already built and live 
+(merge_suggestions table, admin queue UI). Currently the admin's "mark merged" action 
+only closes the queue entry — no actual pet-merge data migration happens. This adds 
+the real mechanism.
+
+REQUIRED BEHAVIOR
+
+1. ADMIN UI CHANGE (merge-suggestions queue):
+   - When admin proceeds with a suggestion (previously just "confirm merged?"), they 
+     must explicitly choose which of the two pets survives and which is merged away — 
+     don't assume suggester's pet or target pet by default. Simple picker/toggle 
+     between the two, defaulting to neither selected (forces a deliberate choice).
+   - Confirm step shows a summary before committing: "X posts, Y followers, Z co-owners 
+     will move from [merged pet name] to [surviving pet name]. This can't be undone."
+
+2. SERVER — new endpoint, e.g. POST /admin/merge-suggestions/:id/merge (primary-owner-
+   agnostic, admin-role-gated same as other admin actions), body specifies survivorPetId 
+   and mergedPetId (both must match the suggestion's two pets, validate against the 
+   suggestion row, reject if either pet is already soft-deleted). Single transaction:
+   
+   a. Re-tag all post_pets rows from mergedPetId to survivorPetId. Handle the case 
+      where a post is ALREADY tagged with both pets (rare but possible) — don't create 
+      a duplicate tag row, just drop the now-redundant one.
+   
+   b. Reassign primaryPetId on any post where mergedPetId was primary, to survivorPetId. 
+      Reuse the same logic/pattern as lib/reassignPrimaryPet.ts if applicable, or a 
+      simpler direct UPDATE since there's no "surviving tagged pet" ambiguity here — 
+      the destination is explicit (survivorPetId), not earliest-tagged.
+   
+   c. Move pack_follows: for each follower of mergedPetId, INSERT a follow of 
+      survivorPetId ON CONFLICT DO NOTHING (dedupe if they already follow both), then 
+      remove the old mergedPetId follow rows.
+   
+   d. Move pet_owners: for each owner/co-owner row on mergedPetId, INSERT the 
+      equivalent row on survivorPetId ON CONFLICT DO NOTHING (dedupe if someone already 
+      owns/co-owns both — do not create a duplicate ownership row, and do not silently 
+      drop their existing role on survivorPetId if one exists), then remove the old 
+      mergedPetId ownership rows.
+   
+   e. Soft-delete mergedPetId using the exact same mechanism as the existing 
+      DELETE /pets/:id soft-delete (deleted_at flip) — do NOT hard-delete, preserve 
+      audit trail and consistency with existing pet-deletion patterns.
+   
+   f. Update the merge_suggestions row status to 'actioned', write an audit log entry 
+      (reuse writeAudit helper) capturing survivorPetId, mergedPetId, and counts of 
+      what moved (posts re-tagged, followers moved, co-owners moved) for transparency.
+
+   g. If any step fails, the whole transaction rolls back — no partial merges.
+
+3. RESPONSE: return the summary counts (posts/followers/co-owners moved) so the admin 
+   UI can show a confirmation of what happened.
+
+DO NOT MODIFY
+- The suggestion submission flow, whisper placement, or rate limiting — already built 
+  and correct, untouched.
+- The dismiss action — unrelated, leave as-is.
+- Any existing pet-deletion logic (DELETE /pets/:id, account deletion's solo-pet 
+  branch) — this is a new, separate merge path, not a modification of those.
+- Boops/treats — these live on posts, not pets directly, so they move automatically 
+  as a side effect of re-tagging posts; no direct boops/treats table changes needed. 
+  Confirm this assumption is correct for this schema before writing the migration — 
+  if boops/treats are somehow pet-scoped rather than post-scoped, flag it and ask 
+  rather than guessing.
+
+PRESERVATION CLAUSE
+No change to any pet, post, follow, or ownership data outside of the two pets 
+explicitly named in a given merge action. No change to unrelated admin flows.
+
+ACCEPTANCE TEST (must pass, ending in golden path)
+1. Set up two test pets: Pet A (3 posts, 2 followers, primary owner X) and Pet B 
+   (2 posts including one where B is primary tag, 1 follower who ALSO follows A, 
+   co-owner Y who does NOT co-own A).
+2. Submit a merge suggestion between them (via the existing user flow or directly 
+   in DB for test setup).
+3. As admin, open the suggestion, choose Pet A as survivor, confirm the summary 
+   shows correct counts, execute the merge.
+4. Verify: all 5 posts now show Pet A as a tag (including primaryPetId correctly 
+   reassigned on the post where B was primary); Pet A now has all followers with 
+   no duplicate for the shared follower; Pet A now has co-owner Y added without 
+   disturbing owner X; Pet B is soft-deleted (deleted_at set, no longer appears in 
+   listings); merge_suggestions row shows status 'actioned'; audit log has the 
+   entry with correct counts.
+5. Confirm the whole operation is atomic — if you simulate a failure mid-transaction 
+   (e.g. temporarily break one step in a test branch), confirm nothing partially 
+   commits.
+6. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → 
+   sign out. Confirm identically on web/iOS/Android.
