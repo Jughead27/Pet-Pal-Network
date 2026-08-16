@@ -25,7 +25,7 @@ import {
   View,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { HandTap, Bone, Fish, Carrot, Cookie, ChatCircle, ShareNetwork } from 'phosphor-react-native';
+import { HandTap, Bone, Fish, Carrot, Cookie, ChatCircle, ShareNetwork, type Icon as PhosphorIcon } from 'phosphor-react-native';
 import * as Haptics from 'expo-haptics';
 import { useColors } from '@/hooks/useColors';
 import { formatCount } from '@/utils/formatCount';
@@ -50,8 +50,7 @@ const TEACHING_KEY_TREAT = 'fishbook:teaching:treat';
 
 interface GlyphShadowProps {
   // The Phosphor icon component (e.g. HandTap, Bone, ChatCircle …)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  icon: React.ComponentType<any>;
+  icon: PhosphorIcon;
   color: string;
   size: number;
   weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone';
@@ -96,8 +95,7 @@ function BoopIcon({ color, size }: { color: string; size: number }) {
 // Cookie is the default fallback for any unmapped species.
 // Add entries here to extend coverage without touching the component.
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const SPECIES_TREAT_ICON: Record<string, React.ComponentType<any>> = {
+const SPECIES_TREAT_ICON: Record<string, PhosphorIcon> = {
   dog:          Bone,
   cat:          Fish,
   rabbit:       Carrot,
@@ -105,8 +103,7 @@ const SPECIES_TREAT_ICON: Record<string, React.ComponentType<any>> = {
   horse:        Carrot,
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function treatIconForSpecies(species: string | undefined): React.ComponentType<any> {
+function treatIconForSpecies(species: string | undefined): PhosphorIcon {
   if (!species) return Cookie;
   return SPECIES_TREAT_ICON[species.trim().toLowerCase()] ?? Cookie;
 }

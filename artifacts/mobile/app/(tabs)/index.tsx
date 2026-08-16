@@ -329,8 +329,13 @@ export default function HomeScreen() {
   // back to the latest post.  Uses tabPress rather than useFocusEffect because
   // useFocusEffect silently no-ops on tab screens.
   useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (navigation as any).addListener('tabPress', () => {
+    // expo-router's useNavigation() returns a base NavigationProp whose event
+    // map lacks tab-navigator events; the underlying navigator does emit
+    // 'tabPress'. Narrow structurally instead of casting through `any`.
+    const tabNav = navigation as unknown as {
+      addListener: (type: 'tabPress', callback: () => void) => () => void;
+    };
+    return tabNav.addListener('tabPress', () => {
       flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     });
   }, [navigation]);

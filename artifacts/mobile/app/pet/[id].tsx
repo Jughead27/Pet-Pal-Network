@@ -63,7 +63,18 @@ import {
   useGetPetCoOwnershipRequests,
   getGetPetCoOwnershipRequestsQueryKey,
 } from "@workspace/api-client-react";
-import type { FeedPost, PackResult } from "@workspace/api-client-react";
+import type { FeedPost, PackResult, PetProfile, PetProfileOwnersItem, TaggedPet } from "@workspace/api-client-react";
+
+// ── Local response-shape extensions ──────────────────────────────────────────
+// The server includes these fields but they are deliberately not in the
+// OpenAPI spec (ToS-fields precedent) — extend the generated types locally
+// instead of casting through `any`.
+/** FeedPost + viewer management flag (original poster or primary owner). */
+type ManagedPost = FeedPost & { viewerCanManagePost?: boolean };
+/** Owner row + optional display name the server sends alongside username. */
+type OwnerDisplay = PetProfileOwnersItem & { displayName?: string | null };
+/** Structured API error shape thrown by customFetch. */
+type ApiError = { status?: number; data?: { error?: string }; message?: string };
 import { useAuth } from "@clerk/clerk-expo";
 import { resolveMediaKey } from "@/utils/mediaKey";
 import { formatCount } from "@/utils/formatCount";
@@ -175,11 +186,11 @@ export default function PetProfileScreen() {
     mutation: {
       onSuccess: (data) => {
         // Write new values into the cached pet profile so view mode is instant
-        queryClient.setQueryData(getGetPetQueryKey(petId ?? ""), (old: any) => {
+        queryClient.setQueryData(getGetPetQueryKey(petId ?? ""), (old: PetProfile | undefined) => {
           if (!old) return old;
           return {
             ...old,
-            posts: old.posts.map((p: any) =>
+            posts: old.posts.map((p) =>
               p.id === selectedPostId
                 ? { ...p, caption: data.caption, isNursery: data.isNursery }
                 : p,
@@ -253,7 +264,7 @@ export default function PetProfileScreen() {
     (pet?.archivedPosts ?? []).find((p) => p.id === selectedPostId);
 
   // Search for cross-owner pets to add (only fires when ≥1 char typed)
-  const editTagExclude = (selectedPost as any)?.taggedPets?.map((tp: any) => tp.id).join(',') ?? '';
+  const editTagExclude = selectedPost?.taggedPets?.map((tp) => tp.id).join(',') ?? '';
   const { data: editSearchData } = useSearchPets(
     { q: editTagSearch, exclude: editTagExclude },
     { query: { enabled: editTagSearch.trim().length >= 1, queryKey: getSearchPetsQueryKey({ q: editTagSearch, exclude: editTagExclude }) } },
@@ -264,7 +275,7 @@ export default function PetProfileScreen() {
 
   // Own pets not yet tagged on this post
   const editableOwnPets = myOwnPets.filter(
-    (p) => !((selectedPost as any)?.taggedPets ?? []).some((tp: any) => tp.id === p.id),
+    (p) => !(selectedPost?.taggedPets ?? []).some((tp) => tp.id === p.id),
   );
 
   const handleEditAddTag = useCallback(async (tagPetId: string) => {
@@ -488,7 +499,7 @@ export default function PetProfileScreen() {
       "/api/co-ownership-requests/mine",
     )
       .then((data) => {
-        const mine = data.requests.find((r: any) => r.petId === petId);
+        const mine = data.requests.find((r) => r.petId === petId);
         setMyPendingInvite(mine ?? null);
       })
       .catch(() => {});
@@ -532,8 +543,9 @@ export default function PetProfileScreen() {
       queryClient.invalidateQueries({ queryKey: getGetMyPetsQueryKey() });
       queryClient.invalidateQueries({ queryKey: getGetFeedQueryKey() });
       router.replace('/(tabs)/profile');
-    } catch (e: any) {
-      const msg = typeof e?.message === 'string' ? e.message : 'Something went wrong.';
+    } catch (e) {
+      const err = e as ApiError;
+      const msg = typeof err?.message === 'string' ? err.message : 'Something went wrong.';
       setLeaveError(msg);
       setLeaveConfirm(false);
     } finally {
@@ -575,16 +587,17 @@ export default function PetProfileScreen() {
       setCoOwnerUsername('');
       queryClient.invalidateQueries({ queryKey: getGetPetQueryKey(petId ?? "") });
       queryClient.invalidateQueries({ queryKey: getGetPetCoOwnershipRequestsQueryKey(petId ?? "") });
-    } catch (e: any) {
-      if (e?.status === 404 && e?.data?.error === 'User not found') {
+    } catch (e) {
+      const err = e as ApiError;
+      if (err?.status === 404 && err?.data?.error === 'User not found') {
         setCoOwnerError(
           `No pshpsh account found for @${uname}. ` +
           `They'll need to join pshpsh first — share your invite link from your profile.`
         );
-      } else if (e?.status === 409 && e?.data?.error === 'A pending request for this user already exists') {
+      } else if (err?.status === 409 && err?.data?.error === 'A pending request for this user already exists') {
         setCoOwnerError(`@${uname} already has a pending invite for this pet.`);
       } else {
-        setCoOwnerError(typeof e?.message === 'string' ? e.message : 'Something went wrong.');
+        setCoOwnerError(typeof err?.message === 'string' ? err.message : 'Something went wrong.');
       }
     } finally {
       setCoOwnerSending(false);
@@ -976,7 +989,7 @@ export default function PetProfileScreen() {
 
         {/* ── Owners section — always visible, prominent ── */}
         {(() => {
-          const owners = (pet as any).owners as Array<{ userId: string; username: string; displayName?: string | null }> | undefined;
+          const owners: OwnerDisplay[] | undefined = pet.owners;
           if (!owners || owners.length === 0) return null;
           return (
             <View style={[styles.ownersSection, { borderColor: colors.border }]}>
@@ -1611,7 +1624,7 @@ export default function PetProfileScreen() {
                 </View>
 
                 {/* Edit & delete affordances — visible to the original poster or primary owner */}
-                {(selectedPost as any).viewerCanManagePost && (
+                {(selectedPost as ManagedPost).viewerCanManagePost && (
                   isEditMode ? (
                     /* ── Edit form ──────────────────────────────────────────── */
                     <View
@@ -1671,12 +1684,12 @@ export default function PetProfileScreen() {
                         </Text>
 
                         {/* Currently tagged — poster can remove any, whisper style */}
-                        {((selectedPost as any).taggedPets ?? []).map((tp: any) => (
+                        {(selectedPost.taggedPets ?? []).map((tp: TaggedPet) => (
                           <View key={tp.id} style={styles.editTagRow}>
                             <Text style={[styles.editTagName, { color: colors.foreground }]}>
                               {tp.name}
                             </Text>
-                            {((selectedPost as any).taggedPets ?? []).length > 1 && (
+                            {(selectedPost.taggedPets ?? []).length > 1 && (
                               <TouchableOpacity
                                 onPress={() => handleEditRemoveTag(tp.id)}
                                 disabled={!!editRemovingId}

@@ -1,0 +1,60 @@
+SCOPED FIX: Type-safety cleanup PASS 2 (final)
+
+CONTEXT
+Codebase audit type-safety cleanup pass 1 already fixed pet/create.tsx, compressImage.ts, 
+pack.ts/blocks.ts/notifications.ts, and admin.ts. Uploads ownership binding and 
+over-fetching findings are separately confirmed fixed — not part of this prompt.
+
+This pass covers the three files deliberately deferred from pass 1, now confirmed 
+via investigation to be genuinely untouched:
+
+1. mobile/app/pet/[id].tsx
+   - (pet as any).owners (line ~979)
+   - (selectedPost as any).viewerCanManagePost (line ~1614)
+   - (selectedPost as any).taggedPets (lines ~256, 267, 1674, 1679)
+   Fix: type these against the actual API response shape (likely already defined via 
+   the generated Orval/Zod client types) rather than casting through any.
+   
+   LOWER PRIORITY, include only if low-risk: setQueryData callbacks (~178, 182), 
+   catch (e: any) (~535, 578), one style cast (~760). If any of these would require 
+   non-trivial type gymnastics, leave them and report back rather than forcing it.
+
+2. mobile/components/ActionRail.tsx
+   - ComponentType<any> (lines ~54, 100, 109) — icon prop typing gap, genuinely fixable, 
+     type against the actual icon component type in use.
+   
+   DO NOT TOUCH: as any at lines ~71, 793, 829 — these are deliberate, documented 
+   web-only style workarounds (filter, textShadow, pointerEvents aren't in React 
+   Native's style types). These are not a type-safety gap; leave them exactly as-is 
+   with their existing comments.
+
+3. mobile/app/(tabs)/index.tsx
+   - (navigation as any).addListener('tabPress', ...) (line ~333) — type against the 
+     actual navigation prop type rather than casting through any.
+
+DO NOT MODIFY
+- Any file already covered by pass 1 (pet/create.tsx, compressImage.ts, pack.ts, 
+  blocks.ts, notifications.ts, admin.ts).
+- ActionRail.tsx's documented web-style workaround casts (see above).
+- Uploads ownership binding, over-fetching fixes, or any other already-fixed audit item.
+- Any response shape, API contract, or UI behavior — type-only changes throughout.
+- Oversized-file line-count splits — separately deferred, not part of this prompt.
+
+PRESERVATION CLAUSE
+Purely type-only changes. No behavior, response shape, or UI difference anywhere. If a 
+given `any` site turns out to require a real behavior change to type properly (rather 
+than just a correct type annotation), leave it and report back instead of forcing it.
+
+ACCEPTANCE TEST (must pass, ending in golden path)
+1. grep confirms the specifically-named `any`/`as any` sites in all three files are 
+   gone (except the documented ActionRail web-style workarounds, which must remain 
+   untouched).
+2. tsc clean on both packages.
+3. pet/[id].tsx: pet profile screen, post detail modal, owners display, and tagged-pets 
+   display all render and behave identically to before.
+4. ActionRail.tsx: icons render correctly across boop/treat/comment/share actions, 
+   web-only style behaviors (filter/shadow/pointerEvents) unaffected.
+5. Home tab: tab-press listener still functions identically (e.g. scroll-to-top on 
+   re-tap, if that's its current behavior).
+6. Golden path: sign in → Home loads → boop persists → Nursery pager → post flow → 
+   sign out. Confirm identically on web/iOS/Android.
